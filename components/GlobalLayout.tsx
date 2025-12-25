@@ -308,11 +308,30 @@ const subtotal = cart.reduce((sum: number, item: any) => sum + item.product.pric
             </ul>
           </div>
 
-          <div>
-            <h4 className="text-white font-serif mb-6 tracking-widest text-sm">NEWSLETTER</h4>
-            <p className="text-xs text-stone-500 mb-4">Subscribe to receive updates, access to exclusive deals, and more.</p>
-            <div className="flex border-b border-stone-700 pb-2"><input type="email" placeholder="Email Address" className="bg-transparent w-full outline-none text-stone-300 text-sm" /><button className="text-stone-400 hover:text-white uppercase text-xs font-bold">Join</button></div>
-          </div>
+          {/* Newsletter Section Replacement */}
+<div>
+  <h4 className="text-white font-serif mb-6 tracking-widest text-sm">NEWSLETTER</h4>
+  <p className="text-xs text-stone-500 mb-4">Subscribe to receive updates, access to exclusive deals, and more.</p>
+  
+  {/* Functional Form */}
+  <form 
+    onSubmit={(e) => {
+      e.preventDefault();
+      const input = e.currentTarget.querySelector('input');
+      if (input && input.value.trim()) {
+         toast.success("Welcome to ZERIMI Insider!", {
+            icon: '📩',
+            style: { background: '#0a1f1c', color: '#fbbf24', border: '1px solid #fbbf24' }
+         });
+         input.value = ''; // Input clear karein
+      }
+    }}
+    className="flex border-b border-stone-700 pb-2"
+  >
+    <input type="email" required placeholder="Email Address" className="bg-transparent w-full outline-none text-stone-300 text-sm" />
+    <button type="submit" className="text-stone-400 hover:text-white uppercase text-xs font-bold">Join</button>
+  </form>
+</div>
         </div>
 
         <div className="max-w-7xl mx-auto pt-8 border-t border-stone-800 flex justify-center items-center text-xs text-stone-600">

@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useStore } from '@/lib/store';
 import ProductCard from '@/components/ProductCard';
@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-// ✅ 1. FIXED: Filter Component ko BAHAR nikala taaki re-render hone par focus na hatae
+// --- FILTER COMPONENT (Sidebar) ---
 const FilterSidebar = ({ 
     searchQuery, setSearchQuery, 
     categories, rawSlug, 
@@ -47,7 +47,7 @@ const FilterSidebar = ({
                         </Link>
                     </li>
                     {categories?.map((c: any) => {
-                        const isActive = rawSlug.includes(c.title.toLowerCase().slice(0,3));
+                        const isActive = rawSlug && rawSlug.includes(c.title.toLowerCase().slice(0,3));
                         return (
                             <li key={c.id}>
                                 <Link href={`/category/${c.title.toLowerCase()}`} onClick={() => setShowMobileFilters(false)} className={`flex items-center justify-between p-2 rounded-lg transition ${isActive ? 'bg-[#0a1f1c] text-white font-bold' : 'hover:bg-stone-100'}`}>
@@ -76,7 +76,7 @@ const FilterSidebar = ({
                 </div>
             </div>
 
-            {/* Mobile Only: Sort Options inside Drawer */}
+            {/* Mobile Only: Sort Options */}
             {isMobile && (
                 <div>
                     <h3 className="font-serif text-lg text-[#0a1f1c] mb-4">Sort By</h3>
@@ -104,9 +104,14 @@ const FilterSidebar = ({
 // --- MAIN COMPONENT ---
 export default function CategoryPage() {
   const params = useParams();
-  const rawSlug = params.slug as string; 
   
-  // ✅ Data Fetch
+  // ✅ FIX 1: Safety check agar params load na hue hon
+  const rawSlug = (params?.slug as string) || 'all';
+  
+  // ✅ FIX 2: URL Search Handle kiya
+  const searchParams = useSearchParams();
+  const queryFromUrl = searchParams.get('q') || '';
+
   const store = useStore() as any;
   const products = store.products || [];
   const categories = store.categories || [];
@@ -114,11 +119,18 @@ export default function CategoryPage() {
   const [filteredProducts, setFilteredProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // ✅ Filter States
+  // Filter States
   const [sortBy, setSortBy] = useState('newest'); 
   const [priceRange, setPriceRange] = useState(100000); 
   const [showMobileFilters, setShowMobileFilters] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(queryFromUrl);
+
+  // URL change hone par search update karein
+  useEffect(() => {
+    if(queryFromUrl) {
+        setSearchQuery(queryFromUrl);
+    }
+  }, [queryFromUrl]);
 
   // --- CORE FILTER LOGIC ---
   useEffect(() => {
@@ -166,7 +178,10 @@ export default function CategoryPage() {
     return () => clearTimeout(timer);
   }, [products, rawSlug, sortBy, priceRange, searchQuery]);
 
-  const pageTitle = rawSlug === 'all' ? 'All Collections' : rawSlug.charAt(0).toUpperCase() + rawSlug.slice(1);
+  // ✅ FIX 3: Safe Title Logic (charAt Error Fix)
+  const pageTitle = rawSlug === 'all' 
+      ? 'All Collections' 
+      : rawSlug.charAt(0).toUpperCase() + rawSlug.slice(1);
 
   return (
     <div className="min-h-screen bg-stone-50/50 pt-20 md:pt-28 pb-20">
@@ -195,7 +210,6 @@ export default function CategoryPage() {
         
         {/* --- DESKTOP SIDEBAR --- */}
         <aside className="hidden lg:block w-72 flex-shrink-0 sticky top-32 h-fit bg-white p-6 rounded-2xl border border-stone-100 shadow-sm">
-            {/* ✅ Passing Props to External Component */}
             <FilterSidebar 
                 searchQuery={searchQuery} setSearchQuery={setSearchQuery}
                 categories={categories} rawSlug={rawSlug}
@@ -320,7 +334,6 @@ export default function CategoryPage() {
                     </div>
                     
                     <div className="p-6 pb-32 overflow-y-auto flex-1">
-                        {/* ✅ Reusing the External Component */}
                         <FilterSidebar 
                             searchQuery={searchQuery} setSearchQuery={setSearchQuery}
                             categories={categories} rawSlug={rawSlug}
