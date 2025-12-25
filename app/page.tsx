@@ -1,0 +1,341 @@
+"use client";
+import { useState, useEffect } from 'react';
+import Image from 'next/image';
+import Link from 'next/link';
+import { useStore } from '@/lib/store';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ArrowRight, Star } from 'lucide-react';
+import ProductCard from '@/components/ProductCard';
+
+// ✅ FIX: Fallback Image
+const FALLBACK_IMAGE = "https://via.placeholder.com/1920x1080?text=ZERIMI+JEWELRY";
+
+export default function Home() {
+  const store = useStore() as any;
+  // Safe destructuring
+  const { products, banner, categories, featuredSection, promoSection, blogs, siteText } = store || {};
+
+  // --- SLIDER STATE ---
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const [slides, setSlides] = useState<any[]>([]);
+
+  // --- INITIALIZE SLIDES ---
+  useEffect(() => {
+    const safeBanner = banner || {};
+
+    if (safeBanner.slides && safeBanner.slides.length > 0) {
+      setSlides(safeBanner.slides);
+    } else if (safeBanner.image || safeBanner.heroImage) {
+      setSlides([{
+        image: safeBanner.image || safeBanner.heroImage,
+        title: siteText?.heroTitle || "Timeless Elegance",
+        subtitle: siteText?.heroSubtitle || "The ZERIMI Privilege",
+        link: "/category/all"
+      }]);
+    } else {
+      setSlides([{
+        image: FALLBACK_IMAGE,
+        title: "Timeless Elegance",
+        subtitle: "The ZERIMI Privilege",
+        link: "/category/all"
+      }]);
+    }
+  }, [banner, siteText]);
+
+  // --- AUTO PLAY SLIDER ---
+  useEffect(() => {
+    if (slides.length <= 1) return;
+    const timer = setInterval(() => {
+      setCurrentSlide((prev) => (prev + 1) % slides.length);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [slides]);
+
+  const getSafeImage = (img: string | undefined | null) => {
+    if (!img || img.trim() === "") return FALLBACK_IMAGE;
+    return img;
+  };
+
+  if (slides.length === 0) return null;
+
+  return (
+    <div className="bg-white overflow-x-hidden">
+
+  {/* =========================================
+          1. HERO SECTION (PREMIUM & COMPACT TEXT)
+         ========================================= */}
+      <section className="relative h-[60vh] md:h-screen w-full flex items-center justify-center overflow-hidden bg-black">
+        
+        {/* SLIDES */}
+        {slides.map((slide, index) => (
+          <div 
+            key={index}
+            className={`absolute inset-0 w-full h-full transition-opacity duration-1000 ease-in-out ${
+              index === currentSlide ? "opacity-100 z-10" : "opacity-0 z-0"
+            }`}
+          >
+            <Image 
+                src={getSafeImage(slide.image)} 
+                alt={slide.title || "Banner"} 
+                fill 
+                className="object-cover opacity-80" 
+                priority={index === 0}
+            />
+            {/* Elegant Gradient Overlay */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-black/20"></div>
+          </div>
+        ))}
+
+        {/* CONTENT */}
+        <div className="relative z-20 w-full h-full flex flex-col items-center justify-center pointer-events-none px-6 mt-6 md:mt-0 text-center">
+           <AnimatePresence mode='wait'>
+             <motion.div 
+               key={currentSlide} 
+               initial={{ opacity: 0, y: 15 }}
+               animate={{ opacity: 1, y: 0 }}
+               exit={{ opacity: 0, y: -15 }}
+               transition={{ duration: 0.6, ease: "easeOut" }}
+               className="pointer-events-auto max-w-3xl mx-auto"
+             >
+                {/* Subtitle: Extra spaced, smaller, golden */}
+                <p className="text-amber-300 tracking-[0.4em] text-[9px] md:text-xs uppercase font-medium mb-3 md:mb-5">
+                  {slides[currentSlide].subtitle || "The ZERIMI Privilege"}
+                </p>
+                
+                {/* Title: Serif, Italic, Not too huge */}
+                <h1 className="text-3xl md:text-6xl font-serif italic text-white leading-tight mb-6 md:mb-8 drop-shadow-lg tracking-wide">
+                  {slides[currentSlide].title || "Timeless Elegance"}
+                </h1>
+                
+                {/* Button: Minimal Glass Style */}
+               {/* Button: Mobile = Gold, Desktop = White */}
+                <Link 
+                    href={slides[currentSlide].link || "/category/all"}
+                    className="inline-block px-8 py-3 md:px-10 md:py-3 text-[10px] md:text-xs font-bold uppercase tracking-[0.2em] transition-all duration-300 shadow-xl border border-transparent
+                    
+                    bg-amber-600 text-white           
+                    md:bg-white md:text-[#0a1f1c]     
+                    
+                    hover:bg-black hover:text-white hover:border-black"
+                >
+                    {siteText?.heroBtnText || "Shop Now"}
+                </Link>
+             </motion.div>
+           </AnimatePresence>
+        </div>
+
+        {/* PREMIUM POINTERS (SLIDERS) - Moved Up */}
+        {/* bottom-20 (mobile) aur bottom-28 (desktop) kar diya taaki card ke piche na chhupe */}
+        <div className="absolute bottom-20 md:bottom-28 left-1/2 -translate-x-1/2 z-30 flex gap-3">
+            {slides.map((_, idx) => (
+              <button
+                key={idx}
+                onClick={() => setCurrentSlide(idx)}
+                className={`h-[2px] transition-all duration-500 rounded-full ${
+                  currentSlide === idx 
+                  ? "bg-amber-400 w-8 md:w-12 shadow-[0_0_10px_rgba(251,191,36,0.6)]" 
+                  : "bg-white/40 w-4 md:w-6 hover:bg-white"
+                }`}
+                aria-label={`Go to slide ${idx + 1}`}
+              />
+            ))}
+        </div>
+      </section>
+
+      {/* =========================================
+          2. CATEGORY CARDS (Grid Fix: 2 Columns on Mobile)
+         ========================================= */}
+      {/* =========================================
+          2. CATEGORY CARDS (SIMPLE DESIGN + MOBILE VISIBLE SHOP NOW)
+         ========================================= */}
+      <section className="relative z-20 -mt-12 md:-mt-16 px-4 md:px-6">
+        <div className="max-w-7xl mx-auto grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-6">
+          {categories?.map((cat: any) => {
+             
+             // Link Fixer
+             let categorySlug = "all";
+             const title = cat.title ? cat.title.toLowerCase() : "";
+             if (title.includes("ring")) categorySlug = "Ring";
+             else if (title.includes("neck") || title.includes("neclace")) categorySlug = "Necklace";
+             else if (title.includes("ear")) categorySlug = "Earring";
+             else if (title.includes("brace")) categorySlug = "Bracelet";
+             else categorySlug = "all";
+
+             return (
+              <motion.div 
+                key={cat.id || Math.random()} 
+                whileHover={{ y: -10 }} 
+                className="bg-[#f9f4e8] rounded-t-2xl rounded-b-lg text-center shadow-lg cursor-pointer group"
+              >
+                <Link href={`/category/${categorySlug}`} className="block p-3 md:p-6">
+                  {/* Image Area */}
+                  <div className="relative w-full h-28 md:h-48 mb-3 md:mb-4 overflow-hidden rounded-t-xl rounded-b-lg">
+                    <Image 
+                      src={getSafeImage(cat.image)} 
+                      alt={cat.title || "Category"} 
+                      fill 
+                      className="object-cover group-hover:scale-110 transition duration-700" 
+                    />
+                  </div>
+                  
+                  {/* Category Title */}
+                  <h3 className="font-serif text-sm md:text-xl text-[#0a1f1c] uppercase tracking-wide font-bold">
+                    {cat.title || "Category"}
+                  </h3>
+                  
+                  {/* Shop Now Button (Visible on Mobile, Hover on Desktop) */}
+                  <p className="flex text-[10px] md:text-xs uppercase text-amber-700 font-bold mt-2 justify-center items-center gap-1 transition-all duration-300
+                    opacity-100 md:opacity-0 md:group-hover:opacity-100 
+                    translate-y-0 md:translate-y-2 md:group-hover:translate-y-0">
+                    Shop Now <ArrowRight className="w-3 h-3" />
+                  </p>
+                </Link>
+              </motion.div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* =========================================
+          3. NEW ARRIVALS (Grid Fix: 2 Columns on Mobile)
+         ========================================= */}
+      <section className="max-w-7xl mx-auto px-4 md:px-6 py-16 md:py-20">
+        <div className="flex justify-between items-end mb-8 md:mb-12">
+          <div>
+            <h2 className="font-serif text-2xl md:text-4xl text-[#0a1f1c] mb-1 md:mb-2">
+              {siteText?.newArrivalsTitle || "New Arrivals"}
+            </h2>
+            <p className="text-stone-500 text-xs md:text-base">
+              {siteText?.newArrivalsSub || "Curated specifically for the modern you."}
+            </p>
+          </div>
+          <Link href="/category/all" className="flex items-center gap-1 text-[#0a1f1c] uppercase text-[10px] md:text-xs font-bold tracking-widest hover:text-amber-600 transition">
+            View All <ArrowRight className="w-3 h-3 md:w-4 md:h-4" />
+          </Link>
+        </div>
+
+        {/* 🛠️ Mobile: 2 Columns | Desktop: 4 Columns */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-8">
+          {products?.slice(0, 4).map((product: any) => (
+            <ProductCard key={product.id} product={product} />
+          ))}
+        </div>
+      </section>
+
+      {/* =========================================
+          4. FEATURED COLLECTION
+         ========================================= */}
+      <section id="shop" className="py-16 md:py-24 bg-[#fffcf5]">
+        <div className="max-w-7xl mx-auto px-4 md:px-6">
+          <div className="text-center mb-10 md:mb-16">
+            <h2 className="text-3xl md:text-4xl font-serif text-[#0a1f1c] mb-2 md:mb-4">
+              {siteText?.featuredTitle || "Diamonds & Engagement Rings"}
+            </h2>
+            <p className="text-stone-500 text-xs md:text-base">
+              {siteText?.featuredSub || "Experience brilliance."}
+            </p>
+            <div className="w-20 h-[2px] bg-amber-200 mx-auto mt-4"></div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 md:gap-12 items-center">
+            {/* Featured Hero Image */}
+            <div className="bg-white p-4 md:p-8 border border-stone-100 shadow-sm relative group overflow-hidden">
+              <div className="absolute top-0 right-0 bg-amber-100 text-amber-800 text-[10px] font-bold px-3 py-1 uppercase">Featured</div>
+              <div className="relative h-64 md:h-80 w-full mb-4 md:mb-6">
+                <Image
+                  src={getSafeImage(featuredSection?.image)}
+                  alt="Featured Product"
+                  fill
+                  className="object-contain group-hover:scale-105 transition duration-500"
+                />
+              </div>
+              <h3 className="text-xl md:text-2xl font-serif text-[#0a1f1c]">{featuredSection?.title || "Signature Collection"}</h3>
+              <p className="text-stone-500 text-xs md:text-sm mt-1 md:mt-2 mb-4 md:mb-6">{featuredSection?.subtitle || "Exclusive designs"}</p>
+              <Link href="/category/rings" className="inline-block text-xs font-bold uppercase tracking-widest border-b border-[#0a1f1c] pb-1 hover:text-amber-700 hover:border-amber-700 transition">
+                Shop Collection
+              </Link>
+            </div>
+
+            {/* Product Grid - Mobile 2 Cols */}
+            <div className="grid grid-cols-2 gap-3 md:gap-6">
+              {products?.slice(0, 4).map((product: any) => (
+                <ProductCard key={product.id} product={product} />
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* =========================================
+          5. PROMO SECTION
+         ========================================= */}
+      <section className="bg-[#f4e4d4] py-16 md:py-20 px-4 md:px-6">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center gap-8 md:gap-12">
+          <div className="flex-1 order-2 md:order-1 w-full">
+            <div className="relative h-[300px] md:h-[500px] w-full rounded-t-full overflow-hidden border-4 border-white shadow-2xl">
+              <Image
+                src={getSafeImage(promoSection?.image)}
+                alt="Promo Model"
+                fill
+                className="object-cover"
+              />
+            </div>
+          </div>
+          <div className="flex-1 order-1 md:order-2 space-y-4 md:space-y-6 text-center md:text-left">
+            <h2 className="text-3xl md:text-5xl font-serif text-[#0a1f1c] leading-tight">
+              {siteText?.promoTitle || "Special Offer"}
+            </h2>
+            <p className="text-stone-700 text-sm md:text-base leading-relaxed max-w-md mx-auto md:mx-0">
+              {siteText?.promoText || "Limited time deals on our finest jewelry."}
+            </p>
+            <div className="grid grid-cols-2 gap-4 pt-2 md:pt-4 max-w-sm mx-auto md:mx-0">
+              <div className="flex items-center gap-2 justify-center md:justify-start">
+                <div className="bg-white p-2 rounded-full"><Star className="w-3 h-3 md:w-4 md:h-4 text-amber-500 fill-current" /></div>
+                <span className="text-xs md:text-sm font-bold text-[#0a1f1c]">Certified Quality</span>
+              </div>
+              <div className="flex items-center gap-2 justify-center md:justify-start">
+                <div className="bg-white p-2 rounded-full"><Star className="w-3 h-3 md:w-4 md:h-4 text-amber-500 fill-current" /></div>
+                <span className="text-xs md:text-sm font-bold text-[#0a1f1c]">Lifetime Warranty</span>
+              </div>
+            </div>
+            <Link href="/category/all" className="inline-block bg-[#0a1f1c] text-white px-8 md:px-10 py-3 md:py-4 mt-4 text-xs uppercase tracking-widest hover:bg-amber-700 transition">
+              {siteText?.promoBtn || "Discover More"}
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* =========================================
+          6. BLOG SECTION
+         ========================================= */}
+      <section className="py-16 md:py-20 bg-white">
+        <div className="max-w-7xl mx-auto px-4 md:px-6 text-center">
+          <h2 className="text-2xl md:text-3xl font-serif text-[#0a1f1c] mb-8 md:mb-12">
+            {siteText?.blogTitle || "From Our Journal"}
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
+            {blogs?.map((blog: any) => (
+              <div key={blog.id} className="text-left group cursor-pointer">
+                <Link href={`/blog/${blog.id}`} className="block">
+                  <div className="relative h-56 md:h-64 w-full mb-4 overflow-hidden rounded-lg">
+                    <Image
+                      src={getSafeImage(blog.image)}
+                      alt={blog.title || "Blog Post"}
+                      fill
+                      className="object-cover group-hover:scale-105 transition duration-700"
+                    />
+                  </div>
+                  <p className="text-[10px] md:text-xs text-amber-700 uppercase font-bold mb-2">{blog.category || "News"} • {blog.date}</p>
+                  <h3 className="font-serif text-lg md:text-xl text-[#0a1f1c] leading-snug group-hover:text-amber-700 transition">
+                    {blog.title || "Untitled Post"}
+                  </h3>
+                </Link>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+    </div>
+  );
+}
