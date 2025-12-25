@@ -1,19 +1,25 @@
 import type { Metadata } from "next";
-import { Playfair_Display, Inter } from "next/font/google";
+// ✅ 1. Import "Bodoni Moda" (High Fashion) and "Lato"
+import { Bodoni_Moda, Lato } from "next/font/google";
 import "./globals.css";
 import GlobalLayout from "@/components/GlobalLayout";
 import { Toaster } from "react-hot-toast";
 
-// Fonts Setup
-const playfair = Playfair_Display({ 
+// ✅ 2. Setup "Bodoni Moda" (Vogue/Gucci Style Headings)
+// Iska variable name '--font-serif' hi rakhenge
+const luxuryFont = Bodoni_Moda({ 
   subsets: ["latin"], 
   variable: "--font-serif",
+  weight: ["400", "500", "600", "700", "800", "900"], 
   display: "swap",
 });
 
-const inter = Inter({ 
+// ✅ 3. Setup "Lato" (Clean & Premium Body Text)
+// Iska variable name '--font-sans' hi rakhenge
+const bodyFont = Lato({ 
   subsets: ["latin"], 
   variable: "--font-sans",
+  weight: ["100", "300", "400", "700", "900"],
   display: "swap",
 });
 
@@ -28,15 +34,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    // 'suppressHydrationWarning' zaroori hai extensions error rokne ke liye
     <html lang="en" suppressHydrationWarning>
-      <body className={`${playfair.variable} ${inter.variable} font-sans bg-[#fcfbf9]`}>
+      <body className={`${luxuryFont.variable} ${bodyFont.variable} font-sans bg-[#fcfbf9]`}>
         
-        {/* ✅ Toast Notifications System */}
         <Toaster position="top-center" reverseOrder={false} />
 
-        {/* ✅ Global Layout (Navbar + Footer) */}
-        {/* Yahan currentUser pass nahi karna hai, GlobalLayout khud handle karega */}
         <GlobalLayout>
           {children}
         </GlobalLayout>

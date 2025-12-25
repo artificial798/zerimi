@@ -516,15 +516,34 @@ function SidebarItem({ icon, label, id, active, onClick, count }: any) {
 }
 
 function OverviewTab({ user, orders, setActiveTab }: any) {
+  // ✅ FIX: Router yahan define karein
+  const router = useRouter();
+  
   const totalValue = orders.reduce((sum: number, o: Order) => sum + o.total, 0);
   const lastOrder = orders.length > 0 ? orders[0] : null;
+  
   return (
     <div className="space-y-8">
        {lastOrder && (
          <div className="bg-[#0f2925] rounded-xl p-6 md:p-8 text-white relative overflow-hidden shadow-lg border border-white/5">
             <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-               <div><div className="flex items-center gap-2 mb-2"><Sparkles className="w-4 h-4 text-amber-400" /><p className="text-amber-400 text-xs font-bold uppercase tracking-widest">Order Confirmed</p></div><h3 className="font-serif text-2xl md:text-3xl mb-2 text-white">Thank you for your patronage.</h3><p className="text-white/70 text-sm font-light max-w-xl leading-relaxed">Your recent acquisition (Order <span className="font-mono text-amber-200">#{lastOrder.id}</span>) is being processed.</p></div>
-               <button onClick={() => setActiveTab('orders')} className="px-6 py-3 border border-amber-500/30 text-amber-400 text-xs uppercase tracking-widest hover:bg-amber-600 hover:text-[#0a1f1c] hover:border-amber-600 transition rounded-lg font-bold">Track Status</button>
+               <div>
+                  <div className="flex items-center gap-2 mb-2">
+                     <Sparkles className="w-4 h-4 text-amber-400" />
+                     <p className="text-amber-400 text-xs font-bold uppercase tracking-widest">Order Confirmed</p>
+                  </div>
+                  <h3 className="font-serif text-2xl md:text-3xl mb-2 text-white">Thank you for your patronage.</h3>
+                  <p className="text-white/70 text-sm font-light max-w-xl leading-relaxed">
+                     Your recent acquisition (Order <span className="font-mono text-amber-200">#{lastOrder.id}</span>) is being processed.
+                  </p>
+               </div>
+               
+               <button 
+                  onClick={() => router.push(`/track-order?orderId=${lastOrder.id}`)}
+                  className="px-6 py-3 border border-amber-500/30 text-amber-400 text-xs uppercase tracking-widest hover:bg-amber-600 hover:text-[#0a1f1c] hover:border-amber-600 transition rounded-lg font-bold"
+               >
+                  Track Status
+               </button>
             </div>
             <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
          </div>
@@ -543,6 +562,9 @@ function OverviewTab({ user, orders, setActiveTab }: any) {
 }
 
 function OrdersTab({ orders, onReturn }: any) {
+  // ✅ FIX: Router yahan bhi define karein
+  const router = useRouter();
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center mb-2"><h2 className="font-serif text-2xl text-white">Order History</h2><span className="text-xs font-bold bg-white/10 px-3 py-1 rounded-full text-white/60">{orders.length} Orders</span></div>
@@ -582,11 +604,20 @@ function OrdersTab({ orders, onReturn }: any) {
             {/* Order Status & Actions */}
             <div className="bg-black/40 text-white p-4 px-6 flex justify-between items-center">
                <div className="flex items-center gap-3"><div className={`w-2 h-2 rounded-full ${order.status === 'Delivered' ? 'bg-green-500' : 'bg-amber-500'} animate-pulse`}></div><span className="text-xs uppercase tracking-widest font-bold">Status: {order.status}</span></div>
-               {order.status === 'Delivered' && (
-                  <button onClick={() => onReturn(order.id)} disabled={!isOrderReturnable(order.date)} className={`text-[10px] px-4 py-2 rounded uppercase tracking-wide transition flex items-center gap-2 ${isOrderReturnable(order.date) ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-white/5 text-white/30 cursor-not-allowed'}`}>
-                     <RotateCcw className="w-3 h-3" /> {isOrderReturnable(order.date) ? 'Return Item' : 'Return Period Expired'}
-                  </button>
-               )}
+               <div className="flex gap-2">
+                 {order.status === 'Delivered' && (
+                    <button onClick={() => onReturn(order.id)} disabled={!isOrderReturnable(order.date)} className={`text-[10px] px-4 py-2 rounded uppercase tracking-wide transition flex items-center gap-2 ${isOrderReturnable(order.date) ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-white/5 text-white/30 cursor-not-allowed'}`}>
+                       <RotateCcw className="w-3 h-3" /> {isOrderReturnable(order.date) ? 'Return Item' : 'Return Period Expired'}
+                    </button>
+                 )}
+                 {/* ✅ FIX: Yahan ab router kaam karega */}
+                 <button 
+                   onClick={() => router.push(`/track-order?orderId=${order.id}`)}
+                   className="flex items-center gap-2 text-xs font-bold uppercase bg-white text-[#0a1f1c] hover:bg-stone-200 transition px-6 py-2 rounded-lg"
+                 >
+                    Track
+                 </button>
+               </div>
             </div>
           </div>
         ))

@@ -13,7 +13,24 @@ import { auth, db } from './firebase';
 // 1. TYPE DEFINITIONS
 // ==========================================
 
-export type Product = { id: string; name: string; price: number; category: string; description: string; image: string; hoverImage: string; images: string[]; stock?: number; tags?: string[]; };
+export type Product = { 
+  id: string; 
+  name: string; 
+  price: number; 
+  originalPrice?: number;
+  category: string; 
+  description: string; 
+  image: string; 
+  hoverImage: string; 
+  images: string[]; 
+  stock?: number; 
+  tags?: string[];
+  // 👇 YE 3 NAYI LINES ZAROORI HAIN DATA SAVE KARNE KE LIYE
+  material?: string;
+  warranty?: string;
+  care?: string;
+  reviews?: Review[];
+};
 export type Review = { id: string; productId: string; userName: string; rating: number; comment: string; date: string; verified?: boolean; image?: string | null; };
 export type BlogPost = { id: string; title: string; category: string; image: string; date: string; content: string; };
 export type CategoryCard = { id: string; title: string; image: string; name?: string; };
