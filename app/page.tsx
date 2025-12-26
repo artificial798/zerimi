@@ -4,17 +4,24 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useStore } from '@/lib/store';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowRight, Star } from 'lucide-react';
+import { ArrowRight, Star, Truck, ShieldCheck, RefreshCw, Lock } from 'lucide-react';
 import ProductCard from '@/components/ProductCard';
+import PopupModal from '@/components/PopupModal';
 
 // ✅ FIX: Fallback Image
 const FALLBACK_IMAGE = "https://via.placeholder.com/1920x1080?text=ZERIMI+JEWELRY";
 
 export default function Home() {
   const store = useStore() as any;
+  
   // Safe destructuring
   const { products, banner, categories, featuredSection, promoSection, blogs, siteText } = store || {};
-
+// ✅ YE LINE ADD KAREIN (New Arrivals Logic)
+  // 1. Check karo products hain ya nahi
+  // 2. Copy karo [...products]
+  // 3. Reverse karo (Taaki naye wale sabse upar aa jayein)
+  // 4. Pehle 8 items lelo (.slice(0, 8))
+  const newArrivals = products ? [...products].reverse().slice(0, 8) : [];
   // --- SLIDER STATE ---
   const [currentSlide, setCurrentSlide] = useState(0);
   const [slides, setSlides] = useState<any[]>([]);
@@ -56,10 +63,13 @@ export default function Home() {
     return img;
   };
 
-  if (slides.length === 0) return null;
+ if (slides.length === 0) return null;
 
   return (
     <div className="bg-white overflow-x-hidden">
+      
+      {/* ✅ YAHAN PASTE KAREIN: Popup sabse upar rahega */}
+      <PopupModal />
 
   {/* =========================================
           1. HERO SECTION (PREMIUM & COMPACT TEXT)
@@ -214,11 +224,19 @@ export default function Home() {
           </Link>
         </div>
 
-        {/* 🛠️ Mobile: 2 Columns | Desktop: 4 Columns */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-8">
-          {products?.slice(0, 4).map((product: any) => (
-            <ProductCard key={product.id} product={product} />
-          ))}
+        {/* ✅ NAYA CODE: Jo nayi logic se products dikhayega */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8">
+            {newArrivals.length > 0 ? (
+                // Agar data hai to products dikhao
+                newArrivals.map((product: any) => (
+                    <ProductCard key={product.id} product={product} />
+                ))
+            ) : (
+                // Agar data load ho raha hai to 'Loading Skeleton' dikhao
+                [...Array(4)].map((_, i) => (
+                    <div key={i} className="aspect-[3/4] bg-stone-100 animate-pulse rounded-xl" />
+                ))
+            )}
         </div>
       </section>
 

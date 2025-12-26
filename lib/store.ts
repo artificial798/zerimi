@@ -57,7 +57,16 @@ export type User = {
 };
 
 export type Notification = { id: string; userId: string; title: string; message: string; date: string; isRead: boolean; };
-export type Coupon = { id: string; code: string; description?: string; discount: number; type: 'percent' | 'flat'; minOrderValue: number; expiryDate?: string; };
+export type Coupon = { 
+  id: string; 
+  code: string; 
+  description?: string; 
+  discount: number; 
+  type: 'percent' | 'flat'; 
+  minOrderValue: number; 
+  expiryDate?: string; 
+  allowedEmail?: string; // ✅ YE LINE ADD KAREIN (Lock feature ke liye)
+};
 export type Order = { id: string; customerName: string; customerEmail?: string; address: Address; total: number; subtotal: number; tax: number; discount: number; status: string; date: string; items: any[]; paymentMethod: string; invoiceNo: string; };
 export type Warranty = { id: string; userEmail: string; productName: string; expiryDate: string; certificateId: string; image: string; purchaseDate: string; };
 export type SystemSettings = { maintenanceMode: boolean; siteName: string; currencySymbol: string; taxRate: number; shippingThreshold: number; globalAlert: string; shippingCost?: number; };
@@ -123,6 +132,8 @@ type Store = {
   authCheckComplete: boolean; 
   systemSettings: SystemSettings;
   loading: boolean;
+  appliedCoupon: Coupon | null; // ✅ Naya State
+  couponDiscount: number;       // ✅ Naya State
 
   // Cart Actions
   addToCart: (product: Product, qty?: number, size?: string) => void;
@@ -130,6 +141,8 @@ type Store = {
   toggleCart: (status: boolean) => void;
   toggleWishlist: (product: Product) => void;
   clearCart: () => void;
+ applyCoupon: (code: string) => { success: boolean; message: string };
+  removeCoupon: () => void;            // ✅ Function definition
   
   // Auth Actions
   login: (email: string, pass: string) => Promise<void>;
@@ -187,7 +200,11 @@ export const useStore = create<Store>()(
   persist(
     (set, get) => ({
       // Initial State
+      appliedCoupon: null, // ✅ Default Value
+      couponDiscount: 0,   // ✅ Default Value
+      
       products: [],
+    
       reviews: [],
       blogs: [],
       coupons: [],
@@ -210,7 +227,51 @@ export const useStore = create<Store>()(
       authCheckComplete: false, 
       systemSettings: { maintenanceMode: false, siteName: 'ZERIMI', currencySymbol: '₹', taxRate: 3, shippingThreshold: 5000, globalAlert: '' },
       loading: true,
+// ✅ NEW: COUPON LOGIC (PERSONALIZED)
+   applyCoupon: (code: string) => {
+        const state = get();
+        const subtotal = state.cart.reduce((sum, item) => sum + item.product.price * item.qty, 0);
 
+        // 1. Find Coupon
+        const coupon = state.coupons.find((c) => c.code.toUpperCase() === code.toUpperCase());
+
+        if (!coupon) {
+          // ❌ Alert hataya, Return lagaya
+          return { success: false, message: "Invalid Coupon Code" };
+        }
+
+        // 2. CHECK: Personalized Email Lock 🔒
+        if (coupon.allowedEmail) {
+            if (!state.currentUser) {
+                return { success: false, message: "Please Login to use this exclusive coupon." };
+            }
+            if (state.currentUser.email.toLowerCase() !== coupon.allowedEmail.toLowerCase()) {
+                // 🔒 Security: Generic message (Email hide kiya)
+                return { success: false, message: "This coupon is not valid for your account." };
+            }
+        }
+
+        // 3. Min Order Value Check
+        if (subtotal < coupon.minOrderValue) {
+            return { success: false, message: `Add items worth ₹${coupon.minOrderValue} to use this code.` };
+        }
+
+        // 4. Calculate Discount
+        let discountAmount = 0;
+        if (coupon.type === 'percent') {
+            discountAmount = Math.round((subtotal * coupon.discount) / 100);
+        } else {
+            discountAmount = coupon.discount;
+        }
+
+        // 5. Apply
+        set({ appliedCoupon: coupon, couponDiscount: discountAmount });
+        
+        // 🎉 Success Return
+        return { success: true, message: `Coupon Applied! You saved ₹${discountAmount}` };
+      },
+
+      removeCoupon: () => set({ appliedCoupon: null, couponDiscount: 0 }),
       // --- CART & WISHLIST ---
     // ✅ NAYA CODE (Stock Check ke saath)
       addToCart: (product, qty = 1, size) => {
@@ -327,7 +388,12 @@ export const useStore = create<Store>()(
 
         const subtotal = state.cart.reduce((sum, item) => sum + item.product.price * item.qty, 0);
         const tax = Math.round(subtotal * (state.systemSettings.taxRate / 100));
-        const total = subtotal + tax + (state.systemSettings.shippingCost || 0);
+        
+        // ✅ Discount calculate karo
+        const discount = state.couponDiscount || 0; 
+        
+        // ✅ Total me se discount minus karo
+        const total = subtotal + tax + (state.systemSettings.shippingCost || 0) - discount;
         const orderId = `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
         
         const newOrder = {
@@ -371,7 +437,10 @@ export const useStore = create<Store>()(
            userId: email, title: 'Order Placed', message: `Order #${orderId} confirmed.`, date: new Date().toLocaleDateString('en-IN'), isRead: false
         });
 
-        set({ cart: [] });
+        // Notification Bhejo... (Existing code)
+        
+        // ✅ Reset Cart & Coupon
+        set({ cart: [], appliedCoupon: null, couponDiscount: 0 }); // Yahan update karein
         return orderId;
       },
 

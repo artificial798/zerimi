@@ -13,6 +13,8 @@ import {
     // 👇 Ye Naye Icons Add Karein
     Download, FileJson, RefreshCw, ShieldAlert
 } from 'lucide-react';
+// ✅ Is line ko file ke sabse top par add karein
+import PopupManager from '@/components/admin/PopupManager';
 import Link from 'next/link';
 // --- PREMIUM ALERT COMPONENT (Add this below imports) ---
 const Toast = ({ message, type, onClose }: { message: string, type: 'error' | 'success' | 'info', onClose: () => void }) => {
@@ -381,6 +383,19 @@ export default function AdminPage() {
                             <SidebarBtn icon={<Layout />} label="Homepage Editor" active={activeTab === 'cms'} onClick={() => setActiveTab('cms')} />
                             <SidebarBtn icon={<Ticket />} label="Coupons & Offers" active={activeTab === 'coupons'} onClick={() => setActiveTab('coupons')} />
                             <SidebarBtn icon={<Megaphone />} label="Marketing" active={activeTab === 'marketing'} onClick={() => setActiveTab('marketing')} />
+                            {/* Line 308 ke baad Marketing ke neeche */}
+                            
+                            
+                            {/* ✅ NEW POPUP BUTTON */}
+                            <button 
+                                onClick={() => setActiveTab('popup')} 
+                                className={`flex items-center justify-center lg:justify-start gap-4 w-full p-3 rounded-lg text-sm tracking-wide transition-all duration-300 group ${activeTab === 'popup' ? 'bg-amber-600 text-white shadow-lg' : 'text-white/40 hover:bg-white/5 hover:text-white'}`}
+                            >
+                                <span className={`w-5 h-5 ${activeTab === 'popup' ? 'text-white' : 'group-hover:text-amber-400'}`}>
+                                    <Sparkles className="w-5 h-5" />
+                                </span>
+                                <span className="hidden lg:inline">Popup Manager</span>
+                            </button>
                             <p className="px-4 py-2 text-[10px] text-white/20 uppercase tracking-widest hidden lg:block mt-4">Administration</p>
                             <SidebarBtn icon={<Users />} label="Staff & Users" active={activeTab === 'users'} onClick={() => setActiveTab('users')} />
                             <SidebarBtn icon={<Settings />} label="Payment & Config" active={activeTab === 'config'} onClick={() => setActiveTab('config')} />
@@ -518,6 +533,15 @@ export default function AdminPage() {
                                 showToast={showToast} // <--- Ye Bhi Zaroori Hai
                             />}
                             {activeTab === 'marketing' && <MarketingManager allUsers={allUsers} sendNotification={sendNotification} showToast={showToast} />}
+                            {/* ✅ NEW POPUP MANAGER SCREEN */}
+                            {activeTab === 'popup' && (
+                                <div className="animate-fade-in">
+                                    <PopupManager 
+                                        siteText={store.siteText} 
+                                        onSave={store.updateSiteText} 
+                                    />
+                                </div>
+                            )}
                             {activeTab === 'users' && <UserManager
                                 allUsers={allUsers}
                                 updateUserRole={updateUserRole}
@@ -2252,24 +2276,29 @@ function UserManager({ allUsers, updateUserRole, deleteUser, showToast }: any) {
     );
 }
 // --- COUPON MANAGER (PREMIUM: Toasts, Glassmorphism & Copy) ---
-function CouponManager({ coupons, onAdd, onDelete, showToast }: { coupons: Coupon[], onAdd: (c: any) => void, onDelete: (id: string) => void, showToast: any }) {
-    const [formData, setFormData] = useState({ code: '', type: 'percent', discount: 0, minOrderValue: 0 });
+// --- UPDATED COUPON MANAGER (With Personalization) ---
+function CouponManager({ coupons, onAdd, onDelete, showToast }: { coupons: any[], onAdd: (c: any) => void, onDelete: (id: string) => void, showToast: any }) {
+    // Naya Field 'allowedEmail' add kiya hai
+    const [formData, setFormData] = useState({ code: '', type: 'percent', discount: 0, minOrderValue: 0, allowedEmail: '' });
 
     const handleSave = () => {
-        // Validation
         if (!formData.code || !formData.discount) {
             return showToast("Code and Discount value required", "error");
         }
 
+        // Logic: Agar email dala hai to use clean karo, nahi to empty rakho
+        const emailLock = formData.allowedEmail ? formData.allowedEmail.toLowerCase().trim() : null;
+
         onAdd({
             id: Date.now().toString(),
-            code: formData.code.toUpperCase().replace(/\s/g, ''), // Auto-uppercase & remove spaces
+            code: formData.code.toUpperCase().replace(/\s/g, ''),
             type: formData.type,
             discount: Number(formData.discount),
-            minOrderValue: Number(formData.minOrderValue)
+            minOrderValue: Number(formData.minOrderValue),
+            allowedEmail: emailLock // ✅ Ye naya data hai (Lock)
         });
 
-        setFormData({ code: '', type: 'percent', discount: 0, minOrderValue: 0 });
+        setFormData({ code: '', type: 'percent', discount: 0, minOrderValue: 0, allowedEmail: '' });
         showToast("Coupon created successfully", "success");
     };
 
@@ -2280,123 +2309,106 @@ function CouponManager({ coupons, onAdd, onDelete, showToast }: { coupons: Coupo
 
     return (
         <div className="animate-fade-in space-y-8">
-            <SectionHeader title="Coupon Management" subtitle="Create discount codes and offers for customers" />
+            <div className="flex justify-between items-center mb-8">
+                <div><h2 className="text-2xl font-serif text-white">Coupon Management</h2><p className="text-sm text-white/40 mt-1">Create public or personalized offers</p></div>
+            </div>
 
-            {/* 1. CREATE COUPON FORM (Premium Card) */}
+            {/* CREATE COUPON FORM */}
             <div className="bg-[#0f2925] p-6 rounded-2xl border border-white/5 shadow-xl relative overflow-hidden">
-                {/* Background Decor */}
                 <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
 
                 <h4 className="text-white font-serif text-lg mb-4 flex items-center gap-2">
                     <PlusCircle className="w-5 h-5 text-amber-500" /> Create New Offer
                 </h4>
 
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-6 items-end">
-                    <div className="md:col-span-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 items-end">
+                    <div className="lg:col-span-1">
                         <label className="text-[10px] text-white/40 uppercase block mb-2 font-bold">Coupon Code</label>
-                        <div className="relative group">
-                            <Ticket className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30 group-focus-within:text-amber-500 transition" />
-                            <input
-                                className="w-full pl-10 pr-4 py-3 bg-black/20 border border-white/10 rounded-xl text-white outline-none focus:border-amber-500/50 transition uppercase font-bold tracking-wider placeholder:text-white/20"
-                                placeholder="SUMMER2025"
-                                value={formData.code}
-                                onChange={e => setFormData({ ...formData, code: e.target.value })}
-                            />
-                        </div>
-                    </div>
-
-                    <div className="md:col-span-1">
-                        <label className="text-[10px] text-white/40 uppercase block mb-2 font-bold">Discount Type</label>
-                        <select
-                            className="w-full px-4 py-3 bg-[#0a1f1c] border border-white/10 rounded-xl text-white outline-none focus:border-amber-500/50 cursor-pointer appearance-none"
-                            value={formData.type}
-                            onChange={e => setFormData({ ...formData, type: e.target.value as any })}
-                        >
-                            <option value="percent">Percentage (%)</option>
-                            <option value="flat">Flat Amount (₹)</option>
-                        </select>
-                    </div>
-
-                    <div className="md:col-span-1">
-                        <label className="text-[10px] text-white/40 uppercase block mb-2 font-bold">Value</label>
                         <input
-                            type="number"
-                            className="w-full px-4 py-3 bg-black/20 border border-white/10 rounded-xl text-white outline-none focus:border-amber-500/50 transition font-mono"
-                            placeholder="20"
-                            value={formData.discount || ''}
-                            onChange={e => setFormData({ ...formData, discount: Number(e.target.value) })}
+                            className="w-full px-4 py-3 bg-black/20 border border-white/10 rounded-xl text-white outline-none focus:border-amber-500/50 transition uppercase font-bold tracking-wider placeholder:text-white/20"
+                            placeholder="VIP20"
+                            value={formData.code}
+                            onChange={e => setFormData({ ...formData, code: e.target.value })}
                         />
                     </div>
 
-                    <div className="md:col-span-1">
+                    <div className="lg:col-span-1">
+                        <label className="text-[10px] text-white/40 uppercase block mb-2 font-bold">Value (₹ or %)</label>
+                        <div className="flex gap-2">
+                            <input
+                                type="number"
+                                className="w-full px-4 py-3 bg-black/20 border border-white/10 rounded-xl text-white outline-none focus:border-amber-500/50 font-mono"
+                                placeholder="20"
+                                value={formData.discount || ''}
+                                onChange={e => setFormData({ ...formData, discount: Number(e.target.value) })}
+                            />
+                            <select
+                                className="px-2 bg-[#0a1f1c] border border-white/10 rounded-xl text-white outline-none text-xs"
+                                value={formData.type}
+                                onChange={e => setFormData({ ...formData, type: e.target.value as any })}
+                            >
+                                <option value="percent">%</option>
+                                <option value="flat">₹</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    {/* ✅ NEW: Email Restriction Field */}
+                    <div className="lg:col-span-2">
+                        <label className="text-[10px] text-amber-500 uppercase block mb-2 font-bold flex items-center gap-2">
+                           <Lock className="w-3 h-3" /> Restrict to Email (Optional)
+                        </label>
+                        <input
+                            type="email"
+                            className="w-full px-4 py-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-white outline-none focus:border-amber-500 transition placeholder:text-white/20 text-sm"
+                            placeholder="Enter customer email to lock this coupon..."
+                            value={formData.allowedEmail}
+                            onChange={e => setFormData({ ...formData, allowedEmail: e.target.value })}
+                        />
+                    </div>
+
+                    <div className="lg:col-span-1">
                         <button
                             onClick={handleSave}
                             className="w-full bg-amber-600 text-white py-3 rounded-xl text-xs uppercase font-bold hover:bg-amber-700 transition shadow-lg shadow-amber-900/20 flex items-center justify-center gap-2"
                         >
-                            <Save className="w-4 h-4" /> Save Coupon
+                            <Save className="w-4 h-4" /> Save
                         </button>
                     </div>
                 </div>
-
-                <div className="mt-4 pt-4 border-t border-white/5">
-                    <label className="text-[10px] text-white/40 uppercase block mb-2 font-bold">Minimum Order Value (Optional)</label>
-                    <input
-                        type="number"
-                        className="w-full md:w-1/3 px-4 py-2 bg-black/20 border border-white/10 rounded-lg text-white text-xs outline-none focus:border-amber-500/50 transition font-mono"
-                        placeholder="Min Cart Value (e.g. 500)"
-                        value={formData.minOrderValue || ''}
-                        onChange={e => setFormData({ ...formData, minOrderValue: Number(e.target.value) })}
-                    />
-                </div>
             </div>
 
-            {/* 2. COUPON LIST (Grid View) */}
+            {/* COUPON LIST */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {coupons?.map(c => (
                     <div key={c.id} className="bg-[#0f2925] p-5 border border-white/5 rounded-2xl flex justify-between items-center group hover:border-amber-500/30 transition duration-300 relative overflow-hidden">
-
-                        {/* Left Side Info */}
+                        
                         <div className="relative z-10">
-                            <div
-                                onClick={() => copyToClipboard(c.code)}
-                                className="flex items-center gap-2 cursor-pointer"
-                                title="Click to Copy"
-                            >
+                            <div onClick={() => copyToClipboard(c.code)} className="flex items-center gap-2 cursor-pointer">
                                 <h4 className="text-amber-500 font-bold text-lg tracking-wide">{c.code}</h4>
-                                <span className="opacity-0 group-hover:opacity-50 transition"><Type className="w-3 h-3 text-white" /></span>
+                                {c.allowedEmail && <Lock className="w-3 h-3 text-red-400" />} {/* Lock Icon */}
                             </div>
 
-                            <div className="flex items-center gap-2 mt-1">
-                                <span className="text-xs text-white bg-white/10 px-2 py-0.5 rounded font-bold">
+                            <div className="flex flex-col gap-1 mt-1">
+                                <span className="text-xs text-white bg-white/10 px-2 py-0.5 rounded font-bold w-fit">
                                     {c.type === 'percent' ? `${c.discount}% OFF` : `₹${c.discount} OFF`}
                                 </span>
-                                {c.minOrderValue > 0 && (
-                                    <span className="text-[10px] text-white/40">On orders above ₹{c.minOrderValue}</span>
+                                {/* Dikhayega ki ye coupon kiske liye hai */}
+                                {c.allowedEmail && (
+                                    <span className="text-[9px] text-red-300 border border-red-500/30 px-1.5 py-0.5 rounded bg-red-500/10">
+                                        Only for: {c.allowedEmail}
+                                    </span>
                                 )}
                             </div>
                         </div>
 
-                        {/* Right Side Action */}
                         <div className="relative z-10">
-                            <button
-                                onClick={() => onDelete(c.id)}
-                                className="w-8 h-8 flex items-center justify-center bg-white/5 rounded-full text-white/30 hover:bg-red-500/20 hover:text-red-400 transition"
-                                title="Delete Coupon"
-                            >
+                            <button onClick={() => onDelete(c.id)} className="w-8 h-8 flex items-center justify-center bg-white/5 rounded-full text-white/30 hover:bg-red-500/20 hover:text-red-400 transition">
                                 <Trash2 className="w-4 h-4" />
                             </button>
                         </div>
-
-                        {/* Decorative Circle */}
-                        <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-white/5 rounded-full blur-xl group-hover:bg-amber-500/10 transition"></div>
                     </div>
                 ))}
-
-                {(!coupons || coupons.length === 0) && (
-                    <div className="col-span-full p-12 text-center text-white/30 italic bg-[#0f2925] rounded-2xl border border-white/5 border-dashed">
-                        No active coupons found. Create your first offer above.
-                    </div>
-                )}
             </div>
         </div>
     )
