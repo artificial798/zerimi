@@ -1199,10 +1199,12 @@ function ProductManager({ products, addProduct, updateProduct, deleteProduct }: 
 // --- CONFIG MANAGER (ULTRA PREMIUM: Razorpay + PayU + Logistics) ---
 function ConfigManager({ showToast, updateSystemConfig }: any) {
     // 1. Config State (Added PayU)
-    const [config, setConfig] = useState({
+   const [config, setConfig] = useState({
         razorpay: { enabled: true, keyId: '', keySecret: '' },
-        payu: { enabled: false, merchantKey: '', merchantSalt: '' }, // <--- New PayU State
+        payu: { enabled: false, merchantKey: '', merchantSalt: '' },
         shiprocket: { enabled: true, email: '', password: '' },
+        // ✅ NEW: Payment Section Add Karein
+        payment: { instamojoApiKey: '', instamojoAuthToken: '', instamojoEnabled: false },
         store: {
             taxRate: 3,
             shippingCost: 150,
@@ -1341,7 +1343,54 @@ function ConfigManager({ showToast, updateSystemConfig }: any) {
                         )}
                     </div>
                 </div>
+{/* 4. INSTAMOJO (Purple Theme) - FIXED CODE ✅ */}
+                    <div className={`p-8 rounded-3xl border transition-all duration-300 relative overflow-hidden group ${config.payment?.instamojoEnabled ? 'bg-[#0f2925] border-purple-500/30 shadow-[0_0_40px_rgba(168,85,247,0.1)]' : 'bg-black/20 border-white/5 grayscale'}`}>
+                        {/* Purple Glow */}
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-purple-500/20 transition duration-700"></div>
 
+                        <div className="flex justify-between items-center mb-6 relative z-10">
+                            <div className="flex items-center gap-3">
+                                <div className={`p-2 rounded-lg ${config.payment?.instamojoEnabled ? 'bg-purple-600 text-white' : 'bg-white/10 text-white/40'}`}>
+                                    <CreditCard className="w-6 h-6" />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-serif text-white">Instamojo</h3>
+                                    <p className="text-[10px] text-white/40 uppercase tracking-widest">Indian Payment Gateway</p>
+                                </div>
+                            </div>
+                            {/* Toggle Switch */}
+                            <div onClick={() => handleChange('payment', 'instamojoEnabled', !config.payment?.instamojoEnabled)} className={`w-12 h-6 rounded-full p-1 cursor-pointer transition-colors duration-300 ${config.payment?.instamojoEnabled ? 'bg-purple-600' : 'bg-white/10'}`}>
+                                <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-300 ${config.payment?.instamojoEnabled ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                            </div>
+                        </div>
+
+                        {config.payment?.instamojoEnabled && (
+                            <div className="space-y-4 animate-fade-in-up relative z-10">
+                                <div>
+                                    <label className="text-[10px] text-white/40 uppercase font-bold mb-1 block">API Key</label>
+                                    <input 
+                                        value={config.payment?.instamojoApiKey || ''} 
+                                        onChange={(e) => handleChange('payment', 'instamojoApiKey', e.target.value)} 
+                                        placeholder="test_2384..." 
+                                        className="w-full p-4 bg-black/40 border border-white/10 rounded-xl text-white text-sm outline-none focus:border-purple-500/50 transition font-mono" 
+                                    />
+                                </div>
+                                <div className="relative">
+                                    <label className="text-[10px] text-white/40 uppercase font-bold mb-1 block">Auth Token</label>
+                                    <input 
+                                        type={showSecret['mojo'] ? "text" : "password"} 
+                                        value={config.payment?.instamojoAuthToken || ''} 
+                                        onChange={(e) => handleChange('payment', 'instamojoAuthToken', e.target.value)} 
+                                        placeholder="••••••••••••••••" 
+                                        className="w-full p-4 bg-black/40 border border-white/10 rounded-xl text-white text-sm outline-none focus:border-purple-500/50 transition font-mono" 
+                                    />
+                                    <button onClick={() => toggleSecret('mojo')} className="absolute right-4 top-9 text-white/30 hover:text-white">
+                                        <Eye className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 {/* RIGHT COLUMN: STORE RULES (Same as before) */}
                 <div className="space-y-8">
                     <div className="bg-[#0f2925] p-8 rounded-3xl border border-white/5 relative overflow-hidden">
@@ -1378,6 +1427,7 @@ function ConfigManager({ showToast, updateSystemConfig }: any) {
         </div>
     );
 }
+
 // --- CMS MANAGER ---
 // Is function ko 'admin/page.tsx' mein replace karein
 // --- CMS MANAGER (Cloudinary Integrated) ---
