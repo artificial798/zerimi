@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, FormEvent } from 'react'; // Added FormEvent for types
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-// Firebase imports
+
+// ✅ Firebase Imports (Path check kar lein: '../../lib/firebase' ya '@/lib/firebase')
 import { auth, googleProvider, db } from '../../lib/firebase'; 
 import { 
   signInWithPopup, 
@@ -13,23 +14,24 @@ import {
   updateProfile 
 } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore'; 
+
 import { motion, AnimatePresence } from 'framer-motion';
 import toast, { Toaster } from 'react-hot-toast';
 import { FcGoogle } from 'react-icons/fc';
 import { 
   FiLock, FiMail, FiUser, FiArrowRight, FiArrowLeft, 
-  FiPhone 
+  FiPhone, FiX // ✅ Added FiX icon
 } from 'react-icons/fi';
 import { BiMaleFemale, BiDiamond } from 'react-icons/bi';
 
 const AuthPage = () => {
   const router = useRouter(); 
 
-  // --- State Management ---
-  const [view, setView] = useState('login'); 
+  // --- State ---
+  const [view, setView] = useState('login'); // 'login' | 'register' | 'reset'
   const [loading, setLoading] = useState(false);
   
-  // Expanded Form Data
+  // Form Data
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -40,23 +42,23 @@ const AuthPage = () => {
     agreeToTerms: false
   });
 
-  // Type definition for handleChange
   const handleChange = (e: any) => {
     const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
     setFormData({ ...formData, [e.target.name]: value });
   };
 
-  // --- Premium Toasts ---
+  // --- Toasts (Fixed: Auto Close Timer) ---
   const notifySuccess = (msg: string) => toast.success(msg, {
+    duration: 3000, // ✅ 3 second mein gayab
     style: { background: '#0f172a', color: '#fbbf24', border: '1px solid #fbbf24' },
     iconTheme: { primary: '#fbbf24', secondary: '#000' },
   });
 
   const notifyError = (msg: string) => toast.error(msg, {
+    duration: 4000,
     style: { background: '#1a1a1a', color: '#ef4444', border: '1px solid #333' }
   });
 
-  // Fixed: Added type 'any' to handle diverse error objects
   const cleanErrorMessage = (msg: any) => {
     const messageString = typeof msg === 'string' ? msg : msg.toString();
     return messageString.replace('Firebase: ', '').replace(' (auth/', '').replace(').', '').replace('-', ' ');
@@ -65,17 +67,13 @@ const AuthPage = () => {
   // --- Handlers ---
   
   // 1. LOGIN
-  // Fixed: Added 'React.FormEvent' type
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
       await signInWithEmailAndPassword(auth, formData.email, formData.password);
       notifySuccess('Welcome back to ZERIMI.');
-      
-      // Recommended: Using router.push instead of window.location for SPA performance
       router.push('/dashboard');
-      
     } catch (error: any) {
       notifyError(cleanErrorMessage(error.message));
       setLoading(false);
@@ -83,25 +81,18 @@ const AuthPage = () => {
   };
 
   // 2. REGISTER
-  // Fixed: Added 'React.FormEvent' type
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Validation
     if(!formData.name) return notifyError("Name is required.");
     if(!formData.mobile) return notifyError("Mobile number is required.");
     if(!formData.agreeToTerms) return notifyError("You must agree to Terms & Privacy Policy.");
     
     setLoading(true);
     try {
-      // Create Auth User
       const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
       const user = userCredential.user;
-
-      // Update Profile Name
       await updateProfile(user, { displayName: formData.name });
       
-      // SAVE DATA TO FIRESTORE
       await setDoc(doc(db, "users", user.uid), {
         uid: user.uid,
         name: formData.name,
@@ -115,9 +106,7 @@ const AuthPage = () => {
       });
       
       notifySuccess(`Account created! Welcome to the Elite.`);
-      
       router.push('/dashboard');
-
     } catch (error: any) {
       notifyError(cleanErrorMessage(error.message));
       setLoading(false);
@@ -129,9 +118,8 @@ const AuthPage = () => {
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
-
-      // Check if user exists in DB
       const userDoc = await getDoc(doc(db, "users", user.uid));
+      
       if (!userDoc.exists()) {
         await setDoc(doc(db, "users", user.uid), {
           uid: user.uid,
@@ -142,7 +130,6 @@ const AuthPage = () => {
           method: 'google'
         });
       }
-
       notifySuccess('Signed in with Google.');
       router.push('/dashboard');
     } catch (error) {
@@ -151,7 +138,6 @@ const AuthPage = () => {
   };
 
   // 4. RESET PASSWORD
-  // Fixed: Added 'React.FormEvent' type
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.email) return notifyError("Please enter your email first.");
@@ -176,13 +162,27 @@ const AuthPage = () => {
       
       <Toaster position="top-center" />
 
+      {/* ✅ NEW: Back/Close Button (Top Left) */}
+      <button 
+        onClick={() => router.push('/')}
+        className="absolute top-6 left-6 z-50 text-white/50 hover:text-white flex items-center gap-2 transition-all group"
+      >
+        <div className="p-2 rounded-full bg-white/10 group-hover:bg-white/20 backdrop-blur-md border border-white/5">
+            <FiX className="w-5 h-5" />
+        </div>
+        <span className="text-sm font-medium hidden md:block tracking-wide">Return Home</span>
+      </button>
+
       <motion.div 
         layout
         className="w-full max-w-md bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-8 relative z-10"
       >
         {/* Header */}
         <div className="text-center mb-6">
-          <h1 className="text-4xl font-serif text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 to-yellow-600 tracking-widest font-bold mb-2">
+          <h1 
+            className="text-4xl font-serif text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 to-yellow-600 tracking-widest font-bold mb-2 cursor-pointer"
+            onClick={() => router.push('/')}
+          >
             ZERIMI
           </h1>
           <p className="text-gray-400 text-xs tracking-[0.2em] uppercase">
@@ -223,7 +223,7 @@ const AuthPage = () => {
             </motion.form>
           )}
 
-          {/* --- REGISTER VIEW (PREMIUM) --- */}
+          {/* --- REGISTER VIEW --- */}
           {view === 'register' && (
             <motion.form 
               key="register"
@@ -256,7 +256,7 @@ const AuthPage = () => {
 
               <InputField icon={FiLock} type="password" placeholder="Create Password" name="password" value={formData.password} onChange={handleChange} />
 
-              {/* Terms Checkbox - FIXED LINKS */}
+              {/* Terms Checkbox */}
               <div className="flex items-start gap-3 mt-2 px-1">
                 <input 
                   type="checkbox" 
@@ -274,8 +274,7 @@ const AuthPage = () => {
                   and{' '}
                   <Link href="/privacy" className="text-yellow-500 hover:underline hover:text-yellow-400 transition-colors">
                     Privacy Policy
-                  </Link>{' '}
-                  of Zerimi.
+                  </Link>.
                 </label>
               </div>
 
@@ -314,8 +313,8 @@ const AuthPage = () => {
   );
 };
 
-// --- Reusable Premium Components ---
-// Fixed: Added ': any' to props to prevent strict type errors in build
+// --- Reusable Components (Fixed Types) ---
+
 const InputField = ({ icon: Icon, ...props }: any) => (
   <div className="relative group w-full">
     <Icon className="absolute left-3 top-3.5 text-gray-500 group-focus-within:text-yellow-500 transition-colors" />
