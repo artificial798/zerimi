@@ -37,7 +37,19 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={`${luxuryFont.variable} ${bodyFont.variable} font-sans bg-[#fcfbf9]`}>
         
-        <Toaster position="top-center" reverseOrder={false} />
+       <Toaster 
+          position="top-center" 
+          reverseOrder={false}
+          toastOptions={{
+            duration: 3000, // 3 second mein auto-close
+            style: {
+              background: '#333',
+              color: '#fff',
+            },
+            // Mobile fix: Touch karne par timer rukna nahi chahiye
+            className: '',
+          }}
+        />
 
         <GlobalLayout>
           {children}

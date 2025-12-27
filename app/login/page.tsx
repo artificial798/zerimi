@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import toast from 'react-hot-toast';
 
 // ✅ Firebase Imports (Path check kar lein: '../../lib/firebase' ya '@/lib/firebase')
 import { auth, googleProvider, db } from '../../lib/firebase'; 
@@ -16,7 +17,7 @@ import {
 import { doc, setDoc, getDoc } from 'firebase/firestore'; 
 
 import { motion, AnimatePresence } from 'framer-motion';
-import toast, { Toaster } from 'react-hot-toast';
+
 import { FcGoogle } from 'react-icons/fc';
 import { 
   FiLock, FiMail, FiUser, FiArrowRight, FiArrowLeft, 
@@ -160,7 +161,7 @@ const AuthPage = () => {
       <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-yellow-600/10 rounded-full blur-[120px]" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-purple-900/10 rounded-full blur-[120px]" />
       
-      <Toaster position="top-center" />
+      
 
       {/* ✅ NEW: Back/Close Button (Top Left) */}
       <button 
