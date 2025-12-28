@@ -9,7 +9,9 @@ import {
 import Image from 'next/image';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-
+// File ke top par ye imports hone chahiye
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 // --- CUSTOM TOAST COMPONENT ---
 const Toast = ({ message, type, onClose }: { message: string, type: 'success' | 'error', onClose: () => void }) => (
     <motion.div
@@ -52,7 +54,26 @@ export default function CheckoutPage() {
     const [discount, setDiscount] = useState(0);
     const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
     const [toast, setToast] = useState<{ msg: string, type: 'success' | 'error' } | null>(null);
+// --- ✅ NAYA CODE START (Settings Fetch) ---
+    const [liveSettings, setLiveSettings] = useState<any>(null);
 
+    // Page load hote hi Database se settings kheecho
+    useEffect(() => {
+        const fetchSettings = async () => {
+            try {
+                const docRef = doc(db, "settings", "general");
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    console.log("Settings Loaded:", docSnap.data()); // Debugging
+                    setLiveSettings(docSnap.data());
+                }
+            } catch (error) {
+                console.error("Settings error:", error);
+            }
+        };
+        fetchSettings();
+    }, []);
+    // --- ✅ NAYA CODE END ---
     // Form State
     const [formData, setFormData] = useState({
         email: '',
@@ -195,9 +216,11 @@ const handlePlaceOrder = async () => {
     setLoading(true);
 
     try {
-        const state = useStore.getState();
-        const settings = state.systemSettings || {};
-        const paymentConfig = settings.payment || {};
+        // Purana code hata kar ye likhein:
+const state = useStore.getState();
+// Pehle Live Settings check karo, agar wo nahi to Store wali, warna Empty
+const settings = liveSettings || state.systemSettings || {}; 
+const paymentConfig = settings.payment || {};
 
         // Calculate Totals
         const subtotal = state.cart.reduce((sum, item) => sum + item.product.price * item.qty, 0);
@@ -282,7 +305,7 @@ const action = state.placeOrder;
             // Ab ye bina error ke chalega
             await action(orderDetails);
 
-            await action(orderDetails);
+            
             if (typeof clearCart === 'function') clearCart();
 
             setLoading(false);
