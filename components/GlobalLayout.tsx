@@ -382,7 +382,63 @@ const subtotal = cart.reduce((sum: number, item: any) => sum + item.product.pric
               <Link href="/category/all" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-amber-400 text-amber-400 transition-colors font-bold">Collections</Link>
               <button onClick={() => { setIsMobileMenuOpen(false); setIsWishlistOpen(true); }} className="text-left hover:text-amber-400 transition-colors flex items-center gap-2"><Heart className="w-5 h-5" /> Wishlist</button>
             </div>
-            <div className="p-8 border-t border-white/10 bg-black/20"><Link href="/login" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 text-white/60 hover:text-white mb-4 transition"><User className="w-5 h-5" /> Login / Register</Link><p className="text-xs text-white/40 mt-4">&copy; 2025 ZERIMI.</p></div>
+            {/* ✅ UPDATED MOBILE FOOTER (Clickable Profile) */}
+            <div className="p-8 border-t border-white/10 bg-black/20">
+              {currentUser ? (
+                // 🔹 SCENARIO 1: USER LOGIN HAI
+                <div className="flex flex-col gap-4">
+                    
+                    {/* 👇 YAHAN CHANGE KIYA: Poore section ko <Link> bana diya */}
+                   <Link 
+                        href="/dashboard"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className="flex items-center gap-4 p-2 -ml-2 rounded-xl hover:bg-white/10 transition cursor-pointer group"
+                    >
+                        {/* ✅ UPDATED AVATAR with IMAGE SUPPORT */}
+                        <div className="relative w-12 h-12 rounded-full bg-amber-500 text-[#0a1f1c] flex items-center justify-center font-bold text-xl shadow-lg border-2 border-white/10 group-hover:scale-105 transition overflow-hidden">
+                            {currentUser.profileImage ? (
+                                <Image 
+                                    src={currentUser.profileImage} 
+                                    alt="Profile" 
+                                    fill 
+                                    className="object-cover"
+                                />
+                            ) : (
+                                currentUser.name?.charAt(0).toUpperCase() || 'U'
+                            )}
+                        </div>
+                        
+                        {/* Name & Email */}
+                        <div>
+                            <p className="text-lg font-serif font-bold text-white tracking-wide group-hover:text-amber-400 transition">
+                                Hello, {currentUser.name?.split(' ')[0]}
+                            </p>
+                            <p className="text-xs text-white/50 group-hover:text-white/80 transition">
+                                {currentUser.email}
+                            </p>
+                            <p className="text-[10px] text-amber-500 mt-1 font-bold uppercase tracking-widest">
+                                Click to view Dashboard
+                            </p>
+                        </div>
+                    </Link>
+
+                </div>
+              ) : (
+                // 🔹 SCENARIO 2: USER LOGOUT HAI
+                <Link 
+                    href="/login" 
+                    onClick={() => setIsMobileMenuOpen(false)} 
+                    className="flex items-center gap-3 text-white/60 hover:text-amber-400 mb-4 transition group"
+                >
+                    <div className="p-2 rounded-full bg-white/10 group-hover:bg-amber-400 group-hover:text-black transition">
+                        <User className="w-5 h-5" /> 
+                    </div>
+                    <span className="text-lg font-serif tracking-wide">Login / Register</span>
+                </Link>
+              )}
+              
+              <p className="text-[10px] text-white/30 mt-6 uppercase tracking-[0.2em]">&copy; 2025 ZERIMI.</p>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
