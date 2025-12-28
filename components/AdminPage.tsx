@@ -13,7 +13,7 @@ import {
     // 👇 Ye Naye Icons Add Karein
     Download, FileJson, RefreshCw, ShieldAlert
 } from 'lucide-react';
-import { doc, getDoc, setDoc } from 'firebase/firestore'; 
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 // ✅ Is line ko file ke sabse top par add karein
 import PopupManager from '@/components/admin/PopupManager';
@@ -386,11 +386,11 @@ export default function AdminPage() {
                             <SidebarBtn icon={<Ticket />} label="Coupons & Offers" active={activeTab === 'coupons'} onClick={() => setActiveTab('coupons')} />
                             <SidebarBtn icon={<Megaphone />} label="Marketing" active={activeTab === 'marketing'} onClick={() => setActiveTab('marketing')} />
                             {/* Line 308 ke baad Marketing ke neeche */}
-                            
-                            
+
+
                             {/* ✅ NEW POPUP BUTTON */}
-                            <button 
-                                onClick={() => setActiveTab('popup')} 
+                            <button
+                                onClick={() => setActiveTab('popup')}
                                 className={`flex items-center justify-center lg:justify-start gap-4 w-full p-3 rounded-lg text-sm tracking-wide transition-all duration-300 group ${activeTab === 'popup' ? 'bg-amber-600 text-white shadow-lg' : 'text-white/40 hover:bg-white/5 hover:text-white'}`}
                             >
                                 <span className={`w-5 h-5 ${activeTab === 'popup' ? 'text-white' : 'group-hover:text-amber-400'}`}>
@@ -538,9 +538,9 @@ export default function AdminPage() {
                             {/* ✅ NEW POPUP MANAGER SCREEN */}
                             {activeTab === 'popup' && (
                                 <div className="animate-fade-in">
-                                    <PopupManager 
-                                        siteText={store.siteText} 
-                                        onSave={store.updateSiteText} 
+                                    <PopupManager
+                                        siteText={store.siteText}
+                                        onSave={store.updateSiteText}
                                     />
                                 </div>
                             )}
@@ -1203,7 +1203,11 @@ function ProductManager({ products, addProduct, updateProduct, deleteProduct }: 
 function ConfigManager({ showToast, updateSystemConfig }: any) {
     // 1. Config State (Razorpay, PayU, Shiprocket, Instamojo sab included)
     const [config, setConfig] = useState({
-        razorpay: { enabled: true, keyId: '', keySecret: '' },
+        razorpay: {
+            enabled: true,
+            mode: "test",   // test | live
+            keyId: ""       // rzp_test_xxx OR rzp_live_xxx
+        },
         payu: { enabled: false, merchantKey: '', merchantSalt: '' },
         shiprocket: { enabled: true, email: '', password: '' },
         payment: { instamojoApiKey: '', instamojoAuthToken: '', instamojoEnabled: false },
@@ -1266,21 +1270,35 @@ function ConfigManager({ showToast, updateSystemConfig }: any) {
         setShowSecret(prev => ({ ...prev, [field]: !prev[field] }));
     };
 
-    const handleSave = async () => {
+  const handleSave = async () => {
+        // --- 1. VALIDATION PART (Suraksha) ---
+        // Agar Razorpay ON hai par Key ID khali hai to roko
+        if (config.razorpay.enabled && !config.razorpay.keyId) {
+            showToast("⚠️ Razorpay Key ID is required!", "error");
+            return; 
+        }
+
+        // Agar Live Mode ON hai to warning do
+        if (config.razorpay.enabled && config.razorpay.mode === "live") {
+            const ok = confirm("⚠️ WARNING: Live Mode is ON.\nReal money will be charged. Are you sure?");
+            if (!ok) return; // User ne Cancel kiya to ruk jao
+        }
+
+        // --- 2. SAVING PART (Database Update) ---
         setLoading(true);
         try {
-            // ✅ FIX: Seedha Database mein Save karo (100% Secure)
+            // Database mein save karo
             const docRef = doc(db, "settings", "general");
             await setDoc(docRef, config, { merge: true });
 
-            // Store ko bhi update karo agar function available hai
+            // Store update karo
             if (updateSystemConfig) {
                 await updateSystemConfig(config);
             }
 
             // LocalStorage backup
             localStorage.setItem('zerimi_config', JSON.stringify(config));
-            
+
             showToast("✅ Configuration saved securely to Database!", "success");
         } catch (error) {
             console.error("Save Error:", error);
@@ -1289,7 +1307,6 @@ function ConfigManager({ showToast, updateSystemConfig }: any) {
             setLoading(false);
         }
     };
-
     const testConnection = (service: string) => {
         setTestingConnection(service);
         setTimeout(() => {
@@ -1322,7 +1339,12 @@ function ConfigManager({ showToast, updateSystemConfig }: any) {
                         {config.razorpay.enabled && (
                             <div className="space-y-4 animate-fade-in-up relative z-10">
                                 <div><label className="text-[10px] text-white/40 uppercase font-bold mb-1 block">Key ID</label><input value={config.razorpay.keyId} onChange={(e) => handleChange('razorpay', 'keyId', e.target.value)} placeholder="rzp_live_..." className="w-full p-4 bg-black/40 border border-white/10 rounded-xl text-white text-sm outline-none focus:border-blue-500/50 transition font-mono" /></div>
-                                <div className="relative"><label className="text-[10px] text-white/40 uppercase font-bold mb-1 block">Key Secret</label><input type={showSecret['rzp'] ? "text" : "password"} value={config.razorpay.keySecret} onChange={(e) => handleChange('razorpay', 'keySecret', e.target.value)} placeholder="••••••••••••••••" className="w-full p-4 bg-black/40 border border-white/10 rounded-xl text-white text-sm outline-none focus:border-blue-500/50 transition font-mono" /><button onClick={() => toggleSecret('rzp')} className="absolute right-4 top-9 text-white/30 hover:text-white"><Eye className="w-4 h-4" /></button></div>
+                               <div className="relative">
+  <label className="text-[10px] text-white/40 uppercase font-bold mb-1 block">Key ID</label>
+  <input
+    type="text"
+    value={config.razorpay.keyId}
+ onChange={(e) => handleChange('razorpay', 'keySecret', e.target.value)} placeholder="••••••••••••••••" className="w-full p-4 bg-black/40 border border-white/10 rounded-xl text-white text-sm outline-none focus:border-blue-500/50 transition font-mono" /><button onClick={() => toggleSecret('rzp')} className="absolute right-4 top-9 text-white/30 hover:text-white"><Eye className="w-4 h-4" /></button></div>
                                 <button onClick={() => testConnection('Razorpay')} disabled={testingConnection === 'Razorpay'} className="w-full py-3 mt-2 border border-blue-500/30 text-blue-400 text-xs font-bold uppercase rounded-xl hover:bg-blue-500/10 transition flex items-center justify-center gap-2">{testingConnection === 'Razorpay' ? <Activity className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}{testingConnection === 'Razorpay' ? 'Verifying...' : 'Test Connection'}</button>
                             </div>
                         )}
@@ -1373,7 +1395,7 @@ function ConfigManager({ showToast, updateSystemConfig }: any) {
 
                 {/* RIGHT COLUMN */}
                 <div className="space-y-8">
-                
+
                     {/* 4. INSTAMOJO (Fixed Persistence) */}
                     <div className={`p-8 rounded-3xl border transition-all duration-300 relative overflow-hidden group ${config.payment?.instamojoEnabled ? 'bg-[#0f2925] border-purple-500/30 shadow-[0_0_40px_rgba(168,85,247,0.1)]' : 'bg-black/20 border-white/5 grayscale'}`}>
                         <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-purple-500/20 transition duration-700"></div>
@@ -1397,21 +1419,21 @@ function ConfigManager({ showToast, updateSystemConfig }: any) {
                             <div className="space-y-4 animate-fade-in-up relative z-10">
                                 <div>
                                     <label className="text-[10px] text-white/40 uppercase font-bold mb-1 block">API Key</label>
-                                    <input 
-                                        value={config.payment?.instamojoApiKey || ''} 
-                                        onChange={(e) => handleChange('payment', 'instamojoApiKey', e.target.value)} 
-                                        placeholder="test_2384..." 
-                                        className="w-full p-4 bg-black/40 border border-white/10 rounded-xl text-white text-sm outline-none focus:border-purple-500/50 transition font-mono" 
+                                    <input
+                                        value={config.payment?.instamojoApiKey || ''}
+                                        onChange={(e) => handleChange('payment', 'instamojoApiKey', e.target.value)}
+                                        placeholder="test_2384..."
+                                        className="w-full p-4 bg-black/40 border border-white/10 rounded-xl text-white text-sm outline-none focus:border-purple-500/50 transition font-mono"
                                     />
                                 </div>
                                 <div className="relative">
                                     <label className="text-[10px] text-white/40 uppercase font-bold mb-1 block">Auth Token</label>
-                                    <input 
-                                        type={showSecret['mojo'] ? "text" : "password"} 
-                                        value={config.payment?.instamojoAuthToken || ''} 
-                                        onChange={(e) => handleChange('payment', 'instamojoAuthToken', e.target.value)} 
-                                        placeholder="••••••••••••••••" 
-                                        className="w-full p-4 bg-black/40 border border-white/10 rounded-xl text-white text-sm outline-none focus:border-purple-500/50 transition font-mono" 
+                                    <input
+                                        type={showSecret['mojo'] ? "text" : "password"}
+                                        value={config.payment?.instamojoAuthToken || ''}
+                                        onChange={(e) => handleChange('payment', 'instamojoAuthToken', e.target.value)}
+                                        placeholder="••••••••••••••••"
+                                        className="w-full p-4 bg-black/40 border border-white/10 rounded-xl text-white text-sm outline-none focus:border-purple-500/50 transition font-mono"
                                     />
                                     <button onClick={() => toggleSecret('mojo')} className="absolute right-4 top-9 text-white/30 hover:text-white">
                                         <Eye className="w-4 h-4" />
@@ -1449,6 +1471,9 @@ function ConfigManager({ showToast, updateSystemConfig }: any) {
                     </div>
                 </div>
             </div>
+             
+  
+
 
             {/* SAVE BUTTON */}
             <div className="fixed bottom-6 right-6 z-50">
@@ -2436,7 +2461,7 @@ function CouponManager({ coupons, onAdd, onDelete, showToast }: { coupons: any[]
                     {/* ✅ NEW: Email Restriction Field */}
                     <div className="lg:col-span-2">
                         <label className="text-[10px] text-amber-500 uppercase block mb-2 font-bold flex items-center gap-2">
-                           <Lock className="w-3 h-3" /> Restrict to Email (Optional)
+                            <Lock className="w-3 h-3" /> Restrict to Email (Optional)
                         </label>
                         <input
                             type="email"
@@ -2462,7 +2487,7 @@ function CouponManager({ coupons, onAdd, onDelete, showToast }: { coupons: any[]
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {coupons?.map(c => (
                     <div key={c.id} className="bg-[#0f2925] p-5 border border-white/5 rounded-2xl flex justify-between items-center group hover:border-amber-500/30 transition duration-300 relative overflow-hidden">
-                        
+
                         <div className="relative z-10">
                             <div onClick={() => copyToClipboard(c.code)} className="flex items-center gap-2 cursor-pointer">
                                 <h4 className="text-amber-500 font-bold text-lg tracking-wide">{c.code}</h4>

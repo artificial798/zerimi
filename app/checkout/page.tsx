@@ -60,20 +60,15 @@ export default function CheckoutPage() {
     // Settings Fetch
     const [liveSettings, setLiveSettings] = useState<any>(null);
 
-    useEffect(() => {
-        const fetchSettings = async () => {
-            try {
-                const docRef = doc(db, "settings", "general");
-                const docSnap = await getDoc(docRef);
-                if (docSnap.exists()) {
-                    setLiveSettings(docSnap.data());
-                }
-            } catch (error) {
-                console.error("Settings error:", error);
-            }
-        };
-        fetchSettings();
-    }, []);
+   useEffect(() => {
+  if (!(window as any).Razorpay) {
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    document.body.appendChild(script);
+  }
+}, []);
+
 
     // User Data Fetch
     useEffect(() => {
@@ -277,8 +272,37 @@ export default function CheckoutPage() {
                         throw new Error(data.error || "Payment initiation failed.");
                     }
                 } else if (paymentConfig?.razorpay?.enabled) {
-                    return;
-                } else {
+
+    if (!(window as any).Razorpay) {
+        throw new Error("Razorpay SDK not loaded");
+    }
+
+    const options = {
+        key: paymentConfig.razorpay.keyId, // rzp_test_xxx
+        amount: finalAmount * 100,
+        currency: "INR",
+        name: "ZERIMI",
+        description: "Test Payment",
+        handler: function (response: any) {
+            console.log("Razorpay success:", response);
+
+            setLoading(false);
+            setStep(3); // success page
+        },
+        prefill: {
+            name: `${formData.firstName} ${formData.lastName}`,
+            email: finalEmail,
+            contact: formData.phone
+        },
+        theme: { color: "#0a1f1c" }
+    };
+
+    // @ts-ignore
+    const rzp = new window.Razorpay(options);
+    rzp.open();
+    return;
+}
+else {
                     throw new Error("Online Payment is currently unavailable. Please select COD.");
                 }
             } else if (paymentMethod === 'cod') {
