@@ -10,45 +10,55 @@ export async function POST(req: Request) {
             return NextResponse.json({ success: false, error: "Payment Gateway not configured (Keys missing)" });
         }
 
-        // URL: Test mode ke liye 'test.instamojo.com', Live ke liye 'www.instamojo.com'
-        // Hum dynamic rakh sakte hain ya live default kar sakte hain.
-        // Yahan Live URL hai:
-        const url = 'https://www.instamojo.com/api/1.1/payment-requests/';
-        
-        // Payload (Instamojo documentation ke hisaab se)
-        const payload = {
-            purpose: purpose,
-            amount: amount,
-            buyer_name: buyer_name,
-            email: email,
-            phone: phone,
-            redirect_url: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://zerimi.com'}/checkout/success`, // Success Page URL
-            send_email: true,
-            send_sms: true,
-            allow_repeated_payments: false,
-        };
+        // ✅ FIX 1: Auto-Detect Test vs Live Key
+        // Agar key "test_" se shuru hoti hai to Test URL, warna Live URL
+        const isTestMode = apiKey.startsWith("test_");
+        const baseUrl = isTestMode 
+            ? "https://test.instamojo.com/api/1.1/" 
+            : "https://www.instamojo.com/api/1.1/";
 
-        const response = await fetch(url, {
+        // ✅ FIX 2: Dynamic Redirect URL (Localhost & Vercel Friendly)
+        // Ye code khud pata lagayega ki site kahan chal rahi hai
+        const origin = req.headers.get('origin') || 'https://zerimi.vercel.app';
+
+        // ✅ FIX 3: Instamojo requires Form Data, NOT JSON
+        const formData = new URLSearchParams();
+        formData.append('purpose', purpose);
+        formData.append('amount', amount);
+        formData.append('buyer_name', buyer_name);
+        formData.append('email', email);
+        formData.append('phone', phone);
+        formData.append('redirect_url', `${origin}/checkout/success`);
+        formData.append('send_email', 'True');
+        formData.append('send_sms', 'True');
+        formData.append('allow_repeated_payments', 'False');
+
+        const response = await fetch(`${baseUrl}payment-requests/`, {
             method: 'POST',
             headers: {
                 'X-Api-Key': apiKey,
-                'X-Auth-Token': authToken,
-                'Content-Type': 'application/json',
+                'X-Auth-Token': authToken
             },
-            body: JSON.stringify(payload)
+            body: formData // JSON.stringify hata diya
         });
 
         const data = await response.json();
 
         if (data.success) {
-            return NextResponse.json({ success: true, payment_url: data.payment_request.longurl });
+            return NextResponse.json({ 
+                success: true, 
+                payment_url: data.payment_request.longurl,
+                id: data.payment_request.id 
+            });
         } else {
             console.error("Instamojo Error:", data);
-            // Agar keys galat hain ya data invalid hai
-            return NextResponse.json({ success: false, error: JSON.stringify(data.message) || "Payment creation failed" });
+            // Error ko string mein convert karke bhejo taaki frontend par dikhe
+            const errorMsg = JSON.stringify(data.message) || "Payment creation failed";
+            return NextResponse.json({ success: false, error: errorMsg }, { status: 400 });
         }
 
     } catch (error: any) {
-        return NextResponse.json({ success: false, error: error.message });
+        console.error("Server Error:", error);
+        return NextResponse.json({ success: false, error: error.message }, { status: 500 });
     }
 }
