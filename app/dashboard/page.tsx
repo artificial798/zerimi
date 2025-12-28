@@ -6,14 +6,18 @@ import {
   Package, User, ShoppingBag, ChevronRight, Heart, 
   FileText, Download, Award, Bell, Key, Camera, Tag, Trash2, 
   Sparkles, RotateCcw, RefreshCcw, Plus, LogOut, X, 
-  Home, Briefcase, Save, Edit2, ShieldCheck, Clock
+  Home, Briefcase, Save, Edit2, ShieldCheck, Clock,Lock
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 // Assuming ProductCard is compatible, otherwise wrap it in a dark container
 import ProductCard from '../../components/ProductCard'; 
-
+// ✅ Ye line file ke top par imports ke saath jod dein
+import { doc, getDoc } from 'firebase/firestore'; 
+import { db } from '@/lib/firebase';
+// ✅ Is line ko sabse upar imports mein add karein
+import toast, { Toaster } from 'react-hot-toast';
 // --- HELPER: DATE PARSER (Unchanged) ---
 const parseDate = (dateStr: string) => {
     if (!dateStr) return new Date();
@@ -459,7 +463,8 @@ const [profileImage, setProfileImage] = useState<string | null>(null);
                {activeTab === 'orders' && <OrdersTab orders={myOrders} onReturn={handleReturnRequest} />}
                {activeTab === 'returns' && <ReturnsTab orders={myOrders} />}
                {activeTab === 'vault' && <VaultTab vaultItems={vaultItems} user={currentUser} />}
-               {activeTab === 'coupons' && <CouponsTab coupons={coupons} />}
+              {/* ✅ user prop pass kiya taaki email check kar sakein */}
+{activeTab === 'coupons' && <CouponsTab coupons={coupons} user={currentUser} />}
                {activeTab === 'wishlist' && <WishlistTab wishlist={wishlist} />}
                {activeTab === 'profile' && <ProfileTab user={currentUser} profileImage={profileImage} setProfileImage={setProfileImage} />}
             </motion.div>
@@ -692,26 +697,59 @@ function VaultTab({ vaultItems, user }: any) {
   );
 }
 
-function CouponsTab({ coupons }: any) {
+// ✅ UPDATED COUPON TAB (Isse replace karein)
+function CouponsTab({ coupons, user }: any) {
+  
+  // 🔥 Logic: Sirf wahi coupons dikhao jo Public hain YA mere liye hain
+  const myCoupons = coupons.filter((coupon: any) => {
+      // 1. Agar 'allowedEmail' khali hai -> Public Coupon (Sabko dikhega)
+      if (!coupon.allowedEmail) return true;
+
+      // 2. Agar 'allowedEmail' hai -> Check karo ki mera email match karta hai ya nahi
+      // (Optional chaining '?' zaroori hai taaki agar user data na ho to crash na kare)
+      return user?.email && coupon.allowedEmail.toLowerCase().trim() === user.email.toLowerCase().trim();
+  });
+
   return (
     <div className="space-y-6">
        <h2 className="font-serif text-2xl text-white mb-6">Exclusive Offers</h2>
-       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {coupons.map((coupon: any) => (
-             <div key={coupon.code} className="bg-gradient-to-br from-stone-900 to-black text-white p-6 rounded-2xl relative overflow-hidden shadow-lg border border-white/10 group">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2"></div>
-                <div className="relative z-10">
-                   <p className="text-amber-400 text-xs font-bold uppercase tracking-widest mb-1">ZERIMI Exclusive</p>
-                   <h3 className="font-serif text-3xl">{coupon.type === 'percent' ? `${coupon.discount}% OFF` : `₹${coupon.discount} OFF`}</h3>
-                   <p className="text-white/60 text-sm mt-2">{coupon.description}</p>
-                </div>
-                <div className="mt-6 pt-4 border-t border-white/10 flex justify-between items-center relative z-10">
-                   <div className="bg-white/10 px-4 py-2 rounded-lg font-mono tracking-widest text-amber-200 border border-amber-500/20">{coupon.code}</div>
-                   <p className="text-[10px] text-white/40">Expires: {coupon.expiryDate || 'N/A'}</p>
-                </div>
-             </div>
-          ))}
-       </div>
+       
+       {myCoupons.length === 0 ? (
+           <div className="p-10 text-center bg-white/5 rounded-2xl border border-white/10 text-white/40">
+               No active offers available for you right now.
+           </div>
+       ) : (
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {myCoupons.map((coupon: any) => (
+                 <div key={coupon.code} className={`p-6 rounded-2xl relative overflow-hidden shadow-lg border group transition-all ${coupon.allowedEmail ? 'bg-gradient-to-br from-amber-900/40 to-black border-amber-500/50' : 'bg-gradient-to-br from-stone-900 to-black border-white/10'}`}>
+                    
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2"></div>
+                    
+                    <div className="relative z-10">
+                       <div className="flex justify-between items-start mb-1">
+                           <p className="text-amber-400 text-xs font-bold uppercase tracking-widest">
+                               {coupon.allowedEmail ? '💎 Personalized For You' : 'ZERIMI Exclusive'}
+                           </p>
+                           {/* Agar Personalized hai to Lock Icon dikhao */}
+                           {coupon.allowedEmail && <span className="bg-amber-500/20 text-amber-400 p-1 rounded"><Lock className="w-3 h-3" /></span>}
+                       </div>
+
+                       <h3 className="font-serif text-3xl text-white mt-2">
+                           {coupon.type === 'percent' ? `${coupon.discount}% OFF` : `₹${coupon.discount} OFF`}
+                       </h3>
+                       <p className="text-white/60 text-sm mt-2">{coupon.description || 'Applicable on your next order.'}</p>
+                    </div>
+
+                    <div className="mt-6 pt-4 border-t border-white/10 flex justify-between items-center relative z-10">
+                       <div className="bg-white/10 px-4 py-2 rounded-lg font-mono tracking-widest text-amber-200 border border-amber-500/20 select-all cursor-pointer hover:bg-white/20 transition">
+                           {coupon.code}
+                       </div>
+                       <p className="text-[10px] text-white/40">Expires: {coupon.expiryDate || 'Valid Forever'}</p>
+                    </div>
+                 </div>
+              ))}
+           </div>
+       )}
     </div>
   );
 }
@@ -721,97 +759,99 @@ function WishlistTab({ wishlist }: { wishlist: any[] }) {
    return <div className="space-y-6"><h2 className="font-serif text-2xl mb-6 text-white">My Wishlist</h2><div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">{wishlist.map((product) => <ProductCard key={product.id} product={product} />)}</div></div>;
 }
 
+// ✅ Is poore function ko copy karke purane ProfileTab ki jagah paste karein
+// ✅ Is poore function ko copy karke purane ProfileTab ki jagah paste karein
+// ✅ Is updated function ko paste karein (Toast Notifications Added)
 function ProfileTab({ user, profileImage, setProfileImage }: any) {
    const { updateUserProfile } = useStore(); 
-   
-   // --- STATE DEFINITIONS (Fixes "setIsSaving not defined") ---
    const [isEditing, setIsEditing] = useState(false);
    const [isSaving, setIsSaving] = useState(false);
+   const [formData, setFormData] = useState({ name: user?.name || '', email: user?.email || '', phone: user?.phone || '' });
    
-   // State initialization with Safety
-   const [formData, setFormData] = useState({ 
-       name: user?.name || '', 
-       email: user?.email || '', 
-       phone: user?.phone || '' 
-   });
-   
-   // --- ADDRESS STATE (Fixes "addresses not defined") ---
-   const defaultAddress = { id: 1, type: 'Home', text: 'Flat 402, Emerald Heights, Juhu Tara Road, Mumbai', pin: '400049', isDefault: true };
+   const defaultAddress = { id: 1, type: 'Home', text: 'No Address Saved', pin: '', isDefault: true };
    const [addresses, setAddresses] = useState(user?.addresses || [defaultAddress]);
    
    const [showAddAddress, setShowAddAddress] = useState(false);
    const [newAddress, setNewAddress] = useState({ type: 'Home', text: '', pin: '' });
    const fileInputRef = useRef<HTMLInputElement>(null);
    
-   // --- SYNC DATA ---
+   // ✅ Fetch User Data
    useEffect(() => {
-       if (user) {
-           setFormData({ name: user.name || '', email: user.email || '', phone: user.phone || '' });
-           if (user.addresses) setAddresses(user.addresses);
-           if (user.profileImage) setProfileImage(user.profileImage);
-       }
+       const fetchUserData = async () => {
+           if (user?.id) {
+               try {
+                   const docRef = doc(db, "users", user.id);
+                   const docSnap = await getDoc(docRef);
+                   if (docSnap.exists()) {
+                       const data = docSnap.data();
+                       setFormData({
+                           name: data.name || '',
+                           email: data.email || '',
+                           phone: data.mobile || data.phone || '' 
+                       });
+                       if (data.addresses && data.addresses.length > 0) {
+                           setAddresses(data.addresses);
+                       }
+                       if (data.profileImage) setProfileImage(data.profileImage);
+                   }
+               } catch (e) { console.error("Fetch error", e); }
+           }
+       };
+       fetchUserData();
    }, [user, setProfileImage]);
 
-   // --- HANDLERS ---
    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => { 
        const file = e.target.files?.[0]; 
        if (file) { 
-           if (file.size > 500000) return alert("Image too large. Max 500KB.");
            const reader = new FileReader(); 
            reader.onloadend = () => setProfileImage(reader.result as string); 
            reader.readAsDataURL(file); 
        } 
    };
 
+   // ✅ Updated: Uses Toast instead of Alert
    const handleSaveProfile = async () => { 
-       // CRITICAL FIX: Check if User ID exists
-       if (!user || !user.id) {
-           alert("Error: User ID missing. Please login again.");
-           return;
-       }
-
+       if (!user || !user.id) return toast.error("User ID missing. Login again.");
        setIsSaving(true);
        try {
            await updateUserProfile(user.id, {
                name: formData.name,
                phone: formData.phone,
-               profileImage: profileImage || "", // Ensure string
-               addresses: addresses // Save addresses
+               profileImage: profileImage || "", 
+               addresses: addresses 
            });
            setIsEditing(false); 
-           alert("Profile Saved Successfully!");
-       } catch (error) {
-           console.error("Save failed", error);
-           alert("Failed to save. Check console.");
-       } finally {
-           setIsSaving(false);
+           toast.success("Profile Updated Successfully!"); // ✨ Fancy Toast
+       } catch (error) { 
+           console.error(error); 
+           toast.error("Failed to update profile."); // 🔴 Error Toast
+       } finally { 
+           setIsSaving(false); 
        }
    };
 
    const handleAddAddress = async () => { 
-       if(!newAddress.text) return alert("Address required"); 
+       if(!newAddress.text) return toast.error("Address is required");
        const updatedList = [...addresses, { ...newAddress, id: Date.now(), isDefault: false }];
-       
        setAddresses(updatedList); 
-       if (user?.id) {
-           await updateUserProfile(user.id, { addresses: updatedList }); 
-       }
-       
+       if (user?.id) await updateUserProfile(user.id, { addresses: updatedList }); 
        setShowAddAddress(false); 
        setNewAddress({ type: 'Home', text: '', pin: '' }); 
+       toast.success("New Address Added");
    };
 
    const removeAddress = async (id: number) => { 
        const updatedList = addresses.filter((a: any) => a.id !== id);
        setAddresses(updatedList);
-       if (user?.id) {
-           await updateUserProfile(user.id, { addresses: updatedList });
-       }
+       if (user?.id) await updateUserProfile(user.id, { addresses: updatedList });
+       toast.success("Address Removed");
    };
 
-   // --- RENDER ---
    return (
       <div className="max-w-4xl space-y-6 animate-fade-in">
+         {/* ✅ Toaster Component Added Here */}
+         <Toaster position="top-center" toastOptions={{ style: { background: '#0f2925', color: '#fff', border: '1px solid #d4af37' } }} />
+
          <div className="flex justify-between items-center mb-8">
             <h2 className="font-serif text-2xl text-white">Personal Profile</h2>
             {!isEditing ? (
@@ -819,77 +859,42 @@ function ProfileTab({ user, profileImage, setProfileImage }: any) {
             ) : (
                <div className="flex gap-2">
                   <button onClick={() => setIsEditing(false)} disabled={isSaving} className="px-4 py-2 rounded-lg text-white/50 text-xs font-bold hover:bg-white/10">Cancel</button>
-                  <button onClick={handleSaveProfile} disabled={isSaving} className="px-4 py-2 bg-amber-600 text-white rounded-lg text-xs font-bold hover:bg-amber-700 flex items-center gap-2">
-                      {isSaving ? "Saving..." : <><Save className="w-3 h-3"/> Save Changes</>}
-                  </button>
+                  <button onClick={handleSaveProfile} disabled={isSaving} className="px-4 py-2 bg-amber-600 text-white rounded-lg text-xs font-bold hover:bg-amber-700 flex items-center gap-2">{isSaving ? "Saving..." : <><Save className="w-3 h-3"/> Save Changes</>}</button>
                </div>
             )}
          </div>
-
          <div className="flex flex-col md:flex-row gap-10">
             <div className="flex flex-col items-center">
                <div className="relative w-32 h-32 rounded-full border-4 border-[#0f2925] shadow-xl overflow-hidden group cursor-pointer bg-black/20" onClick={() => isEditing && fileInputRef.current?.click()}>
-                  {profileImage ? 
-                     <Image src={profileImage} alt="Profile" fill className="object-cover" /> : 
-                     <div className="w-full h-full flex items-center justify-center text-4xl text-white/20 font-serif">{user?.name?.charAt(0) || 'U'}</div>
-                  }
+                  {profileImage ? <Image src={profileImage} alt="Profile" fill className="object-cover" /> : <div className="w-full h-full flex items-center justify-center text-4xl text-white/20 font-serif">{user?.name?.charAt(0) || 'U'}</div>}
                   {isEditing && (<div className="absolute inset-0 bg-black/60 flex items-center justify-center"><Camera className="w-8 h-8 text-white" /></div>)}
                   <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} disabled={!isEditing} />
                </div>
                {isEditing && <p className="text-xs text-white/40 mt-2">Tap to change</p>}
             </div>
-
             <div className="flex-1 space-y-6 w-full">
                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                     <label className="text-xs font-bold text-white/40 uppercase mb-2 block">Full Name</label>
-                     <input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className={`w-full p-4 bg-black/20 border ${isEditing ? 'border-amber-500/50' : 'border-white/10'} rounded-xl outline-none text-white transition`} readOnly={!isEditing} />
-                  </div>
-                  <div>
-                     <label className="text-xs font-bold text-white/40 uppercase mb-2 block">Phone</label>
-                     <input type="text" value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} placeholder="+91..." className={`w-full p-4 bg-black/20 border ${isEditing ? 'border-amber-500/50' : 'border-white/10'} rounded-xl outline-none text-white transition`} readOnly={!isEditing} />
-                  </div>
+                  <div><label className="text-xs font-bold text-white/40 uppercase mb-2 block">Full Name</label><input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className={`w-full p-4 bg-black/20 border ${isEditing ? 'border-amber-500/50' : 'border-white/10'} rounded-xl outline-none text-white transition`} readOnly={!isEditing} /></div>
+                  <div><label className="text-xs font-bold text-white/40 uppercase mb-2 block">Phone</label><input type="text" value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} placeholder="+91..." className={`w-full p-4 bg-black/20 border ${isEditing ? 'border-amber-500/50' : 'border-white/10'} rounded-xl outline-none text-white transition`} readOnly={!isEditing} /></div>
                </div>
-               <div>
-                  <label className="text-xs font-bold text-white/40 uppercase mb-2 block">Email Address</label>
-                  <input type="text" value={formData.email} className="w-full p-4 bg-white/5 border border-white/5 rounded-xl outline-none text-white/50 cursor-not-allowed" readOnly />
-               </div>
-
+               <div><label className="text-xs font-bold text-white/40 uppercase mb-2 block">Email Address</label><input type="text" value={formData.email} className="w-full p-4 bg-white/5 border border-white/5 rounded-xl outline-none text-white/50 cursor-not-allowed" readOnly /></div>
                <div className="pt-8 border-t border-white/10">
-                  <div className="flex justify-between items-center mb-4">
-                     <h3 className="font-serif text-lg text-white">Saved Addresses</h3>
-                     <button onClick={() => setShowAddAddress(true)} className="flex items-center gap-2 text-xs font-bold text-amber-500 hover:bg-white/5 px-3 py-1.5 rounded-lg transition"><Plus className="w-3 h-3"/> Add New</button>
-                  </div>
+                  <div className="flex justify-between items-center mb-4"><h3 className="font-serif text-lg text-white">Saved Addresses</h3><button onClick={() => setShowAddAddress(true)} className="flex items-center gap-2 text-xs font-bold text-amber-500 hover:bg-white/5 px-3 py-1.5 rounded-lg transition"><Plus className="w-3 h-3"/> Add New</button></div>
                   <div className="space-y-4">
-                     {addresses.map((addr: any) => (
-                        <div key={addr.id} className="p-5 bg-white/5 border border-white/5 rounded-xl flex justify-between items-start group hover:border-amber-500/30 transition">
+                     {addresses.map((addr: any, idx: number) => (
+                        <div key={addr.id || idx} className="p-5 bg-white/5 border border-white/5 rounded-xl flex justify-between items-start group hover:border-amber-500/30 transition">
                            <div>
                               <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase flex items-center gap-1 w-fit mb-2 ${addr.type === 'Home' ? 'bg-blue-500/20 text-blue-300' : 'bg-purple-500/20 text-purple-300'}`}>
-                                 {addr.type === 'Home' ? <Home className="w-3 h-3"/> : <Briefcase className="w-3 h-3"/>} {addr.type}
+                                 {addr.type === 'Home' ? <Home className="w-3 h-3"/> : <Briefcase className="w-3 h-3"/>} {addr.type || 'Home'}
                               </span>
-                              <p className="text-sm text-white/80 leading-relaxed">{addr.text}</p>
-                              <p className="text-xs text-white/40 mt-1">Pin: {addr.pin}</p>
+                              <p className="text-sm text-white/80 leading-relaxed">{addr.text || (addr.street ? `${addr.street}, ${addr.city}` : 'Unknown Address')}</p>
+                              <p className="text-xs text-white/40 mt-1">Pin: {addr.pin || addr.pincode}</p>
                            </div>
                            <button onClick={() => removeAddress(addr.id)} className="text-white/20 hover:text-red-400 p-2"><Trash2 className="w-4 h-4"/></button>
                         </div>
                      ))}
                   </div>
-                  {showAddAddress && (
-                     <div className="mt-4 p-5 bg-[#0f2925] rounded-xl border border-white/10 animate-in fade-in zoom-in-95 duration-200">
-                        <h4 className="text-sm font-bold text-white mb-3">Add New Address</h4>
-                        <div className="space-y-3">
-                           <div className="flex gap-4">
-                              <select className="p-3 bg-black/40 border border-white/10 text-white rounded-lg text-sm outline-none" value={newAddress.type} onChange={(e) => setNewAddress({...newAddress, type: e.target.value})}><option>Home</option><option>Office</option><option>Other</option></select>
-                              <input className="flex-1 p-3 bg-black/40 border border-white/10 text-white rounded-lg text-sm outline-none" placeholder="Pincode" value={newAddress.pin} onChange={(e) => setNewAddress({...newAddress, pin: e.target.value})} />
-                           </div>
-                           <textarea className="w-full p-3 bg-black/40 border border-white/10 text-white rounded-lg text-sm h-20 resize-none outline-none" placeholder="Full Address..." value={newAddress.text} onChange={(e) => setNewAddress({...newAddress, text: e.target.value})} />
-                           <div className="flex gap-2 justify-end">
-                              <button onClick={() => setShowAddAddress(false)} className="px-4 py-2 text-white/50 text-xs font-bold hover:bg-white/10 rounded-lg">Cancel</button>
-                              <button onClick={handleAddAddress} className="px-4 py-2 bg-amber-600 text-white rounded-lg text-xs font-bold hover:bg-amber-700">Save Address</button>
-                           </div>
-                        </div>
-                     </div>
-                  )}
+                  {showAddAddress && (<div className="mt-4 p-5 bg-[#0f2925] rounded-xl border border-white/10 animate-in fade-in zoom-in-95 duration-200"><h4 className="text-sm font-bold text-white mb-3">Add New Address</h4><div className="space-y-3"><div className="flex gap-4"><select className="p-3 bg-black/40 border border-white/10 text-white rounded-lg text-sm outline-none" value={newAddress.type} onChange={(e) => setNewAddress({...newAddress, type: e.target.value})}><option>Home</option><option>Office</option><option>Other</option></select><input className="flex-1 p-3 bg-black/40 border border-white/10 text-white rounded-lg text-sm outline-none" placeholder="Pincode" value={newAddress.pin} onChange={(e) => setNewAddress({...newAddress, pin: e.target.value})} /></div><textarea className="w-full p-3 bg-black/40 border border-white/10 text-white rounded-lg text-sm h-20 resize-none outline-none" placeholder="Full Address..." value={newAddress.text} onChange={(e) => setNewAddress({...newAddress, text: e.target.value})} /><div className="flex gap-2 justify-end"><button onClick={() => setShowAddAddress(false)} className="px-4 py-2 text-white/50 text-xs font-bold hover:bg-white/10 rounded-lg">Cancel</button><button onClick={handleAddAddress} className="px-4 py-2 bg-amber-600 text-white rounded-lg text-xs font-bold hover:bg-amber-700">Save Address</button></div></div></div>)}
                </div>
             </div>
          </div>

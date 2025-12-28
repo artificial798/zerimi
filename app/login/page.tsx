@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 
-// ✅ Firebase Imports (Path check kar lein: '../../lib/firebase' ya '@/lib/firebase')
+// ✅ Firebase Imports
 import { auth, googleProvider, db } from '../../lib/firebase';
 import {
   signInWithPopup,
@@ -21,7 +21,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { FcGoogle } from 'react-icons/fc';
 import {
   FiLock, FiMail, FiUser, FiArrowRight, FiArrowLeft,
-  FiPhone, FiX // ✅ Added FiX icon
+  FiPhone, FiX, FiMapPin, FiHome // ✅ Added Map/Home Icons
 } from 'react-icons/fi';
 import { BiMaleFemale, BiDiamond } from 'react-icons/bi';
 
@@ -32,12 +32,15 @@ const AuthPage = () => {
   const [view, setView] = useState('login'); // 'login' | 'register' | 'reset'
   const [loading, setLoading] = useState(false);
 
-  // Form Data
+  // Form Data (Added Address Fields)
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     password: '',
     mobile: '',
+    address: '', // ✅ New
+    city: '',    // ✅ New
+    pincode: '', // ✅ New
     gender: '',
     vibe: '',
     agreeToTerms: false
@@ -48,9 +51,8 @@ const AuthPage = () => {
     setFormData({ ...formData, [e.target.name]: value });
   };
 
-  // --- Toasts (Fixed: Auto Close Timer) ---
   const notifySuccess = (msg: string) => toast.success(msg, {
-    duration: 3000, // ✅ 3 second mein gayab
+    duration: 3000,
     style: { background: '#0f172a', color: '#fbbf24', border: '1px solid #fbbf24' },
     iconTheme: { primary: '#fbbf24', secondary: '#000' },
   });
@@ -81,11 +83,16 @@ const AuthPage = () => {
     }
   };
 
-  // 2. REGISTER
+  // 2. REGISTER (Updated with Address Validation)
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // ✅ Strict Validation
     if (!formData.name) return notifyError("Name is required.");
     if (!formData.mobile) return notifyError("Mobile number is required.");
+    if (!formData.address) return notifyError("Full Address is required.");
+    if (!formData.city) return notifyError("City is required.");
+    if (!formData.pincode) return notifyError("Pincode is required.");
     if (!formData.agreeToTerms) return notifyError("You must agree to Terms & Privacy Policy.");
 
     setLoading(true);
@@ -94,16 +101,28 @@ const AuthPage = () => {
       const user = userCredential.user;
       await updateProfile(user, { displayName: formData.name });
 
+      // ✅ Saving User Data with Proper Address Structure
       await setDoc(doc(db, "users", user.uid), {
         uid: user.uid,
         name: formData.name,
         email: formData.email,
+        phone: formData.mobile, // Saved as 'phone' for consistency
         mobile: formData.mobile,
         gender: formData.gender,
         preference: formData.vibe,
         role: 'customer',
         createdAt: new Date(),
-        termsAccepted: true
+        termsAccepted: true,
+        // ✅ Address Array for Checkout Compatibility
+        addresses: [
+          {
+            street: formData.address,
+            city: formData.city,
+            pincode: formData.pincode,
+            state: 'India', // Default
+            isDefault: true
+          }
+        ]
       });
 
       notifySuccess(`Account created! Welcome to the Elite.`);
@@ -128,7 +147,8 @@ const AuthPage = () => {
           email: user.email,
           role: 'customer',
           createdAt: new Date(),
-          method: 'google'
+          method: 'google',
+          addresses: [] // Empty address initially for Google users
         });
       }
       notifySuccess('Welcome back to ZERIMI.');
@@ -161,9 +181,7 @@ const AuthPage = () => {
       <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-yellow-600/10 rounded-full blur-[120px]" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-purple-900/10 rounded-full blur-[120px]" />
 
-
-
-      {/* ✅ NEW: Back/Close Button (Top Left) */}
+      {/* Back Button */}
       <button
         onClick={() => router.push('/')}
         className="absolute top-6 left-6 z-50 text-white/50 hover:text-white flex items-center gap-2 transition-all group"
@@ -176,7 +194,7 @@ const AuthPage = () => {
 
       <motion.div
         layout
-        className="w-full max-w-md bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-8 relative z-10"
+        className="w-full max-w-md bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-8 relative z-10 my-10"
       >
         {/* Header */}
         <div className="text-center mb-6">
@@ -224,7 +242,7 @@ const AuthPage = () => {
             </motion.form>
           )}
 
-          {/* --- REGISTER VIEW --- */}
+          {/* --- REGISTER VIEW (Updated with Address) --- */}
           {view === 'register' && (
             <motion.form
               key="register"
@@ -238,6 +256,14 @@ const AuthPage = () => {
               </div>
 
               <InputField icon={FiMail} type="email" placeholder="Email Address" name="email" value={formData.email} onChange={handleChange} />
+
+              {/* ✅ Address Fields Added Here */}
+              <InputField icon={FiHome} type="text" placeholder="Full Address (House/Street/Area)" name="address" value={formData.address} onChange={handleChange} />
+              
+              <div className="grid grid-cols-2 gap-3">
+                <InputField icon={FiMapPin} type="text" placeholder="City" name="city" value={formData.city} onChange={handleChange} />
+                <InputField icon={FiMapPin} type="text" placeholder="Pincode" name="pincode" value={formData.pincode} onChange={handleChange} />
+              </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <SelectField icon={BiMaleFemale} name="gender" value={formData.gender} onChange={handleChange}>

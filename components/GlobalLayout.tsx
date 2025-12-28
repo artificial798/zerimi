@@ -99,8 +99,10 @@ const subtotal = cart.reduce((sum: number, item: any) => sum + item.product.pric
     <div className="min-h-screen bg-stone-50 font-sans text-stone-900 flex flex-col">
 
       {/* COUPON STRIP */}
+{/* COUPON STRIP */}
    {/* --- PREMIUM SCROLLING COUPON STRIP --- */}
-{coupons.length > 0 && (
+   {/* ✅ FILTER LOGIC ADDED: Sirf Public Coupons Dikhao */}
+{coupons.filter((c: any) => !c.allowedEmail).length > 0 && (
 <div className="fixed top-0 left-0 w-full h-10 bg-[#020b09] border-b border-amber-500/20 z-50 overflow-hidden flex items-center">
   
   {/* Left Fade Gradient (Premium Look) */}
@@ -108,20 +110,24 @@ const subtotal = cart.reduce((sum: number, item: any) => sum + item.product.pric
 
   {/* Scrolling Content */}
   <div className="animate-marquee flex items-center">
-    {/* Hum list ko 4 baar repeat kar rahe hain taaki gap na aaye */}
-    {[...coupons, ...coupons, ...coupons, ...coupons].map((c, i) => (
-      <div key={i} className="flex items-center gap-3 mx-8 group cursor-pointer">
-        <Ticket className="w-3 h-3 text-amber-500 animate-pulse" />
-        <span className="text-[10px] md:text-xs font-medium text-stone-300 tracking-[0.15em] uppercase whitespace-nowrap">
-          Use Code 
-          <span className="mx-2 text-[#0a1f1c] bg-amber-400 px-2 py-0.5 rounded font-bold shadow-[0_0_10px_rgba(251,191,36,0.4)]">
-            {c.code}
-          </span>
-          Get {c.type === 'percent' ? `${c.discount}%` : `₹${c.discount}`} OFF
-        </span>
-        <span className="text-white/10 text-xs mx-2">•</span>
-      </div>
-    ))}
+    {/* ✅ FILTER APPLIED HERE TOO */}
+    {(() => {
+        const publicCoupons = coupons.filter((c: any) => !c.allowedEmail);
+        // Repeat list 4 times for smooth infinite scroll
+        return [...publicCoupons, ...publicCoupons, ...publicCoupons, ...publicCoupons].map((c, i) => (
+          <div key={i} className="flex items-center gap-3 mx-8 group cursor-pointer">
+            <Ticket className="w-3 h-3 text-amber-500 animate-pulse" />
+            <span className="text-[10px] md:text-xs font-medium text-stone-300 tracking-[0.15em] uppercase whitespace-nowrap">
+              Use Code 
+              <span className="mx-2 text-[#0a1f1c] bg-amber-400 px-2 py-0.5 rounded font-bold shadow-[0_0_10px_rgba(251,191,36,0.4)]">
+                {c.code}
+              </span>
+              Get {c.type === 'percent' ? `${c.discount}%` : `₹${c.discount}`} OFF
+            </span>
+            <span className="text-white/10 text-xs mx-2">•</span>
+          </div>
+        ));
+    })()}
   </div>
 
   {/* Right Fade Gradient */}
