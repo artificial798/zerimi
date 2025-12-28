@@ -13,6 +13,8 @@ import {
     // 👇 Ye Naye Icons Add Karein
     Download, FileJson, RefreshCw, ShieldAlert
 } from 'lucide-react';
+import { doc, getDoc, setDoc } from 'firebase/firestore'; 
+import { db } from '@/lib/firebase';
 // ✅ Is line ko file ke sabse top par add karein
 import PopupManager from '@/components/admin/PopupManager';
 import Link from 'next/link';
@@ -1197,13 +1199,13 @@ function ProductManager({ products, addProduct, updateProduct, deleteProduct }: 
 // --- 3. CONFIG MANAGER (IMPROVED: Payment & Delivery APIs) ---
 // --- CONFIG MANAGER (Fully Functional) ---
 // --- CONFIG MANAGER (ULTRA PREMIUM: Razorpay + PayU + Logistics) ---
+// --- CONFIG MANAGER (FIXED: Full Code + Persistence) ---
 function ConfigManager({ showToast, updateSystemConfig }: any) {
-    // 1. Config State (Added PayU)
-   const [config, setConfig] = useState({
+    // 1. Config State (Razorpay, PayU, Shiprocket, Instamojo sab included)
+    const [config, setConfig] = useState({
         razorpay: { enabled: true, keyId: '', keySecret: '' },
         payu: { enabled: false, merchantKey: '', merchantSalt: '' },
         shiprocket: { enabled: true, email: '', password: '' },
-        // ✅ NEW: Payment Section Add Karein
         payment: { instamojoApiKey: '', instamojoAuthToken: '', instamojoEnabled: false },
         store: {
             taxRate: 3,
@@ -1215,15 +1217,41 @@ function ConfigManager({ showToast, updateSystemConfig }: any) {
         }
     });
 
-    // 2. UI States
     const [loading, setLoading] = useState(false);
     const [showSecret, setShowSecret] = useState<Record<string, boolean>>({});
     const [testingConnection, setTestingConnection] = useState<string | null>(null);
 
-    // 3. Load Config
+    // ✅ FIX: Page Load hote hi Database se Settings Fetch karein
     useEffect(() => {
-        const saved = localStorage.getItem('zerimi_config');
-        if (saved) setConfig(JSON.parse(saved));
+        const fetchSettings = async () => {
+            try {
+                // Firebase se data mango
+                const docRef = doc(db, "settings", "general");
+                const docSnap = await getDoc(docRef);
+
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    // Merge DB data with Default State (taaki kuch gayab na ho)
+                    setConfig(prev => ({
+                        ...prev,
+                        ...data, // Root level overrides
+                        payment: { ...prev.payment, ...data.payment },
+                        razorpay: { ...prev.razorpay, ...data.razorpay },
+                        payu: { ...prev.payu, ...data.payu },
+                        shiprocket: { ...prev.shiprocket, ...data.shiprocket },
+                        store: { ...prev.store, ...data.store }
+                    }));
+                } else {
+                    // Agar DB khali hai, to LocalStorage check karo (Fallback)
+                    const saved = localStorage.getItem('zerimi_config');
+                    if (saved) setConfig(JSON.parse(saved));
+                }
+            } catch (error) {
+                console.error("Error fetching settings:", error);
+            }
+        };
+
+        fetchSettings();
     }, []);
 
     // 4. Handlers
@@ -1241,15 +1269,19 @@ function ConfigManager({ showToast, updateSystemConfig }: any) {
     const handleSave = async () => {
         setLoading(true);
         try {
-            // ✅ REAL: Save to Firebase via Store
+            // ✅ FIX: Seedha Database mein Save karo (100% Secure)
+            const docRef = doc(db, "settings", "general");
+            await setDoc(docRef, config, { merge: true });
+
+            // Store ko bhi update karo agar function available hai
             if (updateSystemConfig) {
                 await updateSystemConfig(config);
-                showToast("✅ Configuration saved securely to Database!", "success");
-            } else {
-                // Fallback (Agar store function connect nahi hua)
-                localStorage.setItem('zerimi_config', JSON.stringify(config));
-                showToast("⚠️ Saved locally (Database connection missing)", "info");
             }
+
+            // LocalStorage backup
+            localStorage.setItem('zerimi_config', JSON.stringify(config));
+            
+            showToast("✅ Configuration saved securely to Database!", "success");
         } catch (error) {
             console.error("Save Error:", error);
             showToast("❌ Failed to save configuration", "error");
@@ -1257,6 +1289,7 @@ function ConfigManager({ showToast, updateSystemConfig }: any) {
             setLoading(false);
         }
     };
+
     const testConnection = (service: string) => {
         setTestingConnection(service);
         setTimeout(() => {
@@ -1274,10 +1307,9 @@ function ConfigManager({ showToast, updateSystemConfig }: any) {
                 {/* LEFT COLUMN: CRITICAL INTEGRATIONS */}
                 <div className="space-y-8">
 
-                    {/* 1. RAZORPAY (Blue Theme) */}
+                    {/* 1. RAZORPAY */}
                     <div className={`p-8 rounded-3xl border transition-all duration-300 relative overflow-hidden group ${config.razorpay.enabled ? 'bg-[#0f2925] border-blue-500/30 shadow-[0_0_40px_rgba(59,130,246,0.1)]' : 'bg-black/20 border-white/5 grayscale'}`}>
                         <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-blue-500/20 transition duration-700"></div>
-
                         <div className="flex justify-between items-center mb-6 relative z-10">
                             <div className="flex items-center gap-3">
                                 <div className={`p-2 rounded-lg ${config.razorpay.enabled ? 'bg-blue-500 text-white' : 'bg-white/10 text-white/40'}`}><CreditCard className="w-6 h-6" /></div>
@@ -1287,7 +1319,6 @@ function ConfigManager({ showToast, updateSystemConfig }: any) {
                                 <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-300 ${config.razorpay.enabled ? 'translate-x-6' : 'translate-x-0'}`}></div>
                             </div>
                         </div>
-
                         {config.razorpay.enabled && (
                             <div className="space-y-4 animate-fade-in-up relative z-10">
                                 <div><label className="text-[10px] text-white/40 uppercase font-bold mb-1 block">Key ID</label><input value={config.razorpay.keyId} onChange={(e) => handleChange('razorpay', 'keyId', e.target.value)} placeholder="rzp_live_..." className="w-full p-4 bg-black/40 border border-white/10 rounded-xl text-white text-sm outline-none focus:border-blue-500/50 transition font-mono" /></div>
@@ -1297,22 +1328,18 @@ function ConfigManager({ showToast, updateSystemConfig }: any) {
                         )}
                     </div>
 
-                    {/* 2. PAYU MONEY (Green Theme) - NEW ADDITION */}
+                    {/* 2. PAYU MONEY */}
                     <div className={`p-8 rounded-3xl border transition-all duration-300 relative overflow-hidden group ${config.payu.enabled ? 'bg-[#0f2925] border-green-500/30 shadow-[0_0_40px_rgba(34,197,94,0.1)]' : 'bg-black/20 border-white/5 grayscale'}`}>
-                        {/* Green Glow */}
                         <div className="absolute top-0 right-0 w-32 h-32 bg-green-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-green-500/20 transition duration-700"></div>
-
                         <div className="flex justify-between items-center mb-6 relative z-10">
                             <div className="flex items-center gap-3">
                                 <div className={`p-2 rounded-lg ${config.payu.enabled ? 'bg-green-600 text-white' : 'bg-white/10 text-white/40'}`}><CreditCard className="w-6 h-6" /></div>
                                 <div><h3 className="text-lg font-serif text-white">PayU Money</h3><p className="text-[10px] text-white/40 uppercase tracking-widest">Alternate Gateway</p></div>
                             </div>
-                            {/* Toggle */}
                             <div onClick={() => handleChange('payu', 'enabled', !config.payu.enabled)} className={`w-12 h-6 rounded-full p-1 cursor-pointer transition-colors duration-300 ${config.payu.enabled ? 'bg-green-600' : 'bg-white/10'}`}>
                                 <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-300 ${config.payu.enabled ? 'translate-x-6' : 'translate-x-0'}`}></div>
                             </div>
                         </div>
-
                         {config.payu.enabled && (
                             <div className="space-y-4 animate-fade-in-up relative z-10">
                                 <div><label className="text-[10px] text-white/40 uppercase font-bold mb-1 block">Merchant Key</label><input value={config.payu.merchantKey} onChange={(e) => handleChange('payu', 'merchantKey', e.target.value)} placeholder="gtKFFx" className="w-full p-4 bg-black/40 border border-white/10 rounded-xl text-white text-sm outline-none focus:border-green-500/50 transition font-mono" /></div>
@@ -1322,7 +1349,7 @@ function ConfigManager({ showToast, updateSystemConfig }: any) {
                         )}
                     </div>
 
-                    {/* 3. SHIPROCKET (Amber Theme) */}
+                    {/* 3. SHIPROCKET */}
                     <div className={`p-8 rounded-3xl border transition-all duration-300 relative overflow-hidden group ${config.shiprocket.enabled ? 'bg-[#0f2925] border-amber-500/30 shadow-[0_0_40px_rgba(245,158,11,0.1)]' : 'bg-black/20 border-white/5 grayscale'}`}>
                         <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-amber-500/20 transition duration-700"></div>
                         <div className="flex justify-between items-center mb-6 relative z-10">
@@ -1343,9 +1370,12 @@ function ConfigManager({ showToast, updateSystemConfig }: any) {
                         )}
                     </div>
                 </div>
-{/* 4. INSTAMOJO (Purple Theme) - FIXED CODE ✅ */}
+
+                {/* RIGHT COLUMN */}
+                <div className="space-y-8">
+                
+                    {/* 4. INSTAMOJO (Fixed Persistence) */}
                     <div className={`p-8 rounded-3xl border transition-all duration-300 relative overflow-hidden group ${config.payment?.instamojoEnabled ? 'bg-[#0f2925] border-purple-500/30 shadow-[0_0_40px_rgba(168,85,247,0.1)]' : 'bg-black/20 border-white/5 grayscale'}`}>
-                        {/* Purple Glow */}
                         <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-purple-500/20 transition duration-700"></div>
 
                         <div className="flex justify-between items-center mb-6 relative z-10">
@@ -1358,7 +1388,6 @@ function ConfigManager({ showToast, updateSystemConfig }: any) {
                                     <p className="text-[10px] text-white/40 uppercase tracking-widest">Indian Payment Gateway</p>
                                 </div>
                             </div>
-                            {/* Toggle Switch */}
                             <div onClick={() => handleChange('payment', 'instamojoEnabled', !config.payment?.instamojoEnabled)} className={`w-12 h-6 rounded-full p-1 cursor-pointer transition-colors duration-300 ${config.payment?.instamojoEnabled ? 'bg-purple-600' : 'bg-white/10'}`}>
                                 <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-300 ${config.payment?.instamojoEnabled ? 'translate-x-6' : 'translate-x-0'}`}></div>
                             </div>
@@ -1391,8 +1420,8 @@ function ConfigManager({ showToast, updateSystemConfig }: any) {
                             </div>
                         )}
                     </div>
-                {/* RIGHT COLUMN: STORE RULES (Same as before) */}
-                <div className="space-y-8">
+
+                    {/* 5. STORE RULES */}
                     <div className="bg-[#0f2925] p-8 rounded-3xl border border-white/5 relative overflow-hidden">
                         <h3 className="text-white font-serif text-lg mb-6 flex items-center gap-2"><DollarSign className="w-5 h-5 text-green-400" /> Financial Rules</h3>
                         <div className="space-y-6">
@@ -1407,6 +1436,7 @@ function ConfigManager({ showToast, updateSystemConfig }: any) {
                         </div>
                     </div>
 
+                    {/* 6. SITE CONTROLS */}
                     <div className="bg-[#0f2925] p-8 rounded-3xl border border-white/5 relative overflow-hidden">
                         <h3 className="text-white font-serif text-lg mb-6 flex items-center gap-2"><Settings className="w-5 h-5 text-purple-400" /> Site Controls</h3>
                         <div className="space-y-6">
