@@ -11,7 +11,7 @@ import {
     Type, Link as LinkIcon, MoveRight, Check, XCircle, Eye, MapPin, Phone, Mail,
     User, MessageSquare, Menu, ShoppingBag, Ban, Briefcase, Headphones, Search,
     // 👇 Ye Naye Icons Add Karein
-    Download, FileJson, RefreshCw, ShieldAlert
+    Download, FileJson, RefreshCw, ShieldAlert, Bike
 } from 'lucide-react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -666,6 +666,8 @@ function OrderManager({ orders, updateOrderStatus }: any) {
             case 'Delivered': return 'bg-green-500/20 text-green-400 border-green-500/50';
             case 'Processing': return 'bg-blue-500/20 text-blue-400 border-blue-500/50';
             case 'Shipped': return 'bg-amber-500/20 text-amber-400 border-amber-500/50';
+            // ✅ NAYA STATUS ADD KIYA
+            case 'Out for Delivery': return 'bg-purple-500/20 text-purple-400 border-purple-500/50 animate-pulse';
             case 'Return Requested': return 'bg-orange-500/20 text-orange-400 animate-pulse border-orange-500/50';
             case 'Return Approved': return 'bg-emerald-600/20 text-emerald-500 border-emerald-500/50';
             case 'Return Rejected': return 'bg-red-600/20 text-red-500 border-red-500/50';
@@ -791,25 +793,36 @@ function OrderManager({ orders, updateOrderStatus }: any) {
                             {/* Left: Timeline & Items */}
                             <div className="lg:col-span-2 space-y-8">
 
-                                {/* VISUAL TIMELINE */}
+                                {/* VISUAL TIMELINE (UPDATED) */}
                                 <div className="bg-black/20 p-6 rounded-xl border border-white/5">
                                     <h4 className="text-[10px] text-white/40 uppercase tracking-widest font-bold mb-6">Order Progress</h4>
                                     <div className="flex items-center justify-between relative">
-                                        {/* Line */}
+                                        {/* Line Background */}
                                         <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-1 bg-white/5 z-0"></div>
+                                        
+                                        {/* Active Progress Line */}
                                         <div className={`absolute left-0 top-1/2 -translate-y-1/2 h-1 bg-amber-600 transition-all duration-500 z-0`} style={{
-                                            width: viewingOrder.status === 'Delivered' ? '100%' : viewingOrder.status === 'Shipped' ? '66%' : viewingOrder.status === 'Processing' ? '33%' : '0%'
+                                            width: viewingOrder.status === 'Delivered' ? '100%' 
+                                                 : viewingOrder.status === 'Out for Delivery' ? '75%' 
+                                                 : viewingOrder.status === 'Shipped' ? '50%' 
+                                                 : viewingOrder.status === 'Processing' ? '25%' 
+                                                 : '0%'
                                         }}></div>
 
                                         {/* Steps */}
-                                        {['Pending', 'Processing', 'Shipped', 'Delivered'].map((step, idx) => {
-                                            const isCompleted = ['Pending', 'Processing', 'Shipped', 'Delivered'].indexOf(viewingOrder.status) >= idx;
+                                        {['Pending', 'Processing', 'Shipped', 'Out for Delivery', 'Delivered'].map((step, idx) => {
+                                            const stepsOrder = ['Pending', 'Processing', 'Shipped', 'Out for Delivery', 'Delivered'];
+                                            const currentIdx = stepsOrder.indexOf(viewingOrder.status);
+                                            const isCompleted = currentIdx >= idx;
+                                            
                                             return (
                                                 <div key={step} className="relative z-10 flex flex-col items-center gap-2">
                                                     <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${isCompleted ? 'bg-amber-600 border-amber-600 text-white shadow-[0_0_10px_rgba(245,158,11,0.5)]' : 'bg-[#0f2925] border-white/10 text-white/20'}`}>
                                                         {isCompleted ? <Check className="w-4 h-4" /> : <div className="w-2 h-2 rounded-full bg-current"></div>}
                                                     </div>
-                                                    <span className={`text-[10px] uppercase font-bold ${isCompleted ? 'text-white' : 'text-white/30'}`}>{step}</span>
+                                                    <span className={`text-[9px] uppercase font-bold text-center w-16 ${isCompleted ? 'text-white' : 'text-white/30'}`}>
+                                                        {step === 'Out for Delivery' ? 'Out for Delivery' : step}
+                                                    </span>
                                                 </div>
                                             )
                                         })}
@@ -873,7 +886,37 @@ function OrderManager({ orders, updateOrderStatus }: any) {
                                     <h4 className="text-[10px] text-white/40 uppercase tracking-widest mb-4">Update Status</h4>
 
                                     <div className="space-y-3">
+                                        {/* 🚚 SHIPROCKET BUTTON */}
+{viewingOrder.status === 'Processing' && (
+  <button
+    onClick={async () => {
+      try {
+        const res = await fetch("/api/shiprocket/create-shipment", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(viewingOrder)
+        });
+
+        const data = await res.json();
+
+        if (!data.success) {
+          alert("❌ Shiprocket shipment failed");
+          return;
+        }
+
+        alert("✅ Shipment created in Shiprocket (Test Mode)");
+      } catch (err) {
+        alert("❌ Shiprocket error");
+      }
+    }}
+    className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs uppercase tracking-wide transition flex items-center justify-center gap-2 shadow-lg"
+  >
+    🚚 Create Shipment (Shiprocket)
+  </button>
+)}
+
                                         {/* Status Logic */}
+                                        {/* PENDING -> PROCESSING */}
                                         {viewingOrder.status === 'Pending' && (
                                             <>
                                                 <button onClick={() => handleStatusUpdate(viewingOrder.id, 'Processing')} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-xs uppercase tracking-wide transition flex items-center justify-center gap-2 shadow-lg shadow-blue-900/20">
@@ -885,18 +928,26 @@ function OrderManager({ orders, updateOrderStatus }: any) {
                                             </>
                                         )}
 
+                                        {/* PROCESSING -> SHIPPED */}
                                         {viewingOrder.status === 'Processing' && (
                                             <button onClick={() => handleStatusUpdate(viewingOrder.id, 'Shipped')} className="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-xs uppercase tracking-wide transition flex items-center justify-center gap-2 shadow-lg shadow-amber-900/20">
                                                 <Truck className="w-4 h-4" /> Mark as Shipped
                                             </button>
                                         )}
 
+                                        {/* ✅ SHIPPED -> OUT FOR DELIVERY (Ye Naya Hai) */}
                                         {viewingOrder.status === 'Shipped' && (
+                                            <button onClick={() => handleStatusUpdate(viewingOrder.id, 'Out for Delivery')} className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold text-xs uppercase tracking-wide transition flex items-center justify-center gap-2 shadow-lg shadow-purple-900/20">
+                                                <Bike className="w-4 h-4" /> Mark Out for Delivery
+                                            </button>
+                                        )}
+
+                                        {/* ✅ OUT FOR DELIVERY -> DELIVERED (Ye bhi Update Hua) */}
+                                        {viewingOrder.status === 'Out for Delivery' && (
                                             <button onClick={() => handleStatusUpdate(viewingOrder.id, 'Delivered')} className="w-full py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold text-xs uppercase tracking-wide transition flex items-center justify-center gap-2 shadow-lg shadow-green-900/20">
                                                 <Check className="w-4 h-4" /> Complete Delivery
                                             </button>
                                         )}
-
                                         {/* Return Logic */}
                                         {viewingOrder.status === 'Return Requested' && (
                                             <div className="bg-orange-500/10 border border-orange-500/30 p-4 rounded-xl">
