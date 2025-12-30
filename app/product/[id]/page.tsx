@@ -115,19 +115,7 @@ const hasDiscount = originalPrice > (product?.price || 0);
         
         {/* --- MAIN PRODUCT SECTION --- */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 mb-20">
-          {/* STICKY MOBILE ADD TO CART */}
-<div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 flex justify-between items-center md:hidden z-50">
-  <span className="font-bold text-lg">₹{product.price}</span>
-  <button
-    onClick={() => {
-      addToCart(product);
-      toast.success("Added to Bag");
-    }}
-    className="bg-[#0a1f1c] text-white px-6 py-3 rounded-lg font-bold"
-  >
-    Add to Cart
-  </button>
-</div>
+         
 
           {/* LEFT: IMAGE GALLERY */}
           <div>
