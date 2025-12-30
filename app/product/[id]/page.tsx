@@ -6,7 +6,7 @@ import ProductGallery from '@/components/ProductGallery';
 import ProductCard from '@/components/ProductCard';
 import { 
   Star, Truck, ShieldCheck, Heart, Share2, 
-  Minus, Plus, ShoppingBag, ChevronDown, User 
+  Minus, Plus, ShoppingBag, ChevronDown, User,RefreshCcw, Award, Gift, Headphones 
 } from 'lucide-react'; // ✅ User icon add kiya
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -15,12 +15,57 @@ export default function ProductPage() {
   const { id } = useParams();
   
   // ✅ Store se zaroori cheezein nikali
-  const { products, reviews, addToCart, addToWishlist, currentUser, addReview } = useStore() as any;
+  const { products, reviews, addToCart, toggleWishlist, currentUser, addReview } = useStore() as any;
   
   const product = products.find((p: any) => p.id == id);
   // ✅ YE LOGIC ADD KAREIN (Return se pehle)
-const originalPrice = product.originalPrice || 0;
-const hasDiscount = originalPrice > product.price;
+const originalPrice = product?.originalPrice || 0;
+const hasDiscount = originalPrice > (product?.price || 0);
+// ... purana code ...
+  const [pincode, setPincode] = useState("");
+  const [deliveryMsg, setDeliveryMsg] = useState("");
+  const [isChecking, setIsChecking] = useState(false); // ✅ Loader State
+
+  // ✅ REAL INDIA POST API LOGIC
+  const handlePincodeCheck = async () => {
+    setDeliveryMsg(""); // Reset msg
+    
+    // 1. Validation (Must be 6 digits)
+    const pinRegex = /^[1-9][0-9]{5}$/;
+    if (!pinRegex.test(pincode)) {
+      setDeliveryMsg("❌ Invalid Pincode Format");
+      return;
+    }
+
+    setIsChecking(true); // Loader Start
+
+    try {
+      // 🌍 Call Free API
+      const response = await fetch(`https://api.postalpincode.in/pincode/${pincode}`);
+      const data = await response.json();
+      setIsChecking(false); // Loader Stop
+
+      if (data[0].Status === "Success") {
+        const city = data[0].PostOffice[0].District;
+        const state = data[0].PostOffice[0].State;
+
+        // Date Logic (Current Date + 5 Days)
+        const deliveryDate = new Date();
+        deliveryDate.setDate(deliveryDate.getDate() + 5);
+        const dateString = deliveryDate.toLocaleDateString('en-IN', { 
+          weekday: 'short', month: 'short', day: 'numeric' 
+        });
+
+        setDeliveryMsg(`✅ Delivering to ${city}, ${state} by ${dateString}`);
+      } else {
+        setDeliveryMsg("❌ Service not available here.");
+      }
+    } catch (error) {
+      setIsChecking(false);
+      setDeliveryMsg("❌ Network Error. Try again.");
+    }
+  };
+
 // ...
   // Filter Reviews for this specific product
   const productReviews = reviews ? reviews.filter((r: any) => r.productId === product?.id) : [];
@@ -70,7 +115,20 @@ const hasDiscount = originalPrice > product.price;
         
         {/* --- MAIN PRODUCT SECTION --- */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 mb-20">
-          
+          {/* STICKY MOBILE ADD TO CART */}
+<div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 flex justify-between items-center md:hidden z-50">
+  <span className="font-bold text-lg">₹{product.price}</span>
+  <button
+    onClick={() => {
+      addToCart(product);
+      toast.success("Added to Bag");
+    }}
+    className="bg-[#0a1f1c] text-white px-6 py-3 rounded-lg font-bold"
+  >
+    Add to Cart
+  </button>
+</div>
+
           {/* LEFT: IMAGE GALLERY */}
           <div>
              <ProductGallery images={galleryImages} />
@@ -127,19 +185,170 @@ const hasDiscount = originalPrice > product.price;
                    <span className="w-12 text-center font-bold">{qty}</span>
                    <button onClick={() => setQty(qty+1)} className="p-3 hover:bg-stone-100"><Plus className="w-4 h-4"/></button>
                 </div>
+                <button
+  onClick={() => {
+    addToCart(product);
+    toast.success("Added to Bag");
+  }}
+  className="flex-1 bg-[#0a1f1c] text-white rounded-lg flex items-center justify-center gap-2 py-3"
+>
+  {/* 🖥 Desktop: Icon + Text */}
+  <span className="hidden md:flex items-center gap-2 font-bold uppercase tracking-widest text-sm">
+    <ShoppingBag className="w-4 h-4" />
+    Add to Cart
+  </span>
+
+  {/* 📱 Mobile: Icon only */}
+  <span className="flex md:hidden">
+    <ShoppingBag className="w-5 h-5" />
+  </span>
+</button>
+
+                
                 <button 
-                  onClick={() => { addToCart(product); toast.success("Added to Bag"); }}
-                  className="flex-1 bg-[#0a1f1c] text-white font-bold uppercase tracking-widest text-sm hover:bg-amber-700 transition rounded-lg flex items-center justify-center gap-2"
-                >
-                   <ShoppingBag className="w-4 h-4" /> Add to Cart
-                </button>
-                <button 
-                  onClick={() => { addToWishlist(product); toast.success("Saved to Wishlist"); }}
+                  onClick={() => { toggleWishlist (product); toast.success("Saved to Wishlist"); }}
                   className="p-3 border border-stone-300 rounded-lg hover:border-red-400 hover:text-red-500 transition"
                 >
                    <Heart className="w-5 h-5" />
                 </button>
+                <button
+  onClick={() => {
+    if (navigator.share) {
+      navigator.share({
+        title: product.name,
+        text: `Check this product on ZERIMI`,
+        url: window.location.href,
+      });
+    } else {
+      navigator.clipboard.writeText(window.location.href);
+      toast.success("Product link copied!");
+    }
+  }}
+  className="p-3 border border-stone-300 rounded-lg hover:bg-stone-100 transition"
+>
+  <Share2 className="w-5 h-5" />
+</button>
+
              </div>
+             <a
+  href={`https://wa.me/918077162909?HI=${encodeURIComponent(
+    `Hi, I want to know about ${product.name}\n${window.location.href}`
+  )}`}
+  target="_blank"
+  className="inline-flex items-center gap-2 text-green-600 text-sm font-bold mt-3 hover:underline"
+>
+  💬 Ask on WhatsApp
+</a>
+{/* ✅ PREMIUM DELIVERY CHECKER */}
+<div className="mb-2 p-5 bg-stone-50 rounded-xl border border-stone-100">
+  <div className="flex items-center gap-2 mb-3">
+     <Truck className="w-4 h-4 text-[#0a1f1c]" />
+     <span className="text-xs font-bold text-[#0a1f1c] uppercase tracking-widest">Check Delivery Date</span>
+  </div>
+
+  <div className="flex items-center gap-2">
+    <div className="relative flex-1">
+      <input
+        type="text"
+        maxLength={6}
+        value={pincode}
+        onChange={(e) => setPincode(e.target.value.replace(/\D/g, ''))} // Sirf numbers allow
+        placeholder="Enter Pincode"
+        className="w-full border border-stone-300 pl-4 pr-4 py-3 rounded-lg text-sm outline-none focus:border-[#0a1f1c] focus:ring-1 focus:ring-[#0a1f1c] transition bg-white"
+      />
+    </div>
+
+    <button
+      onClick={handlePincodeCheck}
+      disabled={isChecking || pincode.length !== 6}
+      className={`px-6 py-3 rounded-lg text-xs font-bold uppercase tracking-widest transition-all shadow-sm ${
+        isChecking || pincode.length !== 6
+          ? 'bg-stone-200 text-stone-400 cursor-not-allowed'
+          : 'bg-[#0a1f1c] text-white hover:bg-amber-700'
+      }`}
+    >
+      {isChecking ? "Checking..." : "Check"}
+    </button>
+  </div>
+
+  {/* RESULT MESSAGE DISPLAY */}
+  {deliveryMsg && (
+    <div className={`mt-3 p-3 rounded-lg text-xs font-bold flex items-start gap-2 border animate-in fade-in slide-in-from-top-1 ${
+      deliveryMsg.includes("✅") 
+        ? "bg-green-50 text-green-800 border-green-200" 
+        : "bg-red-50 text-red-800 border-red-200"
+    }`}>
+      <span className="text-sm mt-0.5">{deliveryMsg.includes("✅") ? "🚚" : "⚠️"}</span>
+      <span>{deliveryMsg.replace("✅ ", "").replace("❌ ", "")}</span>
+    </div>
+  )}
+</div>
+             <div className="flex gap-0 mt-0 text-xs text-stone-400">
+{/* ✅ NEW: PREMIUM TRUST GRID (6 POINTS) */}
+<div className="bg-stone-50 rounded-xl p-5 border border-stone-100 mt-2 mb-2">
+  <h4 className="text-xs font-bold text-center text-stone-400 uppercase tracking-widest mb-4">Why Choose ZERIMI?</h4>
+  
+  <div className="grid grid-cols-2 md:grid-cols-3 gap-y-6 gap-x-4">
+    
+    {/* 1. Secure Payment */}
+    <div className="flex items-start gap-3">
+       <ShieldCheck className="w-5 h-5 text-emerald-700 mt-0.5" strokeWidth={1.5} />
+       <div>
+          <span className="block text-xs font-bold text-[#0a1f1c] uppercase">100% Secure</span>
+          <span className="text-[10px] text-stone-500 leading-tight">Encrypted Payments</span>
+       </div>
+    </div>
+
+    {/* 2. Fast Shipping */}
+    <div className="flex items-start gap-3">
+       <Truck className="w-5 h-5 text-blue-700 mt-0.5" strokeWidth={1.5} />
+       <div>
+          <span className="block text-xs font-bold text-[#0a1f1c] uppercase">Fast Delivery</span>
+          <span className="text-[10px] text-stone-500 leading-tight">Within 3-5 Days</span>
+       </div>
+    </div>
+
+    {/* 3. Easy Returns */}
+    <div className="flex items-start gap-3">
+       <RefreshCcw className="w-5 h-5 text-rose-700 mt-0.5" strokeWidth={1.5} />
+       <div>
+          <span className="block text-xs font-bold text-[#0a1f1c] uppercase">Easy Returns</span>
+          <span className="text-[10px] text-stone-500 leading-tight">7 Days Policy</span>
+       </div>
+    </div>
+
+    {/* 4. Premium Quality (Jewelry Specific) */}
+    <div className="flex items-start gap-3">
+       <Award className="w-5 h-5 text-amber-600 mt-0.5" strokeWidth={1.5} />
+       <div>
+          <span className="block text-xs font-bold text-[#0a1f1c] uppercase">Top Quality</span>
+          <span className="text-[10px] text-stone-500 leading-tight">Handpicked & Verified</span>
+       </div>
+    </div>
+
+    {/* 5. Luxury Packaging */}
+    <div className="flex items-start gap-3">
+       <Gift className="w-5 h-5 text-purple-700 mt-0.5" strokeWidth={1.5} />
+       <div>
+          <span className="block text-xs font-bold text-[#0a1f1c] uppercase">Gift Ready</span>
+          <span className="text-[10px] text-stone-500 leading-tight">Premium Box Packaging</span>
+       </div>
+    </div>
+
+    {/* 6. Support */}
+    <div className="flex items-start gap-3">
+       <Headphones className="w-5 h-5 text-stone-700 mt-0.5" strokeWidth={1.5} />
+       <div>
+          <span className="block text-xs font-bold text-[#0a1f1c] uppercase">Help Center</span>
+          <span className="text-[10px] text-stone-500 leading-tight">Support via WhatsApp</span>
+       </div>
+    </div>
+
+  </div>
+</div>
+</div>
+
+
 
              {/* ACCORDIONS (Details, Warranty etc.) */}
              <div className="border-t border-stone-200 divide-y divide-stone-200">
@@ -182,6 +391,7 @@ const hasDiscount = originalPrice > product.price;
                     </div>
                 </AccordionItem>
              </div>
+
 
              {/* 👇👇👇 REVIEWS SECTION (Yahan Add Kar Diya Hai) 👇👇👇 */}
              <div className="border-t border-stone-200 pt-10 mt-10">

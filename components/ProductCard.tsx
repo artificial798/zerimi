@@ -7,7 +7,7 @@ import { useStore } from '@/lib/store';
 import { toast } from 'react-hot-toast';
 
 export default function ProductCard({ product }: { product: any }) {
-  const { addToCart, addToWishlist } = useStore() as any;
+  const { addToCart, toggleWishlist } = useStore() as any;
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
 
@@ -91,7 +91,7 @@ export default function ProductCard({ product }: { product: any }) {
         {/* Floating Actions (Right Side) */}
         <div className="absolute top-3 right-3 flex flex-col gap-2 translate-x-10 group-hover:translate-x-0 transition-transform duration-300">
              <button 
-                onClick={(e) => { e.preventDefault(); addToWishlist(product); toast.success("Added to Wishlist"); }}
+                onClick={(e) => { e.preventDefault(); toggleWishlist(product); toast.success("Added to Wishlist"); }}
                 className="bg-white text-stone-600 p-2.5 rounded-full hover:bg-[#0a1f1c] hover:text-amber-400 transition shadow-lg"
                 title="Save for later"
              >
