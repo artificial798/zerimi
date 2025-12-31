@@ -1,5 +1,6 @@
 "use client";
 import { useStore, Order } from '@/lib/store';
+import { downloadInvoice } from '@/lib/invoiceHelper';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useRef } from 'react';
 import { 
@@ -43,45 +44,7 @@ const isOrderReturnable = (orderDateStr: string) => {
 };
 
 // --- HELPER: INVOICE GENERATOR (Unchanged Logic, Styled Output) ---
-const generateGSTInvoice = (order: Order) => {
-    const printWindow = window.open('', '_blank', 'width=900,height=800');
-    if (!printWindow) return alert("Please allow popups to print.");
 
-    const taxRate = 3; 
-    const cgstRate = 1.5;
-    const sgstRate = 1.5;
-
-    const itemsHtml = order.items.map((item: any, i: number) => {
-        const price = Number(item.price) || 0;
-        const qty = Number(item.qty) || 1;
-        const itemTotal = price * qty;
-        const taxableValue = itemTotal; 
-        const cgstAmt = (taxableValue * cgstRate) / 100;
-        const sgstAmt = (taxableValue * sgstRate) / 100;
-        const lineTotal = taxableValue + cgstAmt + sgstAmt;
-
-        return `
-        <tr style="border-bottom: 1px solid #eee;">
-            <td style="padding: 10px; text-align: center;">${i + 1}</td>
-            <td style="padding: 10px;">${item.name}</td>
-            <td style="padding: 10px; text-align: center;">7113</td>
-            <td style="padding: 10px; text-align: center;">${qty}</td>
-            <td style="padding: 10px; text-align: right;">₹${price.toLocaleString()}</td>
-            <td style="padding: 10px; text-align: right;">₹${taxableValue.toLocaleString()}</td>
-            <td style="padding: 10px; text-align: right;">${cgstRate}%</td>
-            <td style="padding: 10px; text-align: right;">${sgstRate}%</td>
-            <td style="padding: 10px; text-align: right; font-weight: bold;">₹${lineTotal.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-        </tr>`;
-    }).join('');
-
-    const subTotalVal = Number(order.subtotal) || 0; 
-    const taxVal = Number(order.tax) || 0;
-    const grandTotalVal = Number(order.total) || 0;
-
-    const html = `
-        <!DOCTYPE html><html><head><title>Invoice #${order.invoiceNo}</title><style>body { font-family: 'Helvetica', sans-serif; padding: 30px; color: #333; font-size: 13px; line-height: 1.5; } .container { max-width: 850px; margin: 0 auto; border: 1px solid #eee; padding: 30px; } .header { display: flex; justify-content: space-between; border-bottom: 2px solid #0a1f1c; padding-bottom: 20px; margin-bottom: 20px; } .logo-text { font-size: 28px; font-weight: 900; color: #0a1f1c; } .box { background: #f9f9f9; padding: 15px; border-radius: 8px; } table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 12px; } th { background: #0a1f1c; color: white; padding: 12px 10px; text-align: left; } td { padding: 10px; border-bottom: 1px solid #eee; } .totals-table td { padding: 8px; text-align: right; } .grand-total { font-size: 18px; font-weight: bold; background: #f0f0f0; }</style></head><body><div class="container"><div class="header"><div class="logo-text">ZERIMI JEWELS</div><div>TAX INVOICE<br><b>#${order.invoiceNo || 'INV-GEN'}</b></div></div><div style="display:flex;gap:20px;margin-bottom:20px;"><div style="width:50%" class="box"><b>Sold By</b><br>ZERIMI PRIVATE LIMITED<br>Mumbai, MH - 400050<br>GSTIN: 27AABCU9603R1Z2</div><div style="width:50%" class="box"><b>Bill To</b><br>${order.customerName}<br>${order.customerEmail}</div></div><table><thead><tr><th>#</th><th>Item</th><th>HSN</th><th>Qty</th><th align="right">Price</th><th align="right">Taxable</th><th align="right">CGST</th><th align="right">SGST</th><th align="right">Amount</th></tr></thead><tbody>${itemsHtml}</tbody></table><div style="display:flex;justify-content:flex-end;"><table class="totals-table" style="width:300px;"><tr><td>Taxable Value</td><td>₹${subTotalVal.toLocaleString(undefined, {minimumFractionDigits: 2})}</td></tr><tr><td>CGST (1.5%)</td><td>₹${(taxVal/2).toLocaleString(undefined, {minimumFractionDigits: 2})}</td></tr><tr><td>SGST (1.5%)</td><td>₹${(taxVal/2).toLocaleString(undefined, {minimumFractionDigits: 2})}</td></tr><tr class="grand-total"><td>GRAND TOTAL</td><td>₹${grandTotalVal.toLocaleString(undefined, {minimumFractionDigits: 2})}</td></tr></table></div></div><script>window.onload = function(){ setTimeout(function(){ window.print(); }, 500); }</script></body></html>`;
-    printWindow.document.open(); printWindow.document.write(html); printWindow.document.close();
-};
 
 // --- HELPER: CERTIFICATE GENERATOR (Unchanged) ---
 // --- HELPER: PREMIUM ZERIMI CERTIFICATE GENERATOR (6 MONTHS WARRANTY) ---
@@ -332,7 +295,7 @@ const generateCertificate = (item: any, user: any, date: string) => {
 };
 // --- MAIN COMPONENT ---
 export default function CustomerDashboard() {
-  const { currentUser, orders, logout, coupons, notifications, wishlist, updateOrderStatus, sendNotification } = useStore();
+  const { currentUser, orders, logout, coupons, notifications, wishlist, updateOrderStatus, sendNotification, systemSettings } = useStore();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('overview');
 const [profileImage, setProfileImage] = useState<string | null>(null);
@@ -460,6 +423,8 @@ const [profileImage, setProfileImage] = useState<string | null>(null);
                transition={{ duration: 0.2 }}
             >
                {activeTab === 'overview' && <OverviewTab user={currentUser} orders={myOrders} setActiveTab={setActiveTab} />}
+               {/* ✅ 2. YAHAN 'settings={systemSettings}' ADD KAREIN */}
+               {activeTab === 'orders' && <OrdersTab orders={myOrders} onReturn={handleReturnRequest} settings={systemSettings} />}
                {activeTab === 'orders' && <OrdersTab orders={myOrders} onReturn={handleReturnRequest} />}
                {activeTab === 'returns' && <ReturnsTab orders={myOrders} />}
                {activeTab === 'vault' && <VaultTab vaultItems={vaultItems} user={currentUser} />}
@@ -566,7 +531,7 @@ function OverviewTab({ user, orders, setActiveTab }: any) {
   );
 }
 
-function OrdersTab({ orders, onReturn }: any) {
+function OrdersTab({ orders, onReturn, settings }: any) {
   // ✅ FIX: Router yahan bhi define karein
   const router = useRouter();
 
@@ -588,7 +553,12 @@ function OrdersTab({ orders, onReturn }: any) {
                   <div><p className="text-[10px] text-white/40 uppercase tracking-widest mb-1">Total Amount</p><p className="text-sm font-bold text-amber-500">₹{order.total.toLocaleString()}</p></div>
                   <div><p className="text-[10px] text-white/40 uppercase tracking-widest mb-1">Order ID</p><p className="text-sm font-mono text-white/60">#{order.id}</p></div>
                </div>
-               <button onClick={() => generateGSTInvoice(order)} className="flex items-center gap-2 text-xs font-bold text-amber-400 border border-amber-500/30 px-4 py-2 rounded-lg hover:bg-amber-500/10 transition"><FileText className="w-4 h-4" /> Invoice</button>
+              <button 
+                   onClick={() => downloadInvoice(order, settings)} 
+                   className="flex items-center gap-2 text-xs font-bold text-amber-400 border border-amber-500/30 px-4 py-2 rounded-lg hover:bg-amber-500/10 transition"
+               >
+                   <FileText className="w-4 h-4" /> Invoice
+               </button>
             </div>
             
             {/* Order Items */}

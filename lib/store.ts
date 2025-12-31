@@ -91,6 +91,14 @@ export type SystemSettings = {
         // PayU Keys
         payu?: { enabled: boolean; merchantKey: string; merchantSalt: string; };
     };
+    // 👇 NEW: INVOICE SETTINGS ADD KAREIN
+    invoice?: {
+        companyName: string;
+        address: string;
+        gstin: string;
+        terms: string;
+        logoUrl: string;
+    };
 };
 
 export type SiteText = {
@@ -496,17 +504,39 @@ export const useStore = create<Store>()(
             updatePromo: async (data) => { await setDoc(doc(db, "cms", "promo"), data); },
             updateSiteText: async (data) => { await setDoc(doc(db, "cms", "siteText"), data); },
 
-            updateSystemConfig: async (data) => {
+           updateSystemConfig: async (data) => {
                 try {
+                    // 1. Database mein Save karo
                     await setDoc(doc(db, "cms", "config"), data);
+
+                    // 2. Local State Update (Complete Data ke sath)
                     set((state) => ({
                         systemSettings: {
                             ...state.systemSettings,
+                            
+                            // Store Basic Rules
                             taxRate: Number(data.store?.taxRate) || 3,
                             shippingCost: Number(data.store?.shippingCost) || 150,
                             shippingThreshold: Number(data.store?.freeShippingThreshold) || 5000,
                             maintenanceMode: data.store?.maintenanceMode || false,
-                            globalAlert: data.store?.globalAlert || ''
+                            globalAlert: data.store?.globalAlert || '',
+
+                            // ✅ PAYMENT SETTINGS UPDATE (Ye Missing Tha)
+                            payment: {
+                                ...state.systemSettings.payment,
+                                ...data.payment, // Instamojo keys
+                                razorpay: data.razorpay, // Razorpay Object
+                                payu: data.payu          // PayU Object
+                            },
+
+                            // ✅ INVOICE SETTINGS UPDATE (Ye Bhi Missing Tha)
+                            invoice: data.invoice || {
+                                companyName: 'ZERIMI JEWELS',
+                                address: '',
+                                gstin: '',
+                                terms: '',
+                                logoUrl: ''
+                            }
                         }
                     }));
                 } catch (e) { console.error("Config Save Failed:", e); throw e; }
@@ -544,22 +574,46 @@ export const useStore = create<Store>()(
             },
             markNotificationRead: async (id) => { await updateDoc(doc(db, "notifications", id), { isRead: true }); },
 
-            nukeDatabase: async () => {
+          nukeDatabase: async () => {
                 try {
-                    const collections = ["products", "orders", "coupons", "warranties", "notifications", "blogs", "users", "reviews", "messages"];
-                    for (const colName of collections) {
+                    // ✅ SIRF IN COLLECTIONS KO DELETE KARENGE (Operations & Growth)
+                    // ❌ Users, Settings, aur CMS (Design) ko hath nahi lagayenge
+                    const collectionsToDelete = [
+                        "products",       // Inventory (Operations)
+                        "orders",         // Orders (Operations)
+                        "messages",       // Inbox (Operations)
+                        "coupons",        // Coupons (Growth)
+                        "notifications",  // Marketing (Growth)
+                        "reviews",        // Reviews
+                        "warranties",     // Warranties
+                        "blogs"           // Blogs
+                    ];
+
+                    for (const colName of collectionsToDelete) {
                         const q = query(collection(db, colName));
                         const snapshot = await getDocs(q);
                         const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
                         await Promise.all(deletePromises);
                     }
+
+                    // ✅ LOCAL STATE RESET (Sirf deleted data ko clear karein)
                     set({
-                        products: [], orders: [], coupons: [],
-                        warranties: [], notifications: [], blogs: [],
-                        cart: [], wishlist: [], allUsers: [], reviews: [], messages: []
+                        products: [], 
+                        orders: [], 
+                        coupons: [],
+                        warranties: [], 
+                        notifications: [], 
+                        blogs: [], 
+                        reviews: [], 
+                        messages: [],
+                        // users: [],  <-- ISKO COMMENT KAR DIYA (Users Safe rahenge)
                     });
-                    console.log("💥 Database Nuked Successfully");
-                } catch (e) { console.error("Nuke Failed:", e); throw e; }
+                    
+                    console.log("💥 Operational Data Wiped Successfully. Users & Settings Preserved.");
+                } catch (e) { 
+                    console.error("Nuke Failed:", e); 
+                    throw e; 
+                }
             },
         }),
         {
@@ -624,7 +678,7 @@ const initListeners = () => {
                     useStore.setState({ promoSection: data as PromoSection });
                 } 
                 else if (key === 'config') {
-                    // ✅ PAYMENT SETTINGS KO YAHAN LOAD KAR RAHE HAIN
+                    // ✅ COMPLETE CONFIG LOAD LOGIC
                     useStore.setState({
                         systemSettings: {
                             maintenanceMode: data.store?.maintenanceMode || false,
@@ -635,13 +689,22 @@ const initListeners = () => {
                             shippingCost: Number(data.store?.shippingCost) || 150,
                             globalAlert: data.store?.globalAlert || '',
 
-                            // ✅ Payment Data Load Logic
+                            // Payment Data Load
                             payment: {
                                 instamojoApiKey: data.store?.payment?.instamojoApiKey,
                                 instamojoAuthToken: data.store?.payment?.instamojoAuthToken,
                                 instamojoEnabled: data.store?.payment?.instamojoEnabled,
-                                razorpay: data.razorpay, // Root level se load
-                                payu: data.payu          // Root level se load
+                                razorpay: data.razorpay, // Direct Root se load
+                                payu: data.payu          // Direct Root se load
+                            },
+
+                            // ✅ INVOICE DATA LOAD (Ye Add kiya hai)
+                            invoice: data.invoice || {
+                                companyName: 'ZERIMI JEWELS',
+                                address: '',
+                                gstin: '',
+                                terms: '',
+                                logoUrl: ''
                             }
                         }
                     });

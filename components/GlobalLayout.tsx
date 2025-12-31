@@ -255,12 +255,86 @@ const subtotal = cart.reduce((sum: number, item: any) => sum + item.product.pric
         {children}
       </main>
 
-      <section className="bg-stone-100 py-12 border-t border-stone-200">
-        <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-4 gap-8 text-center">
-          <div className="flex flex-col items-center gap-3"><div className="w-12 h-12 rounded-full bg-[#0a1f1c] flex items-center justify-center text-amber-400"><ShieldCheck className="w-6 h-6" /></div><h4 className="font-serif text-lg text-[#0a1f1c]">6 months Warranty</h4><p className="text-xs text-stone-500 px-4">Plating & stone warranty on all jewelry.</p></div>
-          <div className="flex flex-col items-center gap-3"><div className="w-12 h-12 rounded-full bg-[#0a1f1c] flex items-center justify-center text-amber-400"><Truck className="w-6 h-6" /></div><h4 className="font-serif text-lg text-[#0a1f1c]">Free Express Shipping</h4><p className="text-xs text-stone-500 px-4">On all orders above ₹1000.</p></div>
-          <div className="flex flex-col items-center gap-3"><div className="w-12 h-12 rounded-full bg-[#0a1f1c] flex items-center justify-center text-amber-400"><Gem className="w-6 h-6" /></div><h4 className="font-serif text-lg text-[#0a1f1c]">Certified Authenticity</h4><p className="text-xs text-stone-500 px-4">100% original designs & stones.</p></div>
-          <div className="flex flex-col items-center gap-3"><div className="w-12 h-12 rounded-full bg-[#0a1f1c] flex items-center justify-center text-amber-400"><Check className="w-6 h-6" /></div><h4 className="font-serif text-lg text-[#0a1f1c]">Easy 3-Day Returns</h4><p className="text-xs text-stone-500 px-4">No questions asked return policy.</p></div>
+      {/* --- COMPACT PREMIUM TRUST STRIP (FIXED) --- */}
+      <section className="bg-[#faf9f6] py-8 md:py-16 border-t border-[#e5e0d8]">
+        <div className="max-w-7xl mx-auto px-4 md:px-6">
+          
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-x-4 gap-y-6 md:gap-x-6 md:gap-y-12">
+            
+            {/* 1. Warranty */}
+            <div className="flex flex-row md:flex-col items-center gap-3 md:gap-4 group text-left md:text-center p-2 md:p-0 bg-white md:bg-transparent rounded-lg md:rounded-none border border-stone-100 md:border-none shadow-sm md:shadow-none">
+              <div className="w-10 h-10 md:w-16 md:h-16 flex-shrink-0 rounded-full border border-amber-600/20 bg-[#faf9f6] md:bg-white flex items-center justify-center text-amber-600 shadow-sm group-hover:scale-105 transition-all duration-300">
+                <ShieldCheck className="w-5 h-5 md:w-7 md:h-7 stroke-[1.5]" />
+              </div>
+              <div>
+                <h4 className="font-serif text-xs md:text-base text-[#0a1f1c] font-bold md:font-medium tracking-wide leading-tight">12-Mo Warranty</h4>
+                <p className="hidden md:block text-[10px] md:text-xs text-stone-500 mt-1.5">Plating & stone cover</p>
+                <p className="md:hidden text-[9px] text-stone-400 mt-0.5">Plating & Stone</p>
+              </div>
+            </div>
+
+            {/* 2. Authenticity */}
+            <div className="flex flex-row md:flex-col items-center gap-3 md:gap-4 group text-left md:text-center p-2 md:p-0 bg-white md:bg-transparent rounded-lg md:rounded-none border border-stone-100 md:border-none shadow-sm md:shadow-none">
+              <div className="w-10 h-10 md:w-16 md:h-16 flex-shrink-0 rounded-full border border-amber-600/20 bg-[#faf9f6] md:bg-white flex items-center justify-center text-amber-600 shadow-sm group-hover:scale-105 transition-all duration-300">
+                <Gem className="w-5 h-5 md:w-7 md:h-7 stroke-[1.5]" />
+              </div>
+              <div>
+                <h4 className="font-serif text-xs md:text-base text-[#0a1f1c] font-bold md:font-medium tracking-wide leading-tight">100% Authentic</h4>
+                <p className="hidden md:block text-[10px] md:text-xs text-stone-500 mt-1.5">Original Designs</p>
+                <p className="md:hidden text-[9px] text-stone-400 mt-0.5">Original Designs</p>
+              </div>
+            </div>
+
+            {/* 3. Shipping (ERROR FIXED HERE) */}
+            <div className="flex flex-row md:flex-col items-center gap-3 md:gap-4 group text-left md:text-center p-2 md:p-0 bg-white md:bg-transparent rounded-lg md:rounded-none border border-stone-100 md:border-none shadow-sm md:shadow-none">
+              <div className="w-10 h-10 md:w-16 md:h-16 flex-shrink-0 rounded-full border border-amber-600/20 bg-[#faf9f6] md:bg-white flex items-center justify-center text-amber-600 shadow-sm group-hover:scale-105 transition-all duration-300">
+                <Truck className="w-5 h-5 md:w-7 md:h-7 stroke-[1.5]" />
+              </div>
+              <div>
+                <h4 className="font-serif text-xs md:text-base text-[#0a1f1c] font-bold md:font-medium tracking-wide leading-tight">Free Shipping</h4>
+                <p className="hidden md:block text-[10px] md:text-xs text-stone-500 mt-1.5">Above ₹1000</p>
+                {/* ✅ Fixed: '>' changed to '&gt;' */}
+                <p className="md:hidden text-[9px] text-stone-400 mt-0.5">Orders &gt; ₹1000</p>
+              </div>
+            </div>
+
+            {/* 4. Returns */}
+            <div className="flex flex-row md:flex-col items-center gap-3 md:gap-4 group text-left md:text-center p-2 md:p-0 bg-white md:bg-transparent rounded-lg md:rounded-none border border-stone-100 md:border-none shadow-sm md:shadow-none">
+              <div className="w-10 h-10 md:w-16 md:h-16 flex-shrink-0 rounded-full border border-amber-600/20 bg-[#faf9f6] md:bg-white flex items-center justify-center text-amber-600 shadow-sm group-hover:scale-105 transition-all duration-300">
+                <Check className="w-5 h-5 md:w-7 md:h-7 stroke-[1.5]" />
+              </div>
+              <div>
+                <h4 className="font-serif text-xs md:text-base text-[#0a1f1c] font-bold md:font-medium tracking-wide leading-tight">Easy Returns</h4>
+                <p className="hidden md:block text-[10px] md:text-xs text-stone-500 mt-1.5">3-Day Policy</p>
+                <p className="md:hidden text-[9px] text-stone-400 mt-0.5">3-Day Policy</p>
+              </div>
+            </div>
+
+             {/* 5. Secure */}
+             <div className="flex flex-row md:flex-col items-center gap-3 md:gap-4 group text-left md:text-center p-2 md:p-0 bg-white md:bg-transparent rounded-lg md:rounded-none border border-stone-100 md:border-none shadow-sm md:shadow-none">
+              <div className="w-10 h-10 md:w-16 md:h-16 flex-shrink-0 rounded-full border border-amber-600/20 bg-[#faf9f6] md:bg-white flex items-center justify-center text-amber-600 shadow-sm group-hover:scale-105 transition-all duration-300">
+                <Lock className="w-5 h-5 md:w-7 md:h-7 stroke-[1.5]" />
+              </div>
+              <div>
+                <h4 className="font-serif text-xs md:text-base text-[#0a1f1c] font-bold md:font-medium tracking-wide leading-tight">100% Secure</h4>
+                <p className="hidden md:block text-[10px] md:text-xs text-stone-500 mt-1.5">Encrypted</p>
+                <p className="md:hidden text-[9px] text-stone-400 mt-0.5">Encrypted</p>
+              </div>
+            </div>
+
+             {/* 6. Gift */}
+             <div className="flex flex-row md:flex-col items-center gap-3 md:gap-4 group text-left md:text-center p-2 md:p-0 bg-white md:bg-transparent rounded-lg md:rounded-none border border-stone-100 md:border-none shadow-sm md:shadow-none">
+              <div className="w-10 h-10 md:w-16 md:h-16 flex-shrink-0 rounded-full border border-amber-600/20 bg-[#faf9f6] md:bg-white flex items-center justify-center text-amber-600 shadow-sm group-hover:scale-105 transition-all duration-300">
+                <Gift className="w-5 h-5 md:w-7 md:h-7 stroke-[1.5]" />
+              </div>
+              <div>
+                <h4 className="font-serif text-xs md:text-base text-[#0a1f1c] font-bold md:font-medium tracking-wide leading-tight">Gift Ready</h4>
+                <p className="hidden md:block text-[10px] md:text-xs text-stone-500 mt-1.5">Premium Pack</p>
+                <p className="md:hidden text-[9px] text-stone-400 mt-0.5">Premium Pack</p>
+              </div>
+            </div>
+
+          </div>
         </div>
       </section>
 

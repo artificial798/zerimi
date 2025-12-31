@@ -1,5 +1,5 @@
 "use client";
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useStore } from '@/lib/store';
 import ProductGallery from '@/components/ProductGallery';
@@ -13,11 +13,23 @@ import { toast } from 'react-hot-toast';
 
 export default function ProductPage() {
   const { id } = useParams();
-  
-  // ✅ Store se zaroori cheezein nikali
   const { products, reviews, addToCart, toggleWishlist, currentUser, addReview } = useStore() as any;
-  
-  const product = products.find((p: any) => p.id == id);
+  // Component ke andar (Product find karne se pehle):
+// Component ke andar (Product find karne se pehle):
+const [loading, setLoading] = useState(true);
+
+useEffect(() => {
+    // Agar products load ho chuke hain, to loading band karo
+    if (products && products.length > 0) {
+        setLoading(false);
+    } else {
+        // Fallback: Agar 2 second tak data na aaye to loading band kar do (taaki asli 404 dikhe)
+        const timer = setTimeout(() => setLoading(false), 2000);
+        return () => clearTimeout(timer);
+    }
+}, [products]);
+const product = products.find((p: any) => p.id == id);  
+ 
   // ✅ YE LOGIC ADD KAREIN (Return se pehle)
 const originalPrice = product?.originalPrice || 0;
 const hasDiscount = originalPrice > (product?.price || 0);
@@ -98,7 +110,28 @@ const hasDiscount = originalPrice > (product?.price || 0);
   };
   // --- 👆 REVIEW LOGIC END 👆 ---
 
-  if (!product) return <div className="text-center py-20">Product not found</div>;
+ // ✅ NAYA CODE (Jo lagana hai):
+
+// Case 1: Abhi Loading chal rahi hai -> Spinner Dikhao
+if (loading) {
+    return (
+        <div className="min-h-screen flex flex-col items-center justify-center bg-[#0a1f1c]">
+            <div className="w-12 h-12 border-4 border-white/10 border-t-amber-500 rounded-full animate-spin mb-4"></div>
+            <p className="text-amber-500 font-serif tracking-widest text-xs animate-pulse">LOADING LUXURY...</p>
+        </div>
+    );
+}
+
+// Case 2: Loading khatam, par product nahi mila -> Asli 404 Dikhao
+if (!product) {
+    return (
+        <div className="min-h-screen flex flex-col items-center justify-center bg-stone-50 text-stone-800">
+            <h2 className="text-2xl font-serif mb-2">Product Not Found</h2>
+            <p className="text-sm text-stone-500 mb-6">The item you are looking for does not exist.</p>
+            <a href="/" className="px-6 py-2 bg-[#0a1f1c] text-white rounded uppercase text-xs font-bold">Back to Home</a>
+        </div>
+    );
+}
 
   // Real Images Logic
   const galleryImages = (product.images && product.images.length > 0) 

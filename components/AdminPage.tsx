@@ -14,10 +14,13 @@ import {
     Download, FileJson, RefreshCw, ShieldAlert, Bike
 } from 'lucide-react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+
 // ✅ Is line ko file ke sabse top par add karein
 import PopupManager from '@/components/admin/PopupManager';
+import { signInWithEmailAndPassword, signOut } from 'firebase/auth'; 
+import { auth, db } from '@/lib/firebase';
 import Link from 'next/link';
+
 // --- PREMIUM ALERT COMPONENT (Add this below imports) ---
 const Toast = ({ message, type, onClose }: { message: string, type: 'error' | 'success' | 'info', onClose: () => void }) => {
     useEffect(() => {
@@ -100,7 +103,7 @@ export default function AdminPage() {
     const [showForgotPassword, setShowForgotPassword] = useState(false);
 
     // USER ROLE & DATA STATE
-    const [userRole, setUserRole] = useState<'admin' | 'staff'>('admin');
+    const [userRole, setUserRole] = useState<'admin' | 'manager' | 'staff'>('admin');
     const [currentUser, setCurrentUser] = useState<any>(null);
     const [activeTab, setActiveTab] = useState('dashboard');
     const [storageUsed, setStorageUsed] = useState(0);
@@ -203,51 +206,86 @@ export default function AdminPage() {
         showToast('Logged out successfully', 'info');
     };
 
-    const handleLogin = (e: React.FormEvent) => {
-        e.preventDefault();
+  // --- UPDATED LOGIN HANDLER (Firebase Based) ---
+   // ✅ FIXED LOGIN HANDLER
+// ✅ REAL FIREBASE LOGIN HANDLER (Admin + Staff + Manager)
+const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
 
-        // Secure Credentials
-        const secureEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'admin@zerimi.com';
-        const securePass = process.env.NEXT_PUBLIC_ADMIN_PASS || 'admin';
+    try {
+        // ---------------------------------------------------------
+        // 1. SUPER ADMIN CHECK (Database Settings se)
+        // ---------------------------------------------------------
+        const docRef = doc(db, "settings", "super_admin");
+        const docSnap = await getDoc(docRef);
 
-        // 1. Check Super Admin
-        if (email.toLowerCase() === secureEmail.toLowerCase() && password === securePass) {
-            setIsAuthenticated(true);
-            setUserRole('admin');
-            setCurrentUser({ name: 'Super Admin', email: secureEmail, role: 'admin' });
-            showToast('Welcome back, Super Admin', 'success');
-            return;
+        if (docSnap.exists()) {
+            const adminData = docSnap.data();
+            // Agar email/pass DB wale super admin se match kare
+            if (email.toLowerCase() === adminData.email.toLowerCase() && password === adminData.password) {
+                setIsAuthenticated(true);
+                setUserRole('admin');
+                setCurrentUser({
+                    name: 'Super Admin',
+                    email: adminData.email,
+                    role: 'admin',
+                    image: 'https://cdn-icons-png.flaticon.com/512/2942/2942813.png'
+                });
+                showToast('Welcome Super Admin', 'success');
+                return;
+            }
         }
 
-        // 2. Check Database Users
+        // ---------------------------------------------------------
+        // 2. STAFF / MANAGER CHECK (Real Firebase Auth)
+        // ---------------------------------------------------------
+        
+        // A. Firebase se Email/Pass verify karein
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+
+        // B. Ab check karein ki ye user hamare Database mein kya role rakhta hai
         const foundUser = allUsers?.find((u: any) => u.email.toLowerCase() === email.toLowerCase());
 
         if (foundUser) {
-            if (foundUser.role === 'banned') return showToast('Access Denied: This account is banned.', 'error');
-            if (foundUser.role === 'customer') return showToast('Access Denied: Customers cannot access dashboard.', 'error');
-
-            const requiredPass = foundUser.role === 'admin' ? 'admin' : 'staff'; // In real app, check hash
-
-            if (password === requiredPass) {
-                setIsAuthenticated(true);
-                setUserRole(foundUser.role === 'admin' ? 'admin' : 'staff');
-                setCurrentUser(foundUser);
-                showToast(`Welcome back, ${foundUser.name}`, 'success');
-            } else {
-                showToast('Incorrect Password provided.', 'error');
+            // C. Role Verification
+            if (foundUser.role === 'banned') {
+                await signOut(auth); // Login cancel karo
+                return showToast('Access Denied: Your account is banned.', 'error');
             }
+            
+            if (foundUser.role === 'customer') {
+                await signOut(auth); // Login cancel karo (Customer allowed nahi hai)
+                return showToast('Access Denied: Customers cannot access Admin Panel.', 'error');
+            }
+
+            // D. Success! (Admin / Manager / Staff)
+            setIsAuthenticated(true);
+            setUserRole(foundUser.role); // Role set karo (manager/staff/admin)
+            setCurrentUser(foundUser);
+            showToast(`Welcome back, ${foundUser.name}`, 'success');
+
         } else {
-            // 3. Fallback Demo Staff
-            if (email === 'staff@zerimi.com' && password === 'staff') {
-                setIsAuthenticated(true);
-                setUserRole('staff');
-                setCurrentUser({ name: 'Demo Staff', email: 'staff@zerimi.com', role: 'staff' });
-                showToast('Welcome back, Staff Member', 'success');
-            } else {
-                showToast('User not found in system.', 'error');
-            }
+            // Agar user auth mein hai par database list mein nahi mila
+            await signOut(auth);
+            showToast('User record not found in database.', 'error');
         }
-    };
+
+    } catch (error: any) {
+        console.error("Login Error:", error);
+        
+        // Error Messages ko user-friendly banayein
+        if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+            showToast('Incorrect Email or Password.', 'error');
+        } else if (error.code === 'auth/user-not-found') {
+            showToast('No user found with this email.', 'error');
+        } else if (error.code === 'auth/too-many-requests') {
+            showToast('Too many failed attempts. Try later.', 'error');
+        } else {
+            showToast('Login failed. Check console.', 'error');
+        }
+    }
+};
 
     useEffect(() => {
         setIsMounted(true);
@@ -355,62 +393,81 @@ export default function AdminPage() {
             {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
 
             {/* SIDEBAR */}
-            <aside className="w-20 lg:w-72 bg-[#0f2925] border-r border-white/5 flex flex-col flex-shrink-0 transition-all duration-300 z-20">
-                <div className="p-6 flex items-center justify-center lg:justify-start lg:px-8 border-b border-white/5 h-24">
-                    <div className="text-center lg:text-left">
-                        <h2 className="font-serif text-2xl tracking-widest text-white hidden lg:block">ZERIMI</h2>
-                        <div className="flex items-center justify-center lg:justify-start gap-2 mt-1">
-                            <span className={`w-2 h-2 rounded-full animate-pulse ${userRole === 'admin' ? 'bg-red-500' : 'bg-green-500'}`}></span>
-                            <p className="text-[9px] text-amber-500 uppercase tracking-widest hidden lg:block">{userRole === 'admin' ? 'GOD MODE' : 'STAFF PANEL'}</p>
-                        </div>
-                    </div>
-                </div>
-                <nav className="flex-1 py-6 px-4 space-y-1 overflow-y-auto custom-scrollbar">
-                    <p className="px-4 py-2 text-[10px] text-white/20 uppercase tracking-widest hidden lg:block">Operations</p>
-                    <SidebarBtn icon={<BarChart3 />} label="Overview" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
-                    <SidebarBtn icon={<Truck />} label="Order Management" active={activeTab === 'orders'} onClick={() => setActiveTab('orders')} />
-                    <SidebarBtn icon={<Package />} label="Inventory" active={activeTab === 'products'} onClick={() => setActiveTab('products')} />
-                    {/* 👇 STEP 2: INBOX BUTTON WITH BADGE */}
-                    <div className="relative">
-                        <SidebarBtn icon={<Mail />} label="Inbox" active={activeTab === 'inbox'} onClick={() => setActiveTab('inbox')} />
-                        {inboxUnreadCount > 0 && (
-                            <span className="absolute left-10 top-2 bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full animate-pulse border border-[#0f2925]">
-                                {inboxUnreadCount}
-                            </span>
-                        )}
-                    </div>
-                    {userRole === 'admin' && (
-                        <>
-                            <p className="px-4 py-2 text-[10px] text-white/20 uppercase tracking-widest hidden lg:block mt-4">Growth Engine</p>
-                            <SidebarBtn icon={<Layout />} label="Homepage Editor" active={activeTab === 'cms'} onClick={() => setActiveTab('cms')} />
-                            <SidebarBtn icon={<Ticket />} label="Coupons & Offers" active={activeTab === 'coupons'} onClick={() => setActiveTab('coupons')} />
-                            <SidebarBtn icon={<Megaphone />} label="Marketing" active={activeTab === 'marketing'} onClick={() => setActiveTab('marketing')} />
-                            {/* Line 308 ke baad Marketing ke neeche */}
+           {/* ✅ FIXED SIDEBAR FOR MANAGER ACCESS */}
+<aside className="w-20 lg:w-72 bg-[#0f2925] border-r border-white/5 flex flex-col flex-shrink-0 transition-all duration-300 z-20">
+    <div className="p-6 flex items-center justify-center lg:justify-start lg:px-8 border-b border-white/5 h-24">
+        <div className="text-center lg:text-left">
+            <h2 className="font-serif text-2xl tracking-widest text-white hidden lg:block">ZERIMI</h2>
+            <div className="flex items-center justify-center lg:justify-start gap-2 mt-1">
+                <span className={`w-2 h-2 rounded-full animate-pulse ${
+                    userRole === 'admin' ? 'bg-red-500' : 
+                    userRole === 'manager' ? 'bg-amber-500' : 
+                    'bg-blue-500'
+                }`}></span>
+                
+                {/* 👇 YE LABEL LOGIC FIX KIYA HAI */}
+                <p className="text-[9px] text-white/50 uppercase tracking-widest hidden lg:block">
+                    {userRole === 'admin' ? 'GOD MODE' : 
+                     userRole === 'manager' ? 'MANAGER PANEL' : 
+                     'STAFF PANEL'}
+                </p>
+            </div>
+        </div>
+    </div>
 
+    <nav className="flex-1 py-6 px-4 space-y-1 overflow-y-auto custom-scrollbar">
+        {/* 1. SABKE LIYE (Staff + Manager + Admin) */}
+        <p className="px-4 py-2 text-[10px] text-white/20 uppercase tracking-widest hidden lg:block">Operations</p>
+        <SidebarBtn icon={<BarChart3 />} label="Overview" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
+        <SidebarBtn icon={<Truck />} label="Order Management" active={activeTab === 'orders'} onClick={() => setActiveTab('orders')} />
+        <SidebarBtn icon={<Package />} label="Inventory" active={activeTab === 'products'} onClick={() => setActiveTab('products')} />
+        
+        <div className="relative">
+            <SidebarBtn icon={<Mail />} label="Inbox" active={activeTab === 'inbox'} onClick={() => setActiveTab('inbox')} />
+            {inboxUnreadCount > 0 && (
+                <span className="absolute left-10 top-2 bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full animate-pulse border border-[#0f2925]">
+                    {inboxUnreadCount}
+                </span>
+            )}
+        </div>
 
-                            {/* ✅ NEW POPUP BUTTON */}
-                            <button
-                                onClick={() => setActiveTab('popup')}
-                                className={`flex items-center justify-center lg:justify-start gap-4 w-full p-3 rounded-lg text-sm tracking-wide transition-all duration-300 group ${activeTab === 'popup' ? 'bg-amber-600 text-white shadow-lg' : 'text-white/40 hover:bg-white/5 hover:text-white'}`}
-                            >
-                                <span className={`w-5 h-5 ${activeTab === 'popup' ? 'text-white' : 'group-hover:text-amber-400'}`}>
-                                    <Sparkles className="w-5 h-5" />
-                                </span>
-                                <span className="hidden lg:inline">Popup Manager</span>
-                            </button>
-                            <p className="px-4 py-2 text-[10px] text-white/20 uppercase tracking-widest hidden lg:block mt-4">Administration</p>
-                            <SidebarBtn icon={<Users />} label="Staff & Users" active={activeTab === 'users'} onClick={() => setActiveTab('users')} />
-                            <SidebarBtn icon={<Settings />} label="Payment & Config" active={activeTab === 'config'} onClick={() => setActiveTab('config')} />
-                            <SidebarBtn icon={<AlertOctagon />} label="Danger Zone" active={activeTab === 'danger'} onClick={() => setActiveTab('danger')} />
-                        </>
-                    )}
-                </nav>
-                <div className="p-4 border-t border-white/5">
-                    <div className="flex justify-between text-[10px] text-stone-400 mb-1 px-2"><span>DB Usage</span><span>{storageUsed.toFixed(1)}%</span></div>
-                    <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden mx-2 mb-4 max-w-[90%]"><div className={`h-full ${storageUsed > 90 ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${Math.min(storageUsed, 100)}%` }}></div></div>
-                </div>
-            </aside>
+        {/* 2. SIRF MANAGER AUR ADMIN KE LIYE (Staff ko nahi dikhega) */}
+        {(userRole === 'admin' || userRole === 'manager') && (
+            <>
+                <p className="px-4 py-2 text-[10px] text-white/20 uppercase tracking-widest hidden lg:block mt-4">Growth Engine</p>
+                <SidebarBtn icon={<Layout />} label="Homepage Editor" active={activeTab === 'cms'} onClick={() => setActiveTab('cms')} />
+                <SidebarBtn icon={<Ticket />} label="Coupons & Offers" active={activeTab === 'coupons'} onClick={() => setActiveTab('coupons')} />
+                <SidebarBtn icon={<Megaphone />} label="Marketing" active={activeTab === 'marketing'} onClick={() => setActiveTab('marketing')} />
+                
+                <button
+                    onClick={() => setActiveTab('popup')}
+                    className={`flex items-center justify-center lg:justify-start gap-4 w-full p-3 rounded-lg text-sm tracking-wide transition-all duration-300 group ${activeTab === 'popup' ? 'bg-amber-600 text-white shadow-lg' : 'text-white/40 hover:bg-white/5 hover:text-white'}`}
+                >
+                    <span className={`w-5 h-5 ${activeTab === 'popup' ? 'text-white' : 'group-hover:text-amber-400'}`}>
+                        <Sparkles className="w-5 h-5" />
+                    </span>
+                    <span className="hidden lg:inline">Popup Manager</span>
+                </button>
 
+                <p className="px-4 py-2 text-[10px] text-white/20 uppercase tracking-widest hidden lg:block mt-4">Administration</p>
+                <SidebarBtn icon={<Users />} label="Staff & Users" active={activeTab === 'users'} onClick={() => setActiveTab('users')} />
+            </>
+        )}
+
+        {/* 3. SIRF ADMIN KE LIYE (Manager ko bhi nahi dikhega) */}
+        {userRole === 'admin' && (
+            <>
+                <SidebarBtn icon={<Settings />} label="Payment & Config" active={activeTab === 'config'} onClick={() => setActiveTab('config')} />
+                <SidebarBtn icon={<AlertOctagon />} label="Danger Zone" active={activeTab === 'danger'} onClick={() => setActiveTab('danger')} />
+            </>
+        )}
+    </nav>
+
+    <div className="p-4 border-t border-white/5">
+        <div className="flex justify-between text-[10px] text-stone-400 mb-1 px-2"><span>DB Usage</span><span>{storageUsed.toFixed(1)}%</span></div>
+        <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden mx-2 mb-4 max-w-[90%]"><div className={`h-full ${storageUsed > 90 ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${Math.min(storageUsed, 100)}%` }}></div></div>
+    </div>
+</aside>
             {/* MAIN CONTENT */}
             <main className="flex-1 overflow-y-auto h-full relative" onClick={() => { if (showProfileMenu) setShowProfileMenu(false); if (showNotifMenu) setShowNotifMenu(false); }}>
                 <header className="bg-[#0a1f1c]/90 backdrop-blur-md border-b border-white/5 px-8 h-24 flex justify-between items-center sticky top-0 z-30">
@@ -512,7 +569,14 @@ export default function AdminPage() {
 
                     {activeTab === 'products' && <ProductManager products={products} addProduct={addProduct} updateProduct={updateProduct} deleteProduct={(id: string) => handleProductDelete(id)} />}
 
-                    {activeTab === 'orders' && <OrderManager orders={orders} updateOrderStatus={(id: string, s: string) => handleStatusUpdate(id, s)} />}
+                   
+{activeTab === 'orders' && (
+    <OrderManager 
+        orders={orders} 
+        updateOrderStatus={handleStatusUpdate} 
+        settings={store.systemSettings} // 👈 YE ADD KAREIN
+    />
+)}
                     {/* 👇 STEP 3: INBOX MANAGER COMPONENT */}
                     {activeTab === 'inbox' && (
                         <InboxManager
@@ -522,43 +586,50 @@ export default function AdminPage() {
                             showToast={showToast}
                         />
                     )}
-                    {userRole === 'admin' && (
+                    {/* ✅ 1. MANAGER + ADMIN ACCESS (Users, Marketing, CMS) */}
+                    {['admin', 'manager'].includes(userRole) && (
                         <>
                             {activeTab === 'coupons' && <CouponManager coupons={coupons} onAdd={addCoupon} onDelete={deleteCoupon} showToast={showToast} />}
-                            {activeTab === 'cms' && <CMSManager
+                            
+                            {activeTab === 'cms' && <CMSManager 
                                 banner={banner} updateBanner={updateBanner}
                                 categories={categories} updateCategories={updateCategories}
                                 featured={featured} updateFeatured={updateFeatured}
                                 promo={promo} updatePromo={updatePromo}
                                 blogs={blogs} addBlog={addBlog} deleteBlog={deleteBlog}
-                                siteText={store.siteText} updateSiteText={store.updateSiteText} // <--- Ye Nayi Line Hai
-                                showToast={showToast} // <--- Ye Bhi Zaroori Hai
+                                siteText={store.siteText} updateSiteText={store.updateSiteText}
+                                showToast={showToast} 
                             />}
+
                             {activeTab === 'marketing' && <MarketingManager allUsers={allUsers} sendNotification={sendNotification} showToast={showToast} />}
-                            {/* ✅ NEW POPUP MANAGER SCREEN */}
-                            {activeTab === 'popup' && (
-                                <div className="animate-fade-in">
-                                    <PopupManager
-                                        siteText={store.siteText}
-                                        onSave={store.updateSiteText}
-                                    />
-                                </div>
-                            )}
-                            {activeTab === 'users' && <UserManager
-                                allUsers={allUsers}
-                                updateUserRole={updateUserRole}
-                                deleteUser={store.deleteUser}  // <--- YE MISSING THA
+                            
+                            {activeTab === 'popup' && <div className="animate-fade-in"><PopupManager siteText={store.siteText} onSave={store.updateSiteText} /></div>}
+
+                            {activeTab === 'users' && <UserManager 
+                                allUsers={allUsers} 
+                                updateUserRole={updateUserRole} 
+                                deleteUser={store.deleteUser} 
                                 showToast={showToast}
-                            />}
-                            {activeTab === 'config' && <ConfigManager updateSystemConfig={store.updateSystemConfig} showToast={showToast} />}
-                            {activeTab === 'danger' && <DangerZone
-                                nukeDatabase={nukeDatabase}
-                                products={products}       // <--- Ye missing tha
-                                orders={orders}           // <--- Ye missing tha
-                                allUsers={allUsers}       // <--- Ye missing tha
-                                showToast={showToast}
+                                currentUser={currentUser} // ✅ Safety Prop
                             />}
                         </>
+                    )}
+
+                    {/* ✅ 2. ONLY ADMIN ACCESS (Settings & Danger Zone) */}
+                    {userRole === 'admin' && (
+                        <>
+                            {activeTab === 'config' && <ConfigManager updateSystemConfig={store.updateSystemConfig} showToast={showToast} />}
+                            {activeTab === 'danger' && <DangerZone nukeDatabase={nukeDatabase} products={products} orders={orders} allUsers={allUsers} showToast={showToast} />}
+                        </>
+                    )}
+
+                    {/* ⛔ BLANK SCREEN FIX: Agar Manager restricted page khole */}
+                    {userRole === 'manager' && ['config', 'danger'].includes(activeTab) && (
+                        <div className="flex flex-col items-center justify-center h-64 text-white/30 bg-[#0f2925] rounded-xl border border-white/5 animate-fade-in-up">
+                            <Lock className="w-12 h-12 mb-4 text-red-500" />
+                            <h3 className="text-lg font-serif text-white">Access Restricted</h3>
+                            <p className="text-sm">Only Super Admin can view this section.</p>
+                        </div>
                     )}
 
                     {userRole === 'staff' && !['dashboard', 'products', 'orders'].includes(activeTab) && (
@@ -609,12 +680,130 @@ function SectionHeader({ title, subtitle, action }: any) {
     );
 }
 
-const generateAdminInvoice = (order: any) => {
+// ✅ DYNAMIC INVOICE GENERATOR (Admin Controlled)
+const generateAdminInvoice = (order: any, settings: any) => {
     if (!order) return;
+    
+    // Default Values (Agar Admin ne kuch set nahi kiya to ye dikhega)
+    const companyName = settings?.invoice?.companyName || "ZERIMI JEWELS";
+    const companyAddress = settings?.invoice?.address || "Mumbai, India";
+    const gstin = settings?.invoice?.gstin || "";
+    const terms = settings?.invoice?.terms || "This is a computer generated invoice.";
+    const logoUrl = settings?.invoice?.logoUrl || ""; // Optional Logo
+
     const printWindow = window.open('', '_blank');
     if (!printWindow) { alert("Please allow popups for this website to print the invoice."); return; }
-    const taxRate = 3; const total = order.total || 0; const subTotal = order.subtotal || (total / (1 + taxRate / 100)); const taxAmount = total - subTotal; const cgst = taxAmount / 2; const sgst = taxAmount / 2; const items = order.items || []; const date = order.date || new Date().toLocaleDateString(); const addressStr = typeof order.address === 'object' ? `${order.address.street || ''}, ${order.address.city || ''} - ${order.address.pincode || ''}` : order.address || 'Address Not Provided';
-    const invoiceHTML = `<html><head><title>Tax Invoice #${order.invoiceNo || order.id}</title><style>body { font-family: 'Arial', sans-serif; padding: 40px; color: #333; font-size: 12px; } .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #0a1f1c; padding-bottom: 10px; } .logo { font-size: 24px; font-weight: bold; letter-spacing: 2px; color: #0a1f1c; } .invoice-box { border: 1px solid #ddd; padding: 0; margin-top: 20px; } .row { display: flex; border-bottom: 1px solid #ddd; } .col { flex: 1; padding: 10px; } .col-right { text-align: right; border-left: 1px solid #ddd; } .table { width: 100%; border-collapse: collapse; } .table th { background: #f2f2f2; padding: 8px; text-align: left; border-bottom: 1px solid #ddd; border-right: 1px solid #ddd; font-size: 10px; font-weight: bold; } .table td { padding: 8px; border-bottom: 1px solid #ddd; border-right: 1px solid #ddd; } .text-right { text-align: right; } .total-row td { font-weight: bold; background: #fafafa; } .footer { margin-top: 20px; text-align: center; font-size: 10px; color: #888; }</style></head><body><div class="header"><div class="logo">ZERIMI JEWELS</div><div>Original Tax Invoice</div><div>GSTIN: 27AABCU9603R1Z2</div></div><div class="invoice-box"><div class="row"><div class="col"><strong>Billed To:</strong><br>${order.customerName || 'Customer'}<br>${order.customerEmail || ''}<br>${addressStr}<br>Phone: ${order.phone || 'N/A'}</div><div class="col col-right"><strong>Invoice No:</strong> ${order.invoiceNo || 'INV-' + order.id}<br><strong>Date:</strong> ${date}<br><strong>Status:</strong> ${order.status}<br><strong>Payment:</strong> ${order.paymentMethod || 'Prepaid'}</div></div><table class="table"><thead><tr><th style="width: 5%">#</th><th style="width: 45%">Item</th><th style="width: 10%">Qty</th><th style="width: 20%" class="text-right">Price</th><th style="width: 20%" class="text-right">Total</th></tr></thead><tbody>${items.map((item: any, index: number) => `<tr><td>${index + 1}</td><td>${item.name}</td><td>${item.qty}</td><td class="text-right">₹${(item.price || 0).toLocaleString('en-IN')}</td><td class="text-right">₹${((item.price || 0) * (item.qty || 1)).toLocaleString('en-IN')}</td></tr>`).join('')}</tbody><tfoot><tr><td colspan="4" class="text-right">Sub Total</td><td class="text-right">₹${subTotal.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td></tr><tr><td colspan="4" class="text-right">CGST (1.5%)</td><td class="text-right">₹${cgst.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td></tr><tr><td colspan="4" class="text-right">SGST (1.5%)</td><td class="text-right">₹${sgst.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td></tr><tr class="total-row"><td colspan="4" class="text-right">GRAND TOTAL</td><td class="text-right">₹${total.toLocaleString('en-IN')}</td></tr></tfoot></table></div><div class="footer">This is a computer generated invoice.<br>Authorized Signatory - ZERIMI JEWELS</div><script>window.print();</script></body></html>`;
+
+    // Calculations
+    const taxRate = settings?.store?.taxRate || 3;
+    const total = order.total || 0;
+    const subTotal = order.subtotal || (total / (1 + taxRate / 100));
+    const taxAmount = total - subTotal;
+    const cgst = taxAmount / 2;
+    const sgst = taxAmount / 2;
+    const items = order.items || [];
+    const date = order.date || new Date().toLocaleDateString();
+    
+    // Address Formatting
+    const addressStr = typeof order.address === 'object' 
+        ? `${order.address.street || ''}, ${order.address.city || ''} - ${order.address.pincode || ''}` 
+        : order.address || 'Address Not Provided';
+
+    const invoiceHTML = `
+    <html>
+    <head>
+        <title>Invoice #${order.invoiceNo || order.id}</title>
+        <style>
+            body { font-family: 'Helvetica', 'Arial', sans-serif; padding: 40px; color: #333; font-size: 13px; line-height: 1.5; }
+            .header-container { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #000; padding-bottom: 20px; }
+            .logo-img { max-height: 60px; margin-bottom: 10px; }
+            .company-name { font-size: 28px; font-weight: bold; letter-spacing: 2px; text-transform: uppercase; color: #000; }
+            .company-details { font-size: 12px; color: #555; margin-top: 5px; }
+            .invoice-box { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            .info-row { display: flex; justify-content: space-between; margin-bottom: 30px; }
+            .info-col { width: 48%; }
+            .info-title { font-weight: bold; text-transform: uppercase; font-size: 11px; color: #888; border-bottom: 1px solid #ddd; padding-bottom: 5px; margin-bottom: 10px; }
+            .table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+            .table th { background: #f8f8f8; padding: 12px 8px; text-align: left; border-bottom: 2px solid #ddd; font-weight: bold; font-size: 11px; text-transform: uppercase; }
+            .table td { padding: 12px 8px; border-bottom: 1px solid #eee; }
+            .text-right { text-align: right; }
+            .totals-row td { font-weight: bold; font-size: 14px; border-top: 2px solid #000; border-bottom: none; padding-top: 15px; }
+            .footer { margin-top: 40px; text-align: center; font-size: 11px; color: #888; border-top: 1px solid #eee; padding-top: 20px; }
+        </style>
+    </head>
+    <body>
+        <div class="header-container">
+            ${logoUrl ? `<img src="${logoUrl}" class="logo-img" />` : ''}
+            <div class="company-name">${companyName}</div>
+            <div class="company-details">${companyAddress}</div>
+            ${gstin ? `<div class="company-details"><strong>GSTIN:</strong> ${gstin}</div>` : ''}
+        </div>
+
+        <div class="info-row">
+            <div class="info-col">
+                <div class="info-title">Billed To</div>
+                <strong>${order.customerName || 'Customer'}</strong><br>
+                ${addressStr}<br>
+                Phone: ${order.phone || 'N/A'}<br>
+                ${order.customerEmail || ''}
+            </div>
+            <div class="info-col text-right">
+                <div class="info-title" style="text-align: right;">Invoice Details</div>
+                <strong>Invoice No:</strong> ${order.invoiceNo || 'INV-' + order.id}<br>
+                <strong>Date:</strong> ${date}<br>
+                <strong>Status:</strong> ${order.status.toUpperCase()}<br>
+                <strong>Payment:</strong> ${order.paymentMethod || 'Prepaid'}
+            </div>
+        </div>
+
+        <table class="table">
+            <thead>
+                <tr>
+                    <th style="width: 5%">#</th>
+                    <th style="width: 50%">Item Description</th>
+                    <th style="width: 15%">Qty</th>
+                    <th style="width: 15%" class="text-right">Price</th>
+                    <th style="width: 15%" class="text-right">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${items.map((item: any, index: number) => `
+                <tr>
+                    <td>${index + 1}</td>
+                    <td>${item.name}<br><span style="font-size: 10px; color: #888;">${item.size ? `Size: ${item.size}` : ''}</span></td>
+                    <td>${item.qty}</td>
+                    <td class="text-right">₹${(item.price || 0).toLocaleString('en-IN')}</td>
+                    <td class="text-right">₹${((item.price || 0) * (item.qty || 1)).toLocaleString('en-IN')}</td>
+                </tr>`).join('')}
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="4" class="text-right" style="border:none; padding-top:5px;">Sub Total</td>
+                    <td class="text-right" style="border:none; padding-top:5px;">₹${subTotal.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td>
+                </tr>
+                <tr>
+                    <td colspan="4" class="text-right" style="border:none;">Tax (GST ${taxRate}%)</td>
+                    <td class="text-right" style="border:none;">₹${taxAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td>
+                </tr>
+                <tr>
+                    <td colspan="4" class="text-right" style="border:none;">Shipping Charges</td>
+                    <td class="text-right" style="border:none;">₹${(settings?.store?.shippingCost || 0).toLocaleString('en-IN')}</td>
+                </tr>
+                <tr class="totals-row">
+                    <td colspan="4" class="text-right">GRAND TOTAL</td>
+                    <td class="text-right">₹${total.toLocaleString('en-IN')}</td>
+                </tr>
+            </tfoot>
+        </table>
+
+        <div class="footer">
+            <p><strong>Terms & Conditions:</strong><br>${terms}</p>
+            <p style="margin-top: 10px;">Authorized Signatory - ${companyName}</p>
+        </div>
+        <script>window.print();</script>
+    </body>
+    </html>`;
+
     printWindow.document.write(invoiceHTML);
     printWindow.document.close();
 };
@@ -622,7 +811,7 @@ const generateAdminInvoice = (order: any) => {
 // --- ORDER MANAGER (Updates Trigger Notification) ---
 // --- ORDER MANAGER (Fixed Return Logic) ---
 // --- ORDER MANAGER (PREMIUM: Search, Filters & Timeline) ---
-function OrderManager({ orders, updateOrderStatus }: any) {
+function OrderManager({ orders, updateOrderStatus, settings }: any) {
     const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
     const [viewingOrder, setViewingOrder] = useState<any | null>(null);
 
@@ -778,7 +967,7 @@ function OrderManager({ orders, updateOrderStatus }: any) {
                                 <p className="text-xs text-white/40 mt-1 flex items-center gap-2"><Activity className="w-3 h-3" /> Placed on {viewingOrder.date}</p>
                             </div>
                             <div className="flex gap-2">
-                                <button onClick={() => generateAdminInvoice(viewingOrder)} className="bg-white/5 hover:bg-white/10 text-white px-4 py-2 rounded-lg text-xs uppercase font-bold flex items-center gap-2 transition border border-white/5">
+                                <button onClick={() => generateAdminInvoice(viewingOrder, settings)} className="bg-white/5 hover:bg-white/10 text-white px-4 py-2 rounded-lg text-xs uppercase font-bold flex items-center gap-2 transition border border-white/5">
                                     <Printer className="w-4 h-4" /> Invoice
                                 </button>
                                 <button onClick={() => setViewingOrder(null)} className="hover:bg-red-500/20 p-2 rounded-lg text-white/50 hover:text-red-500 transition">
@@ -1269,7 +1458,15 @@ function ConfigManager({ showToast, updateSystemConfig }: any) {
             currency: '₹',
             maintenanceMode: false,
             globalAlert: 'Welcome to ZERIMI - Premium Jewelry'
-        }
+        },
+        
+        invoice: {
+        companyName: 'ZERIMI JEWELS',
+        address: '',
+        gstin: '',
+        terms: 'Goods once sold cannot be returned after 7 days.',
+        logoUrl: '' 
+    }
     });
 
     const [loading, setLoading] = useState(false);
@@ -1512,6 +1709,54 @@ function ConfigManager({ showToast, updateSystemConfig }: any) {
                     {/* 6. SITE CONTROLS */}
                     <div className="bg-[#0f2925] p-8 rounded-3xl border border-white/5 relative overflow-hidden">
                         <h3 className="text-white font-serif text-lg mb-6 flex items-center gap-2"><Settings className="w-5 h-5 text-purple-400" /> Site Controls</h3>
+                        {/* 7. INVOICE SETTINGS (Admin Control) */}
+<div className="bg-[#0f2925] p-8 rounded-3xl border border-white/5 relative overflow-hidden mt-8">
+    <h3 className="text-white font-serif text-lg mb-6 flex items-center gap-2">
+        <Printer className="w-5 h-5 text-amber-400" /> Invoice Configuration
+    </h3>
+    <div className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label className="text-[10px] text-white/40 uppercase font-bold mb-1 block">Company Name</label>
+                <input 
+                    value={config.invoice?.companyName || ''} 
+                    onChange={(e) => handleChange('invoice', 'companyName', e.target.value)} 
+                    placeholder="ZERIMI JEWELS" 
+                    className="w-full p-3 bg-black/40 border border-white/10 rounded-xl text-white text-sm outline-none focus:border-amber-500/50" 
+                />
+            </div>
+            <div>
+                <label className="text-[10px] text-white/40 uppercase font-bold mb-1 block">GSTIN (Optional)</label>
+                <input 
+                    value={config.invoice?.gstin || ''} 
+                    onChange={(e) => handleChange('invoice', 'gstin', e.target.value)} 
+                    placeholder="27AABCU..." 
+                    className="w-full p-3 bg-black/40 border border-white/10 rounded-xl text-white text-sm outline-none focus:border-amber-500/50 font-mono" 
+                />
+            </div>
+        </div>
+        
+        <div>
+            <label className="text-[10px] text-white/40 uppercase font-bold mb-1 block">Full Address</label>
+            <textarea 
+                value={config.invoice?.address || ''} 
+                onChange={(e) => handleChange('invoice', 'address', e.target.value)} 
+                placeholder="Shop No. 1, Luxury Lane, Mumbai..." 
+                className="w-full p-3 bg-black/40 border border-white/10 rounded-xl text-white text-sm outline-none focus:border-amber-500/50 h-20 resize-none" 
+            />
+        </div>
+
+        <div>
+            <label className="text-[10px] text-white/40 uppercase font-bold mb-1 block">Terms & Conditions</label>
+            <textarea 
+                value={config.invoice?.terms || ''} 
+                onChange={(e) => handleChange('invoice', 'terms', e.target.value)} 
+                placeholder="No returns without video proof..." 
+                className="w-full p-3 bg-black/40 border border-white/10 rounded-xl text-white text-sm outline-none focus:border-amber-500/50 h-20 resize-none" 
+            />
+        </div>
+    </div>
+</div>
                         <div className="space-y-6">
                             <div><label className="text-[10px] text-white/40 uppercase font-bold mb-1 block">Global Announcement Bar</label><div className="relative"><Megaphone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" /><input value={config.store.globalAlert} onChange={(e) => handleChange('store', 'globalAlert', e.target.value)} placeholder="e.g. FLAT 20% OFF on all Diamonds!" className="w-full p-3 pl-10 bg-black/40 border border-white/10 rounded-xl text-white text-sm outline-none focus:border-purple-500/50" /></div></div>
                             <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl flex items-center justify-between">
@@ -2293,10 +2538,12 @@ function MarketingManager({ allUsers, sendNotification, showToast }: any) {
 // --- USER MANAGER (PREMIUM: Stats, Search & Role Control) ---
 // --- USER MANAGER (FIXED: Dropdown Visibility & Actions) ---
 // --- USER MANAGER (PREMIUM: Delete Option Added) ---
-function UserManager({ allUsers, updateUserRole, deleteUser, showToast }: any) { // <--- Added deleteUser prop
+// --- USER MANAGER (FIXED & IMPROVED) ---
+// --- USER MANAGER (FULLY FIXED) ---
+function UserManager({ allUsers, updateUserRole, deleteUser, showToast, currentUser }: any) {
     const [searchQuery, setSearchQuery] = useState('');
     const [filterRole, setFilterRole] = useState('All');
-    const [processingEmail, setProcessingEmail] = useState<string | null>(null);
+    const [processingUser, setProcessingUser] = useState<string | null>(null);
 
     // STATS
     const totalUsers = allUsers?.length || 0;
@@ -2306,127 +2553,125 @@ function UserManager({ allUsers, updateUserRole, deleteUser, showToast }: any) {
     // FILTER
     const filteredUsers = allUsers?.filter((u: any) => {
         const matchesSearch =
-            u.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            u.email?.toLowerCase().includes(searchQuery.toLowerCase());
+            (u.name?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+            (u.email?.toLowerCase() || '').includes(searchQuery.toLowerCase());
         const matchesRole = filterRole === 'All' ? true : u.role === filterRole;
         return matchesSearch && matchesRole;
     });
 
-    const handleRoleChange = async (email: string, newRole: string) => {
-        if (confirm(`Change role to ${newRole.toUpperCase()}?`)) {
-            await updateUserRole(email, newRole);
+    // HANDLERS
+    const handleRoleChange = async (targetEmail: string, newRole: string) => {
+        if (currentUser?.email === targetEmail) return showToast("You cannot change your own role!", "error");
+        
+        setProcessingUser(targetEmail);
+        try {
+            await updateUserRole(targetEmail, newRole);
             showToast(`Role updated to ${newRole.toUpperCase()}`, "success");
+        } catch (error) {
+            console.error(error);
+            showToast("Failed to update role", "error");
+        } finally {
+            setProcessingUser(null);
         }
     };
 
-    const handlePasswordReset = (email: string) => {
-        setProcessingEmail(email);
-        setTimeout(() => {
-            setProcessingEmail(null);
-            showToast(`Reset link sent to ${email}`, "success");
-        }, 1500);
-    };
-
-    // --- NEW: DELETE HANDLER ---
     const handleDeleteUser = async (id: string, email: string) => {
-        if (confirm(`⚠️ DANGER: Are you sure you want to PERMANENTLY DELETE user ${email}?\n\nThis action cannot be undone.`)) {
-            if (deleteUser) {
-                await deleteUser(id); // Store function call
-                showToast(`User ${email} deleted permanently`, "error");
-            } else {
-                showToast("Delete function not connected to store", "error");
+        if (currentUser?.email === email) return showToast("You cannot delete yourself!", "error");
+
+        if (confirm(`⚠️ DELETE USER: ${email}?\nThis action cannot be undone.`)) {
+            setProcessingUser(email);
+            try {
+                if (deleteUser) {
+                    await deleteUser(id);
+                    showToast(`User ${email} deleted permanently`, "success");
+                } else {
+                    showToast("Delete function not connected", "error");
+                }
+            } catch (error) {
+                console.error(error);
+                showToast("Failed to delete user", "error");
+            } finally {
+                setProcessingUser(null);
             }
         }
     };
 
     const getRoleBadge = (role: string) => {
         switch (role) {
-            case 'admin': return <span className="flex items-center gap-1 px-2 py-1 rounded bg-purple-500/20 text-purple-400 border border-purple-500/50 text-[10px] font-bold uppercase"><ShieldCheck className="w-3 h-3" /> Super Admin</span>;
-            case 'manager': return <span className="flex items-center gap-1 px-2 py-1 rounded bg-amber-500/20 text-amber-400 border border-amber-500/50 text-[10px] font-bold uppercase"><Briefcase className="w-3 h-3" /> Manager</span>;
-            case 'staff': return <span className="flex items-center gap-1 px-2 py-1 rounded bg-blue-500/20 text-blue-400 border border-blue-500/50 text-[10px] font-bold uppercase"><Headphones className="w-3 h-3" /> Support Staff</span>;
-            case 'banned': return <span className="flex items-center gap-1 px-2 py-1 rounded bg-red-500/20 text-red-400 border border-red-500/50 text-[10px] font-bold uppercase"><Ban className="w-3 h-3" /> Banned</span>;
-            default: return <span className="flex items-center gap-1 px-2 py-1 rounded bg-white/10 text-white/50 border border-white/10 text-[10px] font-bold uppercase"><User className="w-3 h-3" /> Customer</span>;
+            case 'admin': return <span className="px-2 py-1 rounded bg-purple-500/20 text-purple-400 border border-purple-500/50 text-[10px] font-bold uppercase">Super Admin</span>;
+            case 'manager': return <span className="px-2 py-1 rounded bg-amber-500/20 text-amber-400 border border-amber-500/50 text-[10px] font-bold uppercase">Manager</span>;
+            case 'staff': return <span className="px-2 py-1 rounded bg-blue-500/20 text-blue-400 border border-blue-500/50 text-[10px] font-bold uppercase">Staff</span>;
+            case 'banned': return <span className="px-2 py-1 rounded bg-red-500/20 text-red-400 border border-red-500/50 text-[10px] font-bold uppercase">Banned</span>;
+            default: return <span className="px-2 py-1 rounded bg-white/10 text-white/50 border border-white/10 text-[10px] font-bold uppercase">Customer</span>;
         }
     };
 
     return (
         <div className="space-y-8 animate-fade-in pb-10">
-            <SectionHeader title="User Management" subtitle="Manage access levels, staff roles, and customer accounts" />
+            <SectionHeader title="User Management" subtitle="Manage access levels and accounts" />
 
-            {/* STATS & CONTROLS (Same as before) */}
+            {/* STATS */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="bg-[#0f2925] p-6 rounded-2xl border border-white/5 flex items-center gap-4"><div className="p-4 bg-blue-500/20 rounded-xl text-blue-400"><Users className="w-6 h-6" /></div><div><h3 className="text-2xl font-serif text-white">{totalUsers}</h3><p className="text-xs text-white/40 uppercase font-bold">Total Accounts</p></div></div>
                 <div className="bg-[#0f2925] p-6 rounded-2xl border border-white/5 flex items-center gap-4"><div className="p-4 bg-amber-500/20 rounded-xl text-amber-400"><ShieldCheck className="w-6 h-6" /></div><div><h3 className="text-2xl font-serif text-white">{staffCount}</h3><p className="text-xs text-white/40 uppercase font-bold">Active Staff</p></div></div>
-                <div className="bg-[#0f2925] p-6 rounded-2xl border border-white/5 flex items-center gap-4"><div className="p-4 bg-red-500/20 rounded-xl text-red-400"><Ban className="w-6 h-6" /></div><div><h3 className="text-2xl font-serif text-white">{blockedCount}</h3><p className="text-xs text-white/40 uppercase font-bold">Banned / Flagged</p></div></div>
+                <div className="bg-[#0f2925] p-6 rounded-2xl border border-white/5 flex items-center gap-4"><div className="p-4 bg-red-500/20 rounded-xl text-red-400"><Ban className="w-6 h-6" /></div><div><h3 className="text-2xl font-serif text-white">{blockedCount}</h3><p className="text-xs text-white/40 uppercase font-bold">Banned</p></div></div>
             </div>
 
+            {/* CONTROLS */}
             <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-[#0f2925] p-4 rounded-xl border border-white/5">
                 <div className="flex gap-2 overflow-x-auto w-full md:w-auto pb-2 md:pb-0 custom-scrollbar">
-                    {['All', 'admin', 'manager', 'staff', 'customer', 'banned'].map(role => (<button key={role} onClick={() => setFilterRole(role)} className={`px-4 py-2 text-xs font-bold uppercase tracking-widest rounded-lg transition-all whitespace-nowrap ${filterRole === role ? 'bg-amber-600 text-white shadow-lg' : 'text-white/40 hover:bg-white/5 hover:text-white'}`}>{role}</button>))}
+                    {['All', 'admin', 'manager', 'staff', 'customer', 'banned'].map(role => (
+                        <button key={role} onClick={() => setFilterRole(role)} className={`px-4 py-2 text-xs font-bold uppercase tracking-widest rounded-lg transition-all ${filterRole === role ? 'bg-amber-600 text-white shadow-lg' : 'text-white/40 hover:bg-white/5 hover:text-white'}`}>{role}</button>
+                    ))}
                 </div>
-                <div className="relative w-full md:w-64"><input type="text" placeholder="Search user..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-black/20 border border-white/10 rounded-lg text-white text-xs focus:border-amber-500/50 outline-none" /><div className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30"><Search className="w-4 h-4" /></div></div>
+                <input type="text" placeholder="Search user..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full md:w-64 pl-4 pr-4 py-2 bg-black/20 border border-white/10 rounded-lg text-white text-xs outline-none focus:border-amber-500/50" />
             </div>
 
-            {/* USERS TABLE */}
+            {/* TABLE */}
             <div className="bg-[#0f2925] border border-white/5 rounded-2xl overflow-hidden shadow-xl min-h-[300px]">
                 <table className="w-full text-left text-sm text-white/70">
                     <thead className="bg-[#0a1f1c] text-[10px] uppercase text-white/40 tracking-wider">
-                        <tr>
-                            <th className="p-5">User Profile</th>
-                            <th className="p-5">Role & Access</th>
-                            <th className="p-5">Status</th>
-                            <th className="p-5 text-right">Actions</th>
-                        </tr>
+                        <tr><th className="p-5">User Profile</th><th className="p-5">Role</th><th className="p-5">Status</th><th className="p-5 text-right">Actions</th></tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
-                        {filteredUsers?.map((u: any) => (
-                            <tr key={u.id || u.email} className="hover:bg-white/5 transition duration-200 group">
-                                <td className="p-5">
-                                    <div className="flex items-center gap-4">
-                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-lg ${u.role === 'admin' ? 'bg-gradient-to-br from-purple-500 to-indigo-600' : 'bg-gradient-to-br from-stone-600 to-stone-800'}`}>{u.name?.charAt(0).toUpperCase() || 'U'}</div>
-                                        <div><p className="font-bold text-white group-hover:text-amber-400 transition">{u.name || 'Unknown'}</p><p className="text-[10px] text-white/40">{u.email}</p></div>
-                                    </div>
-                                </td>
-                                <td className="p-5">
-                                    <div className="space-y-2">
-                                        <div>{getRoleBadge(u.role)}</div>
-                                        <div className="relative w-40">
-                                            <select
-                                                value={u.role || 'customer'}
-                                                onChange={(e) => handleRoleChange(u.email, e.target.value)}
-                                                className="w-full appearance-none bg-[#0f2925] border border-white/10 text-white text-[10px] rounded px-3 py-1.5 outline-none focus:border-amber-500/50 cursor-pointer uppercase font-bold"
-                                                style={{ colorScheme: 'dark' }} // <--- Ye zaruri hai white background hatane ke liye
-                                            >
-                                                <option value="customer" className="bg-[#0f2925] text-white">Customer</option>
-                                                <option value="staff" className="bg-[#0f2925] text-white">Staff (Limited)</option>
-                                                <option value="manager" className="bg-[#0f2925] text-white">Manager (Ops)</option>
-                                                <option value="admin" className="bg-[#0f2925] text-white">Admin (Owner)</option>
-                                                <option value="banned" className="bg-red-900 text-white">Ban User</option>
-                                            </select>
-                                            <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-white/50"><svg width="8" height="6" viewBox="0 0 10 6" fill="currentColor"><path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg></div>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td className="p-5">
-                                    {u.role === 'banned' ? <span className="flex items-center gap-1 text-red-400 text-xs font-bold"><XCircle className="w-3 h-3" /> Restricted</span> : <span className="flex items-center gap-1 text-green-400 text-xs font-bold"><Check className="w-3 h-3" /> Active</span>}
-                                    <p className="text-[9px] text-white/30 mt-1">Joined: {u.joinedDate || 'Recently'}</p>
-                                </td>
-                                <td className="p-5 text-right">
-                                    <div className="flex items-center justify-end gap-2">
-                                        <button onClick={() => handlePasswordReset(u.email)} disabled={processingEmail === u.email} className={`p-2 rounded-lg transition ${processingEmail === u.email ? 'bg-amber-500/20 text-amber-400' : 'bg-white/5 hover:bg-white/10 hover:text-amber-400 text-white/50'}`} title="Send Password Reset Link">
-                                            {processingEmail === u.email ? <Activity className="w-4 h-4 animate-spin" /> : <Key className="w-4 h-4" />}
-                                        </button>
-                                        {/* DELETE BUTTON */}
-                                        <button onClick={() => handleDeleteUser(u.id, u.email)} className="p-2 bg-red-500/10 hover:bg-red-500 hover:text-white text-red-400 rounded-lg transition" title="Delete User Permanently">
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
+                        {filteredUsers?.map((u: any) => {
+                            const isMe = currentUser?.email === u.email;
+                            const isBusy = processingUser === u.email;
+                            return (
+                                <tr key={u.id || u.email} className={`transition duration-200 ${isMe ? 'bg-amber-500/5' : 'hover:bg-white/5'}`}>
+                                    <td className="p-5 flex items-center gap-4">
+                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${u.role === 'admin' ? 'bg-purple-600' : 'bg-stone-700'}`}>{u.name?.charAt(0).toUpperCase()}</div>
+                                        <div><p className="font-bold text-white">{u.name} {isMe && <span className="text-[9px] text-amber-500">(You)</span>}</p><p className="text-[10px] text-white/40">{u.email}</p></div>
+                                    </td>
+                                    <td className="p-5">
+                                        {isBusy ? <span className="text-amber-500 text-xs animate-pulse">Updating...</span> : (
+                                            <div className="space-y-2">
+                                                {getRoleBadge(u.role)}
+                                                {!isMe && (
+                                                    <select value={u.role} onChange={(e) => handleRoleChange(u.email, e.target.value)} className="block w-32 bg-black/40 border border-white/10 text-white text-[10px] rounded px-2 py-1 mt-1 outline-none focus:border-amber-500/50 uppercase font-bold cursor-pointer">
+                                                        <option value="customer" className="bg-stone-900">Customer</option>
+                                                        <option value="staff" className="bg-stone-900">Staff</option>
+                                                        <option value="manager" className="bg-stone-900">Manager</option>
+                                                        <option value="admin" className="bg-stone-900">Admin</option>
+                                                        <option value="banned" className="bg-red-900 text-white">Ban User</option>
+                                                    </select>
+                                                )}
+                                            </div>
+                                        )}
+                                    </td>
+                                    <td className="p-5">{u.role === 'banned' ? <span className="text-red-400 text-xs">Blocked</span> : <span className="text-green-400 text-xs">Active</span>}</td>
+                                    <td className="p-5 text-right">
+                                        {!isMe && (
+                                            <button onClick={() => handleDeleteUser(u.id, u.email)} disabled={isBusy} className="p-2 bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white rounded-lg transition" title="Delete User">
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        )}
+                                    </td>
+                                </tr>
+                            );
+                        })}
                     </tbody>
                 </table>
-                {(!filteredUsers || filteredUsers.length === 0) && <div className="p-12 text-center text-white/30 italic">No users found matching your search.</div>}
             </div>
         </div>
     );
