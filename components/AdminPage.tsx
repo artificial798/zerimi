@@ -684,99 +684,164 @@ function SectionHeader({ title, subtitle, action }: any) {
 
 // ✅ DYNAMIC INVOICE GENERATOR (Admin Controlled)
 // --- ADMIN SIDE: AMAZON/FLIPKART STANDARD PDF INVOICE ---
+// --- HELPER: NUMBER TO WORDS ---
+const numberToWords = (num: number): string => {
+    const a = ['', 'One ', 'Two ', 'Three ', 'Four ', 'Five ', 'Six ', 'Seven ', 'Eight ', 'Nine ', 'Ten ', 'Eleven ', 'Twelve ', 'Thirteen ', 'Fourteen ', 'Fifteen ', 'Sixteen ', 'Seventeen ', 'Eighteen ', 'Nineteen '];
+    const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+    if (num === 0) return 'Zero';
+    const numStr = Math.floor(num).toString();
+    if (num < 20) return a[num] + 'Only';
+    return `Rupees ${num.toLocaleString('en-IN')} Only`;
+};
+
+/* ----------------------------------------------------
+   ✅ EXACT REPLICA OF CUSTOMER INVOICE (ADMIN SIDE)
+---------------------------------------------------- */
 const generateAdminInvoice = (order: any, settings: any) => {
   if (!order) return;
   
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.width;
-  
-  // 1. HEADER
-  doc.setFontSize(20);
-  doc.setFont("helvetica", "bold");
-  doc.text("ZERIMI", 14, 20); 
-  
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
-  doc.text(settings?.invoice?.companyName || "ZERIMI JEWELS", 14, 26);
-  doc.text(settings?.invoice?.address || "Mumbai, Maharashtra", 14, 31);
-  doc.text(`GSTIN: ${settings?.invoice?.gstin || 'Unregistered'}`, 14, 36); 
-  doc.text(`Email: support@zerimi.com`, 14, 41);
 
-  // 2. INVOICE DETAILS
+  // 1. EXTRACT DATA (Same variables as Customer Side)
+  const subtotal = Number(order.subtotal || 0);
+  const taxAmount = Number(order.tax || 0);
+  const shipping = Number(order.shipping || 0);
+  const discount = Number(order.discount || 0);
+  const grandTotal = Number(order.total || 0);
+
+  // 2. HEADER DESIGN
+  doc.setFontSize(24);
+  doc.setTextColor(212, 175, 55); // Gold Color
+  doc.setFont("helvetica", "bold");
+  doc.text("ZERIMI", 14, 20);
+
+  doc.setFontSize(10);
+  doc.setTextColor(100);
+  doc.setFont("helvetica", "normal");
+  doc.text("Luxury Jewelry & Accessories", 14, 26);
+  doc.text(settings?.invoice?.address || "Mumbai, Maharashtra, India", 14, 31);
+  doc.text(`GSTIN: ${settings?.invoice?.gstin || "27ABCDE1234F1Z5"}`, 14, 36);
+  doc.text("Email: support@zerimi.com", 14, 41);
+
   doc.setFontSize(16);
-  doc.text("TAX INVOICE", pageWidth - 14, 20, { align: 'right' });
-  doc.setFontSize(10);
-  doc.text(`Invoice No: ${order.invoiceNo || 'INV-' + order.id.slice(0, 8).toUpperCase()}`, pageWidth - 14, 30, { align: 'right' });
-  doc.text(`Date: ${order.date}`, pageWidth - 14, 35, { align: 'right' });
-  doc.text(`Order ID: #${order.id}`, pageWidth - 14, 40, { align: 'right' });
+  doc.setTextColor(0);
+  doc.text("TAX INVOICE", pageWidth - 14, 20, { align: "right" });
 
-  // 3. BILL TO
-  doc.line(14, 45, pageWidth - 14, 45);
-  doc.text("Bill To:", 14, 52);
+  doc.setFontSize(10);
+  doc.text(`Invoice #: ${order.invoiceNo || "INV-" + order.id}`, pageWidth - 14, 30, { align: "right" });
+  doc.text(`Date: ${order.date}`, pageWidth - 14, 35, { align: "right" });
+  doc.text(`Order ID: #${order.id}`, pageWidth - 14, 40, { align: "right" });
+
+  doc.line(14, 48, pageWidth - 14, 48);
+
+  // 3. BILL TO SECTION
+  const billingY = 55;
   doc.setFont("helvetica", "bold");
-  doc.text(order.customerName || "Customer", 14, 57);
+  doc.text("Bill To:", 14, billingY);
   doc.setFont("helvetica", "normal");
   
-  // Address Formatting
-  let addressText = "N/A";
-  if (typeof order.address === 'string') addressText = order.address;
-  else if (order.address) addressText = `${order.address.street || ''}, ${order.address.city || ''} - ${order.address.pincode || ''}`;
-  
-  const splitAddress = doc.splitTextToSize(addressText, 80); 
-  doc.text(splitAddress, 14, 62);
-  doc.text(`Phone: ${order.phone || order.address?.phone || 'N/A'}`, 14, 62 + (splitAddress.length * 5));
+  const custName = order.name || order.customerName || "Valued Customer";
+  doc.text(custName, 14, billingY + 5);
 
-  // 4. TABLE (Inclusive Tax Logic)
-  const taxRate = settings?.store?.taxRate || 3;
-  const tableRows = order.items.map((item: any, index: number) => {
-      const itemTotal = item.price * item.qty;
-      const basePrice = item.price / (1 + taxRate / 100);
-      const taxableValue = basePrice * item.qty;
-      const taxAmount = itemTotal - taxableValue;
+  let addressStr = "";
+  if (typeof order.address === "string") {
+      addressStr = order.address;
+  } else if (order.address) {
+      addressStr = `${order.address.street || ""}, ${order.address.city || ""} - ${order.address.pincode || ""}`;
+  }
       
+  doc.text(doc.splitTextToSize(addressStr, 80), 14, billingY + 10);
+
+  // 4. ITEMS TABLE (Same Grid Theme)
+  const tableRows = order.items.map((item: any, index: number) => {
+      const unitPrice = Number(item.price);
+      const qty = Number(item.qty);
+      const totalVal = unitPrice * qty;
       return [
-          index + 1,
-          item.name,
-          item.qty,
-          `Rs.${basePrice.toFixed(2)}`, 
-          `Rs.${taxableValue.toFixed(2)}`,  
-          `${taxRate}%`,                    
-          `Rs.${taxAmount.toFixed(2)}`,     
-          `Rs.${itemTotal.toFixed(2)}`      
+        index + 1,
+        item.name,
+        qty,
+        `Rs.${unitPrice.toLocaleString()}`,
+        `Rs.${totalVal.toLocaleString()}`
       ];
   });
 
   // @ts-ignore
   autoTable(doc, {
-      startY: 85,
-      head: [['Sn', 'Item', 'Qty', 'Unit Price', 'Taxable Val', 'Tax Rate', 'Tax Amt', 'Total']],
-      body: tableRows,
-      theme: 'grid',
-      headStyles: { fillColor: [10, 31, 28], textColor: 255, fontSize: 8 },
-      bodyStyles: { fontSize: 8 },
+    startY: billingY + 35,
+    head: [["Sn", "Item Description", "Qty", "Unit Price", "Taxable Value"]],
+    body: tableRows,
+    theme: "grid",
+    headStyles: { fillColor: [15, 41, 37], textColor: 255, fontSize: 9 }, // ZERIMI Green Header
+    bodyStyles: { fontSize: 9 },
+    columnStyles: {
+      3: { halign: "right" },
+      4: { halign: "right" }
+    },
   });
 
-  // 5. TOTALS
+  // 5. TOTALS CALCULATION
   // @ts-ignore
   const finalY = doc.lastAutoTable.finalY + 10;
-  const subtotal = Number(order.total);
-  const baseTotal = subtotal / (1 + taxRate/100);
-  const totalTax = subtotal - baseTotal;
   const rightX = pageWidth - 14;
+  const labelX = rightX - 60;
 
-  doc.text(`Taxable Value:`, rightX - 50, finalY);
-  doc.text(`Rs.${baseTotal.toFixed(2)}`, rightX, finalY, { align: 'right' });
+  doc.setFontSize(10);
+  doc.setTextColor(0);
 
-  doc.text(`Total Tax (${taxRate}%):`, rightX - 50, finalY + 6);
-  doc.text(`Rs.${totalTax.toFixed(2)}`, rightX, finalY + 6, { align: 'right' });
+  // Subtotal
+  doc.text("Taxable Amount (Subtotal):", labelX, finalY);
+  doc.text(`Rs.${subtotal.toLocaleString()}`, rightX, finalY, { align: "right" });
 
-  doc.setFontSize(12);
+  // Tax
+  doc.text(`Total GST (${settings?.store?.taxRate || 3}%):`, labelX, finalY + 6);
+  doc.text(`+ Rs.${taxAmount.toLocaleString()}`, rightX, finalY + 6, { align: "right" });
+
+  // Shipping
+  doc.text("Shipping Charges:", labelX, finalY + 12);
+  doc.text(shipping === 0 ? "Free" : `+ Rs.${shipping.toFixed(2)}`, rightX, finalY + 12, { align: "right" });
+
+  let currentY = finalY + 18;
+
+  // Discount (Green Color)
+  if (discount > 0) {
+    doc.setTextColor(22, 163, 74); // Green
+    doc.text("Coupon Discount:", labelX, currentY);
+    doc.text(`- Rs.${discount.toLocaleString()}`, rightX, currentY, { align: "right" });
+    currentY += 6;
+  }
+
+  // Grand Total (Gold & Bold)
+  doc.setFontSize(14);
   doc.setFont("helvetica", "bold");
-  doc.text(`Grand Total:`, rightX - 50, finalY + 16);
-  doc.text(`Rs.${subtotal.toLocaleString()}`, rightX, finalY + 16, { align: 'right' });
+  doc.setTextColor(212, 140, 0); // Gold
+  doc.line(labelX, currentY, rightX, currentY);
+  
+  doc.text("Grand Total:", labelX, currentY + 8);
+  doc.text(`Rs.${grandTotal.toLocaleString()}`, rightX, currentY + 8, { align: "right" });
 
-  // Save
-  doc.save(`Admin_Invoice_${order.id}.pdf`);
+  // 6. FOOTER (Words & Declaration)
+  doc.setFontSize(9);
+  doc.setTextColor(80);
+  doc.setFont("helvetica", "normal");
+  
+  doc.text(`Amount in Words: ${numberToWords(grandTotal)}`, 14, currentY + 8);
+
+  // Declaration Box (Ye missing tha admin side pe)
+  doc.rect(14, currentY + 20, pageWidth - 28, 20);
+  doc.setFontSize(8);
+  doc.text("Declaration:", 16, currentY + 25);
+  doc.text(
+    "We declare that this invoice shows the actual price of the goods described above and that all particulars are true and correct.",
+    16, currentY + 30
+  );
+
+  // Signature
+  doc.setFont("helvetica", "bold");
+  doc.text("For ZERIMI", pageWidth - 40, currentY + 35, { align: "center" });
+
+  doc.save(`Invoice_${order.id}.pdf`);
 };
 // --- ORDER MANAGER (Updates Trigger Notification) ---
 // --- ORDER MANAGER (Fixed Return Logic) ---

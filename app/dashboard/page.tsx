@@ -47,130 +47,273 @@ const isOrderReturnable = (orderDateStr: string) => {
 
 // --- HELPER: INVOICE GENERATOR (Unchanged Logic, Styled Output) ---
 // --- HELPER: NUMBER TO WORDS ---
+// --- HELPER: NUMBER TO WORDS ---
+// --- HELPER: NUMBER TO WORDS ---
+// --- HELPER: NUMBER TO WORDS ---
 const numberToWords = (price: number) => {
-  return `Rupees ${Math.floor(price)} Only`; 
+  return `Rupees ${Math.floor(price)} Only`;
 };
 
-// --- MAIN INVOICE FUNCTION (AMAZON/FLIPKART STYLE) ---
-const downloadInvoice = (order: any, settings: any) => {
+/* ----------------------------------------
+   FINAL INVOICE GENERATOR
+   (CHECKOUT TRUTH BASED)
+---------------------------------------- */
+export const downloadInvoice = (order: any, settings: any) => {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.width;
-  
-  // 1. HEADER
-  doc.setFontSize(20);
+
+  /* ========================================
+     1. CORE DATA LOGIC (NO GUESSING)
+  ======================================== */
+
+  // A. Items MRP Total (GST INCLUDED)
+  const itemsMrpTotal = order.items.reduce(
+    (sum: number, item: any) =>
+      sum + Number(item.price) * Number(item.qty),
+    0
+  );
+
+  // B. Final Paid Amount (SOURCE OF TRUTH)
+  const paidAmount = Number(order.total);
+
+  // C. Explicit Checkout Values
+  const shippingCost = Number(
+    order.shipping ?? order.shippingCost ?? 0
+  );
+  const discountAmount = Number(
+    order.discount ?? order.couponDiscount ?? 0
+  );
+
+  // Safety check (logs only)
+  const calcTotal =
+    itemsMrpTotal + shippingCost - discountAmount;
+
+  if (Math.abs(calcTotal - paidAmount) > 1) {
+    console.warn("Invoice mismatch detected", {
+      itemsMrpTotal,
+      shippingCost,
+      discountAmount,
+      paidAmount,
+    });
+  }
+
+  /* ========================================
+     2. TAX LOGIC (INFORMATIONAL ONLY)
+  ======================================== */
+
+  const taxRate = 3; // Jewellery GST
+  const totalBasePrice =
+    itemsMrpTotal / (1 + taxRate / 100);
+  const totalTaxAmount =
+    itemsMrpTotal - totalBasePrice;
+
+  /* ========================================
+     3. HEADER
+  ======================================== */
+
+  doc.setFontSize(24);
+  doc.setTextColor(212, 175, 55);
   doc.setFont("helvetica", "bold");
-  doc.text("ZERIMI", 14, 20); 
-  
+  doc.text("ZERIMI", 14, 20);
+
   doc.setFontSize(10);
+  doc.setTextColor(100);
   doc.setFont("helvetica", "normal");
   doc.text("Luxury Jewelry & Accessories", 14, 26);
   doc.text("Mumbai, Maharashtra, 400001", 14, 31);
-  doc.text(`GSTIN: ${settings?.gstNo || '27ABCDE1234F1Z5'}`, 14, 36); 
-  doc.text(`Email: support@zerimi.com`, 14, 41);
-
-  // 2. INVOICE TITLE & DETAILS
+  doc.text(
+    `GSTIN: ${settings?.gstNo || "27ABCDE1234F1Z5"}`,
+    14,
+    36
+  );
+  doc.text("Email: support@zerimi.com", 14, 41);
   doc.setFontSize(16);
-  doc.text("TAX INVOICE", pageWidth - 14, 20, { align: 'right' });
-  
-  doc.setFontSize(10);
-  doc.text(`Invoice No: INV-${order.id.slice(0, 8).toUpperCase()}`, pageWidth - 14, 30, { align: 'right' });
-  doc.text(`Order Date: ${new Date(order.date).toLocaleDateString()}`, pageWidth - 14, 35, { align: 'right' });
-  doc.text(`Order ID: #${order.id}`, pageWidth - 14, 40, { align: 'right' });
+  doc.setTextColor(0);
+  doc.text("TAX INVOICE", pageWidth - 14, 20, {
+    align: "right",
+  });
 
-  // 3. BILL TO / SHIP TO
-  doc.setDrawColor(200);
+  doc.setFontSize(10);
+  doc.text(
+    `Invoice #: ${order.invoiceNo || "INV-" + order.id.slice(0, 6)}`,
+    pageWidth - 14,
+    30,
+    { align: "right" }
+  );
+  doc.text(
+    `Date: ${new Date(order.date).toLocaleDateString("en-IN")}`,
+    pageWidth - 14,
+    35,
+    { align: "right" }
+  );
+  doc.text(
+    `Order ID: #${order.id}`,
+    pageWidth - 14,
+    40,
+    { align: "right" }
+  );
+
   doc.line(14, 48, pageWidth - 14, 48);
-  
+
+  /* ========================================
+     4. BILL TO
+  ======================================== */
+
   const billingY = 55;
   doc.setFont("helvetica", "bold");
-  doc.text("Bill To / Ship To:", 14, billingY);
-  
+  doc.text("Bill To:", 14, billingY);
+
   doc.setFont("helvetica", "normal");
-  const addressText = typeof order.address === 'string' 
-      ? order.address 
-      : `${order.address.street}, ${order.address.city}, ${order.address.state} - ${order.address.pincode}`;
+  const custName =
+    order.name || order.customerName || "Customer";
+  doc.text(custName, 14, billingY + 5);
 
-  // Name priority: Order Name > Customer Name > Guest
-doc.text(order.name || order.customerName || "Guest User", 14, billingY + 5);
-  const splitAddress = doc.splitTextToSize(addressText, 80); 
-  doc.text(splitAddress, 14, billingY + 10);
-  doc.text(`Phone: ${order.address.phone || order.phone || 'N/A'}`, 14, billingY + 10 + (splitAddress.length * 5));
+  const address =
+    typeof order.address === "string"
+      ? order.address
+      : `${order.address?.street || ""}, ${order.address?.city || ""} - ${
+          order.address?.pincode || ""
+        }`;
 
-  // 4. CALCULATION LOGIC (Reverse Calculation)
-  const taxRate = 3; 
-  
-  const tableRows = order.items.map((item: any, index: number) => {
-      const itemTotal = item.price * item.qty;
-      const baseUnitPrice = item.price / (1 + taxRate / 100);
-      const taxableValue = baseUnitPrice * item.qty;
-      const taxAmount = itemTotal - taxableValue;
-      
+  doc.text(
+    doc.splitTextToSize(address, 80),
+    14,
+    billingY + 10
+  );
+
+  /* ========================================
+     5. ITEMS TABLE
+  ======================================== */
+
+  const tableRows = order.items.map(
+    (item: any, index: number) => {
+      const mrp = Number(item.price);
+      const qty = Number(item.qty);
+      const totalMrp = mrp * qty;
+
+      const basePrice = mrp / (1 + taxRate / 100);
+      const taxAmt = totalMrp - basePrice * qty;
+
       return [
-          index + 1,
-          item.name,
-          item.qty,
-          `Rs.${baseUnitPrice.toFixed(2)}`, 
-          `Rs.${taxableValue.toFixed(2)}`,  
-          `${taxRate}%`,                    
-          `Rs.${taxAmount.toFixed(2)}`,     
-          `Rs.${itemTotal.toFixed(2)}`      
+        index + 1,
+        item.name,
+        qty,
+        `Rs.${basePrice.toFixed(2)}`,
+        `Rs.${taxAmt.toFixed(2)}`,
+        `Rs.${totalMrp.toFixed(2)}`,
       ];
-  });
+    }
+  );
 
-  // 5. GENERATE TABLE
-  // @ts-ignore
   autoTable(doc, {
-      startY: billingY + 30,
-      head: [['Sn', 'Description', 'Qty', 'Unit Price', 'Taxable Val', 'Tax Rate', 'Tax Amt', 'Total']],
-      body: tableRows,
-      theme: 'grid',
-      headStyles: { fillColor: [10, 31, 28], textColor: 255, fontSize: 8 },
-      bodyStyles: { fontSize: 8 },
-      columnStyles: {
-          0: { cellWidth: 10 },
-          1: { cellWidth: 'auto' }, 
-          7: { cellWidth: 25, halign: 'right' }
-      }
+    startY: billingY + 35,
+    head: [
+      ["Sn", "Item Description", "Qty", "Taxable Val", "GST Amt", "Total (MRP)"],
+    ],
+    body: tableRows,
+    theme: "grid",
+    headStyles: {
+      fillColor: [15, 41, 37],
+      textColor: 255,
+      fontSize: 8,
+    },
+    bodyStyles: { fontSize: 8 },
+    columnStyles: {
+      3: { halign: "right" },
+      4: { halign: "right" },
+      5: { halign: "right", fontStyle: "bold" },
+    },
   });
 
-  // 6. TOTALS SECTION
-  // @ts-ignore
-  const finalY = doc.lastAutoTable.finalY + 10;
-  
-  const subtotal = order.total; 
-  const baseTotal = subtotal / (1 + taxRate/100);
-  const totalTax = subtotal - baseTotal;
-  
+  /* ========================================
+     6. TOTALS (CHECKOUT MATCHED)
+  ======================================== */
+
+  const finalY = (doc as any).lastAutoTable.finalY + 10;
   const rightX = pageWidth - 14;
-  doc.text(`Total Taxable Value:`, rightX - 50, finalY);
-  doc.text(`Rs.${baseTotal.toFixed(2)}`, rightX, finalY, { align: 'right' });
 
-  doc.text(`CGST (${taxRate/2}%):`, rightX - 50, finalY + 6);
-  doc.text(`Rs.${(totalTax/2).toFixed(2)}`, rightX, finalY + 6, { align: 'right' });
+  doc.setFontSize(10);
+  doc.text("Subtotal (MRP):", rightX - 60, finalY);
+  doc.text(`Rs.${itemsMrpTotal.toLocaleString()}`, rightX, finalY, {
+    align: "right",
+  });
 
-  doc.text(`SGST (${taxRate/2}%):`, rightX - 50, finalY + 12);
-  doc.text(`Rs.${(totalTax/2).toFixed(2)}`, rightX, finalY + 12, { align: 'right' });
-
-  doc.setFontSize(12);
-  doc.setFont("helvetica", "bold");
-  doc.text(`Grand Total:`, rightX - 50, finalY + 22);
-  doc.text(`Rs.${subtotal.toLocaleString()}`, rightX, finalY + 22, { align: 'right' });
-
-  // 7. FOOTER
   doc.setFontSize(8);
+  doc.setTextColor(100);
+  doc.text(
+    `(Includes GST @3%: Rs.${totalTaxAmount.toFixed(2)})`,
+    rightX,
+    finalY + 5,
+    { align: "right" }
+  );
+
+  doc.setFontSize(10);
+  doc.setTextColor(0);
+  doc.text("Shipping Charges:", rightX - 60, finalY + 12);
+  doc.text(
+    shippingCost === 0 ? "Free" : `Rs.${shippingCost.toFixed(2)}`,
+    rightX,
+    finalY + 12,
+    { align: "right" }
+  );
+
+  let currentY = finalY + 18;
+
+  if (discountAmount > 0) {
+    doc.setTextColor(22, 163, 74);
+    doc.text("Coupon Discount:", rightX - 60, currentY);
+    doc.text(
+      `- Rs.${discountAmount.toLocaleString()}`,
+      rightX,
+      currentY,
+      { align: "right" }
+    );
+    currentY += 6;
+  }
+
+  doc.setTextColor(0);
+  doc.setFontSize(8);
+  doc.text("NET PAYABLE", rightX, currentY + 5, {
+    align: "right",
+  });
+
+  doc.setFontSize(16);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(212, 140, 0);
+  doc.text(
+    `Rs.${paidAmount.toLocaleString()}`,
+    rightX,
+    currentY + 12,
+    { align: "right" }
+  );
+  doc.text("Grand Total", rightX - 60, currentY + 12);
+
+  /* ========================================
+     7. FOOTER
+  ======================================== */
+
+  doc.setFontSize(9);
+  doc.setTextColor(0);
   doc.setFont("helvetica", "normal");
-  doc.text(`Amount in Words: ${numberToWords(subtotal)}`, 14, finalY + 22);
+  doc.text(
+    `Amount in Words: ${numberToWords(paidAmount)}`,
+    14,
+    currentY + 12
+  );
 
-  doc.setDrawColor(0);
-  doc.rect(14, finalY + 35, pageWidth - 28, 25);
-  doc.text("Declaration:", 16, finalY + 40);
-  doc.text("We declare that this invoice shows the actual price of the goods described above and that", 16, finalY + 45);
-  doc.text("all particulars are true and correct.", 16, finalY + 50);
+  doc.rect(14, currentY + 20, pageWidth - 28, 20);
+  doc.setFontSize(8);
+  doc.text("Declaration:", 16, currentY + 25);
+  doc.text(
+    "We declare that this invoice shows the actual price of the goods described above.",
+    16,
+    currentY + 30
+  );
 
-  doc.text("For ZERIMI", pageWidth - 40, finalY + 55, { align: 'center' });
-  doc.text("(Authorized Signatory)", pageWidth - 40, finalY + 62, { align: 'center' });
-
-  // Save PDF
+  doc.setFont("helvetica", "bold");
+  doc.text("For ZERIMI", pageWidth - 40, currentY + 35, {
+    align: "center",
+  });
   doc.save(`Invoice_${order.id}.pdf`);
 };
 
@@ -660,177 +803,103 @@ function OverviewTab({ user, orders, setActiveTab }: any) {
 }
 
 function OrdersTab({ orders, onReturn, settings, sendNotification, currentUser }: any) {
-  const router = useRouter();
-  const [loadingId, setLoadingId] = useState<string | null>(null); // Loading state add kiya
+    const router = useRouter();
+    const [loadingId, setLoadingId] = useState<string | null>(null);
 
-  // --- NEW: CANCEL ORDER LOGIC ---
- const handleCancelOrder = async (orderId: string) => {
-    if (!confirm("Are you sure you want to cancel this order?")) return;
+    const handleCancelOrder = async (orderId: string) => {
+        if (!confirm("Are you sure you want to cancel this order?")) return;
+        setLoadingId(orderId);
+        try {
+            const orderRef = doc(db, 'orders', orderId);
+            const orderSnap = await getDoc(orderRef);
+            if (!orderSnap.exists()) { toast.error("Order not found!"); setLoadingId(null); return; }
+            const orderData = orderSnap.data();
+            if ((orderData as any).shiprocketOrderId || (orderData as any).awb || (orderData as any).shipmentId) { toast.error("Cannot cancel: Shipment/AWB already generated."); setLoadingId(null); return; }
+            await updateDoc(orderRef, { status: 'Cancelled', cancelledAt: new Date().toISOString(), cancellationReason: 'User requested cancellation' });
+            if (sendNotification) {
+                try {
+                    const usersRef = collection(db, "users");
+                    const q = query(usersRef, where("role", "in", ["admin", "manager"]));
+                    const querySnapshot = await getDocs(q);
+                    querySnapshot.forEach((doc) => {
+                        const staffMember = doc.data();
+                        if (staffMember.email) sendNotification(staffMember.email, 'Order Cancelled Alert', `URGENT: Order #${orderId} has been cancelled by customer ${currentUser?.name || ''}.`);
+                    });
+                } catch (err) { console.error("Error fetching staff emails:", err); }
+            }
+            toast.success("Order cancelled successfully");
+            router.refresh();
+        } catch (error) { console.error(error); toast.error("Failed to cancel order"); } finally { setLoadingId(null); }
+    };
 
-    setLoadingId(orderId);
-    try {
-      const orderRef = doc(db, 'orders', orderId);
-      const orderSnap = await getDoc(orderRef);
-      
-      if (!orderSnap.exists()) {
-        toast.error("Order not found!");
-        setLoadingId(null);
-        return;
-      }
-
-      const orderData = orderSnap.data();
-
-      // Check shipment status
-      if ((orderData as any).shiprocketOrderId || (orderData as any).awb || (orderData as any).shipmentId) {
-         toast.error("Cannot cancel: Shipment/AWB already generated.");
-         setLoadingId(null);
-         return;
-      }
-
-      // Update Order Status
-      await updateDoc(orderRef, {
-        status: 'Cancelled',
-        cancelledAt: new Date().toISOString(),
-        cancellationReason: 'User requested cancellation'
-      });
-
-      // --- DYNAMIC NOTIFICATION SYSTEM (No Code Edit Required) ---
-      if (sendNotification) {
-          try {
-              // 1. Database se wo saare users dhundo jinka role 'admin' ya 'manager' hai
-              const usersRef = collection(db, "users");
-              const q = query(usersRef, where("role", "in", ["admin", "manager"]));
-              const querySnapshot = await getDocs(q);
-
-              // 2. Sabko ek-ek karke notification bhejo
-              querySnapshot.forEach((doc) => {
-                  const staffMember = doc.data();
-                  if (staffMember.email) {
-                      sendNotification(
-                          staffMember.email,
-                          'Order Cancelled Alert',
-                          `URGENT: Order #${orderId} has been cancelled by customer ${currentUser?.name || ''}.`
-                      );
-                      console.log(`Notification sent to: ${staffMember.email}`);
-                  }
-              });
-              
-          } catch (err) {
-              console.error("Error fetching staff emails:", err);
-          }
-      }
-      // -----------------------------------------------------------
-
-      toast.success("Order cancelled successfully");
-      router.refresh();
-
-    } catch (error) {
-      console.error(error);
-      toast.error("Failed to cancel order");
-    } finally {
-      setLoadingId(null);
-    }
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center mb-2">
-        <h2 className="font-serif text-2xl text-white">Order History</h2>
-        <span className="text-xs font-bold bg-white/10 px-3 py-1 rounded-full text-white/60">{orders.length} Orders</span>
-      </div>
-      
-      {orders.length === 0 ? (
-        <div className="text-center py-20 bg-white/5 rounded-2xl border border-white/5">
-          <ShoppingBag className="w-16 h-16 text-white/20 mx-auto mb-4" />
-          <p className="text-white/50 mb-6 font-serif text-lg">Your collection awaits.</p>
-          <Link href="/" className="bg-amber-600 text-white px-8 py-3 text-xs uppercase tracking-widest hover:bg-amber-700 transition rounded-lg shadow-lg">Browse Collection</Link>
-        </div>
-      ) : orders.map((order: Order) => {
-          
-          // --- CHECK: Kya User Cancel kar sakta hai? ---
-          // Rule: Status Placed/Processing ho AUR Shipment/AWB na bana ho
-        const isCancellable = 
-  ['Placed', 'Processing', 'Confirmed'].includes(order.status) && 
-  !(order as any).shiprocketOrderId && 
-  !(order as any).awb && 
-  !(order as any).shipmentId;
-
-          return (
-            <div key={order.id} className="bg-[#0f2925] border border-white/5 rounded-2xl overflow-hidden shadow-lg hover:border-amber-500/20 transition duration-300">
-                {/* Order Header */}
-                <div className="bg-black/20 p-6 border-b border-white/5 flex flex-wrap gap-6 justify-between items-center">
-                   <div className="flex gap-8">
-                      <div><p className="text-[10px] text-white/40 uppercase tracking-widest mb-1">Order Placed</p><p className="text-sm font-bold text-white">{order.date}</p></div>
-                      <div><p className="text-[10px] text-white/40 uppercase tracking-widest mb-1">Total Amount</p><p className="text-sm font-bold text-amber-500">₹{order.total.toLocaleString()}</p></div>
-                      <div><p className="text-[10px] text-white/40 uppercase tracking-widest mb-1">Order ID</p><p className="text-sm font-mono text-white/60">#{order.id}</p></div>
-                   </div>
-                  <button 
-     onClick={() => downloadInvoice({ 
-         ...order, 
-         // Yahan humne (order as any) lagaya taaki error hat jaye
-         name: (order as any).name || (order as any).customerName || currentUser?.name || "Valued Customer"
-     }, settings)} 
-     className="flex items-center gap-2 text-xs font-bold text-amber-400 border border-amber-500/30 px-4 py-2 rounded-lg hover:bg-amber-500/10 transition"
->
-     <FileText className="w-4 h-4" /> Invoice
-</button>
-                </div>
-                
-                {/* Order Items */}
-                <div className="p-6">
-                  {order.items.map((item, idx) => (
-                    <div key={idx} className="flex gap-6 items-center py-4 border-b border-white/5 last:border-0">
-                      <div className="w-20 h-20 bg-black/30 rounded-lg overflow-hidden flex-shrink-0 border border-white/10">
-                        {item.image && <Image src={item.image} alt={item.name} width={80} height={80} className="w-full h-full object-cover" />}
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-serif text-lg text-white">{item.name}</h4>
-                        <p className="text-xs text-white/50 mt-1">Qty: {item.qty} &bull; Price: ₹{item.price.toLocaleString()}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Order Status & Actions */}
-                <div className="bg-black/40 text-white p-4 px-6 flex justify-between items-center">
-                   <div className="flex items-center gap-3">
-                      <div className={`w-2 h-2 rounded-full ${order.status === 'Delivered' ? 'bg-green-500' : order.status === 'Cancelled' ? 'bg-red-500' : 'bg-amber-500'} animate-pulse`}></div>
-                      <span className="text-xs uppercase tracking-widest font-bold">Status: {order.status}</span>
-                   </div>
-                   
-                   <div className="flex gap-2">
-                     {/* --- CANCEL BUTTON START --- */}
-                     {isCancellable && (
-                        <button 
-                          onClick={() => handleCancelOrder(order.id)}
-                          disabled={loadingId === order.id}
-                          className="flex items-center gap-2 text-xs font-bold uppercase bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white transition px-4 py-2 rounded-lg border border-red-500/20"
-                        >
-                          {loadingId === order.id ? 'Processing...' : <><XCircle className="w-4 h-4" /> Cancel</>}
-                        </button>
-                     )}
-                     {/* --- CANCEL BUTTON END --- */}
-
-                     {/* Return Button Logic */}
-                     {order.status === 'Delivered' && (
-                        <button onClick={() => onReturn(order.id)} disabled={!isOrderReturnable(order.date)} className={`text-[10px] px-4 py-2 rounded uppercase tracking-wide transition flex items-center gap-2 ${isOrderReturnable(order.date) ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-white/5 text-white/30 cursor-not-allowed'}`}>
-                           <RotateCcw className="w-3 h-3" /> {isOrderReturnable(order.date) ? 'Return Item' : 'Return Period Expired'}
-                        </button>
-                     )}
-                     
-                     <button 
-                       onClick={() => router.push(`/track-order?orderId=${order.id}`)}
-                       className="flex items-center gap-2 text-xs font-bold uppercase bg-white text-[#0a1f1c] hover:bg-stone-200 transition px-6 py-2 rounded-lg"
-                     >
-                        Track
-                     </button>
-                   </div>
-                </div>
+    return (
+        <div className="space-y-6">
+            <div className="flex justify-between items-center mb-2">
+                <h2 className="font-serif text-2xl text-white">Order History</h2>
+                <span className="text-xs font-bold bg-white/10 px-3 py-1 rounded-full text-white/60">{orders.length} Orders</span>
             </div>
-          );
-      })}
-    </div>
-  );
+            {orders.length === 0 ? (
+                <div className="text-center py-20 bg-white/5 rounded-2xl border border-white/5">
+                    <ShoppingBag className="w-16 h-16 text-white/20 mx-auto mb-4" /><p className="text-white/50 mb-6 font-serif text-lg">Your collection awaits.</p>
+                    <Link href="/" className="bg-amber-600 text-white px-8 py-3 text-xs uppercase tracking-widest hover:bg-amber-700 transition rounded-lg shadow-lg">Browse Collection</Link>
+                </div>
+            ) : orders.map((order: Order) => {
+                const isCancellable = ['Placed', 'Processing', 'Confirmed'].includes(order.status) && !(order as any).shiprocketOrderId && !(order as any).awb && !(order as any).shipmentId;
+                return (
+                    <div key={order.id} className="bg-[#0f2925] border border-white/5 rounded-2xl overflow-hidden shadow-lg hover:border-amber-500/20 transition duration-300">
+                        <div className="bg-black/20 p-6 border-b border-white/5 flex flex-wrap gap-6 justify-between items-center">
+                            <div className="flex gap-8">
+                                <div><p className="text-[10px] text-white/40 uppercase tracking-widest mb-1">Order Placed</p><p className="text-sm font-bold text-white">{order.date}</p></div>
+                                <div><p className="text-[10px] text-white/40 uppercase tracking-widest mb-1">Total Amount</p><p className="text-sm font-bold text-amber-500">₹{order.total.toLocaleString()}</p></div>
+                                <div><p className="text-[10px] text-white/40 uppercase tracking-widest mb-1">Order ID</p><p className="text-sm font-mono text-white/60">#{order.id}</p></div>
+                            </div>
+
+                            {/* 👇 UPDATED: Invoice Logic yahan hai */}
+                            {order.status === 'Delivered' ? (
+                                <button
+                                    onClick={() => downloadInvoice({ ...order, name: (order as any).name || (order as any).customerName || currentUser?.name || "Valued Customer" }, settings)}
+                                    className="flex items-center gap-2 text-xs font-bold text-amber-400 border border-amber-500/30 px-4 py-2 rounded-lg hover:bg-amber-500/10 transition"
+                                >
+                                    <FileText className="w-4 h-4" /> Invoice
+                                </button>
+                            ) : (
+                                <span className="text-[10px] text-white/30 italic flex items-center gap-1 border border-white/5 px-3 py-2 rounded-lg">
+                                    <Lock className="w-3 h-3" /> Invoice Locked (Wait for Delivery)
+                                </span>
+                            )}
+                        </div>
+                        <div className="p-6">
+                            {order.items.map((item, idx) => (
+                                <div key={idx} className="flex gap-6 items-center py-4 border-b border-white/5 last:border-0">
+                                    <div className="w-20 h-20 bg-black/30 rounded-lg overflow-hidden flex-shrink-0 border border-white/10">
+                                        {item.image && <Image src={item.image} alt={item.name} width={80} height={80} className="w-full h-full object-cover" />}
+                                    </div>
+                                    <div className="flex-1">
+                                        <h4 className="font-serif text-lg text-white">{item.name}</h4>
+                                        <p className="text-xs text-white/50 mt-1">Qty: {item.qty} &bull; Price: ₹{item.price.toLocaleString()}</p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="bg-black/40 text-white p-4 px-6 flex justify-between items-center">
+                            <div className="flex items-center gap-3"><div className={`w-2 h-2 rounded-full ${order.status === 'Delivered' ? 'bg-green-500' : order.status === 'Cancelled' ? 'bg-red-500' : 'bg-amber-500'} animate-pulse`}></div><span className="text-xs uppercase tracking-widest font-bold">Status: {order.status}</span></div>
+                            <div className="flex gap-2">
+                                {isCancellable && (
+                                    <button onClick={() => handleCancelOrder(order.id)} disabled={loadingId === order.id} className="flex items-center gap-2 text-xs font-bold uppercase bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white transition px-4 py-2 rounded-lg border border-red-500/20">{loadingId === order.id ? 'Processing...' : <><XCircle className="w-4 h-4" /> Cancel</>}</button>
+                                )}
+                                {order.status === 'Delivered' && (
+                                    <button onClick={() => onReturn(order.id)} disabled={!isOrderReturnable(order.date)} className={`text-[10px] px-4 py-2 rounded uppercase tracking-wide transition flex items-center gap-2 ${isOrderReturnable(order.date) ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-white/5 text-white/30 cursor-not-allowed'}`}>
+                                        <RotateCcw className="w-3 h-3" /> {isOrderReturnable(order.date) ? 'Return Item' : 'Return Period Expired'}
+                                    </button>
+                                )}
+                                <button onClick={() => router.push(`/track-order?orderId=${order.id}`)} className="flex items-center gap-2 text-xs font-bold uppercase bg-white text-[#0a1f1c] hover:bg-stone-200 transition px-6 py-2 rounded-lg">Track</button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
+    );
 }
 
 function ReturnsTab({ orders }: { orders: Order[] }) {

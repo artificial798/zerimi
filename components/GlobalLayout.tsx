@@ -217,10 +217,10 @@ const subtotal = cart.reduce((sum: number, item: any) => sum + item.product.pric
                 {/* Mobile View: Circular Avatar */}
                 <button 
                   onClick={() => router.push('/dashboard')}
-                  className="md:hidden w-7 h-7 rounded-full overflow-hidden border border-white/40 flex items-center justify-center bg-amber-500 text-[#0a1f1c] font-bold text-[10px]"
+                  className="relative md:hidden w-8 h-8 rounded-full overflow-hidden border border-white/40 flex items-center justify-center bg-amber-500 text-[#0a1f1c] font-bold text-[10px]"
                 >
                   {currentUser.profileImage ? (
-                    <Image src={currentUser.profileImage} alt="Profile" fill className="object-cover" />
+                    <Image src={currentUser.profileImage} alt="Profile" fill className="object-cover rounded-full" />
                   ) : (
                     currentUser.name?.charAt(0).toUpperCase() || 'U'
                   )}
