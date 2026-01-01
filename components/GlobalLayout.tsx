@@ -136,6 +136,7 @@ const subtotal = cart.reduce((sum: number, item: any) => sum + item.product.pric
 )}
 
       {/* NAVBAR */}
+     {/* NAVBAR */}
       <header
         className={`fixed w-full z-40 transition-all duration-500 border-b ${isTransparent
           ? `bg-transparent py-4 border-transparent`
@@ -143,33 +144,26 @@ const subtotal = cart.reduce((sum: number, item: any) => sum + item.product.pric
           }`}
         style={{ top: coupons.length > 0 ? '36px' : '0px' }}
       >
-        <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 md:px-6 flex items-center justify-between">
+          
+          {/* 1. LEFT SIDE: Hamburger & Nav Links */}
           <div className="flex items-center gap-4 flex-1">
             <button onClick={() => setIsMobileMenuOpen(true)} className="md:hidden p-2 rounded-full transition text-white hover:bg-white/20">
               <Menu className="w-5 h-5" />
             </button>
-         {/* ✅ UPDATED NAVIGATION LINKS (Spelling Match Fix) */}
             <nav className="hidden md:flex gap-8 text-xs font-medium tracking-[0.15em] uppercase text-white/90">
-              
-              {/* 1. NEW ARRIVALS -> "All" category par bhejo */}
               <Link href="/category/all" className="hover:text-amber-400 transition-colors relative group">
                 New Arrivals
                 <span className="absolute -bottom-1 left-0 w-0 h-[1px] bg-amber-400 transition-all duration-300 group-hover:w-full"></span>
               </Link>
-
-              {/* 2. RINGS -> Ye already chal rha hai */}
               <Link href="/category/Ring" className="hover:text-amber-400 transition-colors relative group">
                 Rings
                 <span className="absolute -bottom-1 left-0 w-0 h-[1px] bg-amber-400 transition-all duration-300 group-hover:w-full"></span>
               </Link>
-
-              {/* 3. NECKLACES -> Spelling change ki "Necklace" (Singular) */}
               <Link href="/category/Necklace" className="hover:text-amber-400 transition-colors relative group">
                 Necklaces
                 <span className="absolute -bottom-1 left-0 w-0 h-[1px] bg-amber-400 transition-all duration-300 group-hover:w-full"></span>
               </Link>
-              
-              {/* 4. EARRINGS -> Spelling change ki "Earring" (Singular) */}
               <Link href="/category/Earring" className="hover:text-amber-400 transition-colors relative group">
                 Earrings
                 <span className="absolute -bottom-1 left-0 w-0 h-[1px] bg-amber-400 transition-all duration-300 group-hover:w-full"></span>
@@ -177,63 +171,75 @@ const subtotal = cart.reduce((sum: number, item: any) => sum + item.product.pric
             </nav>
           </div>
 
+          {/* 2. CENTER: Logo */}
           <div className="flex-shrink-0">
             <Link href="/">
-              <div className="relative h-12 w-32 md:w-40 cursor-pointer">
+              <div className="relative h-10 w-28 md:h-12 md:w-40 cursor-pointer">
                 <Image src={logoWhite} alt="ZERIMI" fill className="object-contain" />
               </div>
             </Link>
           </div>
 
-          <div className="flex items-center justify-end gap-6 flex-1">
+          {/* 3. RIGHT SIDE: Search, Profile, Cart */}
+          <div className="flex items-center justify-end gap-3 md:gap-6 flex-1">
+            
+            {/* SEARCH ICON */}
             <div className={`flex items-center transition-all duration-300 ${isSearchOpen ? 'bg-white/10 rounded-full px-3 py-1 border border-white/20' : ''}`}>
               {isSearchOpen && (
-                <input autoFocus type="text" placeholder="Search..." className="bg-transparent border-none outline-none text-xs w-24 md:w-32 mr-2 text-white placeholder-white/50 font-sans" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={handleSearchSubmit} />
+                <input autoFocus type="text" placeholder="Search..." className="bg-transparent border-none outline-none text-xs w-20 md:w-32 mr-2 text-white placeholder-white/50 font-sans" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={handleSearchSubmit} />
               )}
               <Search onClick={handleSearchIconClick} className="w-5 h-5 cursor-pointer text-white hover:text-amber-400 transition" />
             </div>
 
-           <div className="relative group hidden md:block">
-  <Heart 
-  onClick={() => {
-    if (wishlist.length === 0) {
-      // --- NAYA LUXURY TOAST CODE ---
-      toast("Your wishlist is currently empty!", {
-        icon: '💎', // Diamond icon for luxury feel
-        style: {
-          border: '1px solid #d97706', // Gold/Amber Border
-          padding: '16px',
-          background: '#0a1f1c',       // ZERIMI Dark Green Background
-          color: '#fbbf24',            // Gold Text
-          fontFamily: 'serif',         // Luxury Font
-          fontSize: '14px',
-          letterSpacing: '0.05em',
-        },
-      });
-      // -----------------------------
-    } else {
-      setIsWishlistOpen(true);
-    }
-  }} 
-  className="w-5 h-5 cursor-pointer text-white hover:text-red-400 transition" 
-/>
-  {wishlist.length > 0 && (
-    <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-bold pointer-events-none">
-      {wishlist.length}
-    </span>
-  )}
-</div>
+            {/* WISHLIST (Desktop Only - Mobile space bachane ke liye hide rakha hai) */}
+            <div className="relative group hidden md:block">
+              <Heart 
+                onClick={() => {
+                  if (wishlist.length === 0) {
+                    toast("Your wishlist is empty!", { icon: '💎', style: { background: '#0a1f1c', color: '#fbbf24' } });
+                  } else {
+                    setIsWishlistOpen(true);
+                  }
+                }} 
+                className="w-5 h-5 cursor-pointer text-white hover:text-red-400 transition" 
+              />
+              {wishlist.length > 0 && (
+                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-bold pointer-events-none">
+                  {wishlist.length}
+                </span>
+              )}
+            </div>
 
+            {/* ✅ PROFILE LOGIC (MOBILE + DESKTOP) */}
             {currentUser ? (
-              <div className="relative hidden md:block">
-                <button onClick={() => router.push('/dashboard')} className="flex items-center gap-2 text-xs font-bold tracking-widest px-3 py-1 rounded-full border border-white/30 text-white hover:bg-white/10 transition">
+              // SCENARIO 1: LOGGED IN (Dashboard Link)
+              <div className="relative">
+                {/* Mobile View: Circular Avatar */}
+                <button 
+                  onClick={() => router.push('/dashboard')}
+                  className="md:hidden w-7 h-7 rounded-full overflow-hidden border border-white/40 flex items-center justify-center bg-amber-500 text-[#0a1f1c] font-bold text-[10px]"
+                >
+                  {currentUser.profileImage ? (
+                    <Image src={currentUser.profileImage} alt="Profile" fill className="object-cover" />
+                  ) : (
+                    currentUser.name?.charAt(0).toUpperCase() || 'U'
+                  )}
+                </button>
+
+                {/* Desktop View: Name Badge */}
+                <button onClick={() => router.push('/dashboard')} className="hidden md:flex items-center gap-2 text-xs font-bold tracking-widest px-3 py-1 rounded-full border border-white/30 text-white hover:bg-white/10 transition">
                   <User className="w-3 h-3" /> {currentUser.name.split(' ')[0]}
                 </button>
               </div>
             ) : (
-              <Link href="/login"><User className="w-5 h-5 cursor-pointer text-white hover:text-amber-400 transition hidden md:block" /></Link>
+              // SCENARIO 2: NOT LOGGED IN (Login Link)
+              <Link href="/login" className="flex items-center">
+                 {/* Ab 'hidden md:block' hata diya taaki mobile par bhi dikhe */}
+                 <User className="w-5 h-5 cursor-pointer text-white hover:text-amber-400 transition" />
+              </Link>
             )}
 
+            {/* CART ICON */}
             <button onClick={() => toggleCart(true)} className="relative group">
               <ShoppingBag className="w-5 h-5 text-white group-hover:text-amber-400 transition" />
               {cart.length > 0 && <span className="absolute -top-2 -right-2 bg-amber-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center animate-bounce shadow-md">{cart.reduce((a: number, b: any) => a + b.qty, 0)}</span>}

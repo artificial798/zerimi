@@ -20,6 +20,8 @@ import PopupManager from '@/components/admin/PopupManager';
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth'; 
 import { auth, db } from '@/lib/firebase';
 import Link from 'next/link';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 // --- PREMIUM ALERT COMPONENT (Add this below imports) ---
 const Toast = ({ message, type, onClose }: { message: string, type: 'error' | 'success' | 'info', onClose: () => void }) => {
@@ -681,133 +683,101 @@ function SectionHeader({ title, subtitle, action }: any) {
 }
 
 // ✅ DYNAMIC INVOICE GENERATOR (Admin Controlled)
+// --- ADMIN SIDE: AMAZON/FLIPKART STANDARD PDF INVOICE ---
 const generateAdminInvoice = (order: any, settings: any) => {
-    if (!order) return;
-    
-    // Default Values (Agar Admin ne kuch set nahi kiya to ye dikhega)
-    const companyName = settings?.invoice?.companyName || "ZERIMI JEWELS";
-    const companyAddress = settings?.invoice?.address || "Mumbai, India";
-    const gstin = settings?.invoice?.gstin || "";
-    const terms = settings?.invoice?.terms || "This is a computer generated invoice.";
-    const logoUrl = settings?.invoice?.logoUrl || ""; // Optional Logo
+  if (!order) return;
+  
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.width;
+  
+  // 1. HEADER
+  doc.setFontSize(20);
+  doc.setFont("helvetica", "bold");
+  doc.text("ZERIMI", 14, 20); 
+  
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+  doc.text(settings?.invoice?.companyName || "ZERIMI JEWELS", 14, 26);
+  doc.text(settings?.invoice?.address || "Mumbai, Maharashtra", 14, 31);
+  doc.text(`GSTIN: ${settings?.invoice?.gstin || 'Unregistered'}`, 14, 36); 
+  doc.text(`Email: support@zerimi.com`, 14, 41);
 
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) { alert("Please allow popups for this website to print the invoice."); return; }
+  // 2. INVOICE DETAILS
+  doc.setFontSize(16);
+  doc.text("TAX INVOICE", pageWidth - 14, 20, { align: 'right' });
+  doc.setFontSize(10);
+  doc.text(`Invoice No: ${order.invoiceNo || 'INV-' + order.id.slice(0, 8).toUpperCase()}`, pageWidth - 14, 30, { align: 'right' });
+  doc.text(`Date: ${order.date}`, pageWidth - 14, 35, { align: 'right' });
+  doc.text(`Order ID: #${order.id}`, pageWidth - 14, 40, { align: 'right' });
 
-    // Calculations
-    const taxRate = settings?.store?.taxRate || 3;
-    const total = order.total || 0;
-    const subTotal = order.subtotal || (total / (1 + taxRate / 100));
-    const taxAmount = total - subTotal;
-    const cgst = taxAmount / 2;
-    const sgst = taxAmount / 2;
-    const items = order.items || [];
-    const date = order.date || new Date().toLocaleDateString();
-    
-    // Address Formatting
-    const addressStr = typeof order.address === 'object' 
-        ? `${order.address.street || ''}, ${order.address.city || ''} - ${order.address.pincode || ''}` 
-        : order.address || 'Address Not Provided';
+  // 3. BILL TO
+  doc.line(14, 45, pageWidth - 14, 45);
+  doc.text("Bill To:", 14, 52);
+  doc.setFont("helvetica", "bold");
+  doc.text(order.customerName || "Customer", 14, 57);
+  doc.setFont("helvetica", "normal");
+  
+  // Address Formatting
+  let addressText = "N/A";
+  if (typeof order.address === 'string') addressText = order.address;
+  else if (order.address) addressText = `${order.address.street || ''}, ${order.address.city || ''} - ${order.address.pincode || ''}`;
+  
+  const splitAddress = doc.splitTextToSize(addressText, 80); 
+  doc.text(splitAddress, 14, 62);
+  doc.text(`Phone: ${order.phone || order.address?.phone || 'N/A'}`, 14, 62 + (splitAddress.length * 5));
 
-    const invoiceHTML = `
-    <html>
-    <head>
-        <title>Invoice #${order.invoiceNo || order.id}</title>
-        <style>
-            body { font-family: 'Helvetica', 'Arial', sans-serif; padding: 40px; color: #333; font-size: 13px; line-height: 1.5; }
-            .header-container { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #000; padding-bottom: 20px; }
-            .logo-img { max-height: 60px; margin-bottom: 10px; }
-            .company-name { font-size: 28px; font-weight: bold; letter-spacing: 2px; text-transform: uppercase; color: #000; }
-            .company-details { font-size: 12px; color: #555; margin-top: 5px; }
-            .invoice-box { width: 100%; border-collapse: collapse; margin-top: 20px; }
-            .info-row { display: flex; justify-content: space-between; margin-bottom: 30px; }
-            .info-col { width: 48%; }
-            .info-title { font-weight: bold; text-transform: uppercase; font-size: 11px; color: #888; border-bottom: 1px solid #ddd; padding-bottom: 5px; margin-bottom: 10px; }
-            .table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-            .table th { background: #f8f8f8; padding: 12px 8px; text-align: left; border-bottom: 2px solid #ddd; font-weight: bold; font-size: 11px; text-transform: uppercase; }
-            .table td { padding: 12px 8px; border-bottom: 1px solid #eee; }
-            .text-right { text-align: right; }
-            .totals-row td { font-weight: bold; font-size: 14px; border-top: 2px solid #000; border-bottom: none; padding-top: 15px; }
-            .footer { margin-top: 40px; text-align: center; font-size: 11px; color: #888; border-top: 1px solid #eee; padding-top: 20px; }
-        </style>
-    </head>
-    <body>
-        <div class="header-container">
-            ${logoUrl ? `<img src="${logoUrl}" class="logo-img" />` : ''}
-            <div class="company-name">${companyName}</div>
-            <div class="company-details">${companyAddress}</div>
-            ${gstin ? `<div class="company-details"><strong>GSTIN:</strong> ${gstin}</div>` : ''}
-        </div>
+  // 4. TABLE (Inclusive Tax Logic)
+  const taxRate = settings?.store?.taxRate || 3;
+  const tableRows = order.items.map((item: any, index: number) => {
+      const itemTotal = item.price * item.qty;
+      const basePrice = item.price / (1 + taxRate / 100);
+      const taxableValue = basePrice * item.qty;
+      const taxAmount = itemTotal - taxableValue;
+      
+      return [
+          index + 1,
+          item.name,
+          item.qty,
+          `Rs.${basePrice.toFixed(2)}`, 
+          `Rs.${taxableValue.toFixed(2)}`,  
+          `${taxRate}%`,                    
+          `Rs.${taxAmount.toFixed(2)}`,     
+          `Rs.${itemTotal.toFixed(2)}`      
+      ];
+  });
 
-        <div class="info-row">
-            <div class="info-col">
-                <div class="info-title">Billed To</div>
-                <strong>${order.customerName || 'Customer'}</strong><br>
-                ${addressStr}<br>
-                Phone: ${order.phone || 'N/A'}<br>
-                ${order.customerEmail || ''}
-            </div>
-            <div class="info-col text-right">
-                <div class="info-title" style="text-align: right;">Invoice Details</div>
-                <strong>Invoice No:</strong> ${order.invoiceNo || 'INV-' + order.id}<br>
-                <strong>Date:</strong> ${date}<br>
-                <strong>Status:</strong> ${order.status.toUpperCase()}<br>
-                <strong>Payment:</strong> ${order.paymentMethod || 'Prepaid'}
-            </div>
-        </div>
+  // @ts-ignore
+  autoTable(doc, {
+      startY: 85,
+      head: [['Sn', 'Item', 'Qty', 'Unit Price', 'Taxable Val', 'Tax Rate', 'Tax Amt', 'Total']],
+      body: tableRows,
+      theme: 'grid',
+      headStyles: { fillColor: [10, 31, 28], textColor: 255, fontSize: 8 },
+      bodyStyles: { fontSize: 8 },
+  });
 
-        <table class="table">
-            <thead>
-                <tr>
-                    <th style="width: 5%">#</th>
-                    <th style="width: 50%">Item Description</th>
-                    <th style="width: 15%">Qty</th>
-                    <th style="width: 15%" class="text-right">Price</th>
-                    <th style="width: 15%" class="text-right">Total</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${items.map((item: any, index: number) => `
-                <tr>
-                    <td>${index + 1}</td>
-                    <td>${item.name}<br><span style="font-size: 10px; color: #888;">${item.size ? `Size: ${item.size}` : ''}</span></td>
-                    <td>${item.qty}</td>
-                    <td class="text-right">₹${(item.price || 0).toLocaleString('en-IN')}</td>
-                    <td class="text-right">₹${((item.price || 0) * (item.qty || 1)).toLocaleString('en-IN')}</td>
-                </tr>`).join('')}
-            </tbody>
-            <tfoot>
-                <tr>
-                    <td colspan="4" class="text-right" style="border:none; padding-top:5px;">Sub Total</td>
-                    <td class="text-right" style="border:none; padding-top:5px;">₹${subTotal.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td>
-                </tr>
-                <tr>
-                    <td colspan="4" class="text-right" style="border:none;">Tax (GST ${taxRate}%)</td>
-                    <td class="text-right" style="border:none;">₹${taxAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td>
-                </tr>
-                <tr>
-                    <td colspan="4" class="text-right" style="border:none;">Shipping Charges</td>
-                    <td class="text-right" style="border:none;">₹${(settings?.store?.shippingCost || 0).toLocaleString('en-IN')}</td>
-                </tr>
-                <tr class="totals-row">
-                    <td colspan="4" class="text-right">GRAND TOTAL</td>
-                    <td class="text-right">₹${total.toLocaleString('en-IN')}</td>
-                </tr>
-            </tfoot>
-        </table>
+  // 5. TOTALS
+  // @ts-ignore
+  const finalY = doc.lastAutoTable.finalY + 10;
+  const subtotal = Number(order.total);
+  const baseTotal = subtotal / (1 + taxRate/100);
+  const totalTax = subtotal - baseTotal;
+  const rightX = pageWidth - 14;
 
-        <div class="footer">
-            <p><strong>Terms & Conditions:</strong><br>${terms}</p>
-            <p style="margin-top: 10px;">Authorized Signatory - ${companyName}</p>
-        </div>
-        <script>window.print();</script>
-    </body>
-    </html>`;
+  doc.text(`Taxable Value:`, rightX - 50, finalY);
+  doc.text(`Rs.${baseTotal.toFixed(2)}`, rightX, finalY, { align: 'right' });
 
-    printWindow.document.write(invoiceHTML);
-    printWindow.document.close();
+  doc.text(`Total Tax (${taxRate}%):`, rightX - 50, finalY + 6);
+  doc.text(`Rs.${totalTax.toFixed(2)}`, rightX, finalY + 6, { align: 'right' });
+
+  doc.setFontSize(12);
+  doc.setFont("helvetica", "bold");
+  doc.text(`Grand Total:`, rightX - 50, finalY + 16);
+  doc.text(`Rs.${subtotal.toLocaleString()}`, rightX, finalY + 16, { align: 'right' });
+
+  // Save
+  doc.save(`Admin_Invoice_${order.id}.pdf`);
 };
-
 // --- ORDER MANAGER (Updates Trigger Notification) ---
 // --- ORDER MANAGER (Fixed Return Logic) ---
 // --- ORDER MANAGER (PREMIUM: Search, Filters & Timeline) ---

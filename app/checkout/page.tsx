@@ -31,7 +31,19 @@ const Toast = ({ message, type, onClose }: { message: string, type: 'success' | 
         <button onClick={onClose}><X className="w-4 h-4 opacity-50 hover:opacity-100" /></button>
     </motion.div>
 );
-
+// --- GOVT. STANDARD GST CALCULATOR (Inclusive Method) ---
+const calculateInclusiveGST = (amount: number, rate: number) => {
+    // Formula: Amount / (1 + (Rate/100))
+    const basePrice = amount / (1 + rate / 100);
+    const totalTax = amount - basePrice;
+    
+    return {
+        basePrice: basePrice, // Asli keemat bina tax ke
+        totalTax: totalTax,   // Total Tax amount
+        cgst: totalTax / 2,   // Central Tax (Half)
+        sgst: totalTax / 2    // State Tax (Half)
+    };
+};
 export default function CheckoutPage() {
     const router = useRouter();
     const store = useStore() as any;
@@ -130,18 +142,22 @@ export default function CheckoutPage() {
         );
     }
 
+   // --- STANDARD E-COMMERCE CALCULATIONS ---
     const subtotal = cart.reduce((sum: number, item: any) => sum + item.product.price * item.qty, 0);
-    const taxRate = Number(systemSettings?.taxRate) || 0;
+    
+    // Default Jewelry Tax is 3% in India if not set
+    const taxRate = Number(systemSettings?.taxRate) || 3; 
+    
+    // Reverse Calculate Tax Breakdown (Standard Invoice Method)
+    const gstBreakdown = calculateInclusiveGST(subtotal, taxRate);
+
     const shippingThreshold = Number(systemSettings?.shippingThreshold) || 5000;
     const baseShipping = Number(systemSettings?.shippingCost) || 150;
-
-    const taxAmount = Math.round(subtotal * (taxRate / 100));
     const isFreeShipping = subtotal >= shippingThreshold;
     const shipping = isFreeShipping ? 0 : baseShipping;
 
-    // ✅ FIXED TOTAL CALCULATION (Uses local discountAmount)
-    const total = subtotal + taxAmount + shipping - discountAmount;
-
+    // Final Total: Subtotal mein tax already included hai, isliye dobara add nahi karenge
+    const total = subtotal + shipping - discountAmount;
     // --- HELPERS ---
     const showToast = (msg: string, type: 'success' | 'error') => {
         setToast({ msg, type });
@@ -640,9 +656,20 @@ else {
                                 <span>Subtotal</span>
                                 <span className="font-medium text-[#0a1f1c]">₹{subtotal.toLocaleString()}</span>
                             </div>
-                            <div className="flex justify-between">
-                                <span>Tax ({taxRate}%)</span>
-                                <span className="font-medium text-[#0a1f1c]">₹{taxAmount.toLocaleString()}</span>
+                           {/* --- GST BREAKDOWN (Informational Only) --- */}
+                            <div className="pt-2 pb-2 space-y-1 border-b border-stone-100 mb-2">
+                                <div className="flex justify-between text-[11px] text-stone-400">
+                                    <span>Taxable Value (Base Price)</span>
+                                    <span>₹{gstBreakdown.basePrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                </div>
+                                <div className="flex justify-between text-[11px] text-stone-400">
+                                    <span>CGST ({(taxRate / 2).toFixed(1)}%)</span>
+                                    <span>₹{gstBreakdown.cgst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                </div>
+                                <div className="flex justify-between text-[11px] text-stone-400">
+                                    <span>SGST ({(taxRate / 2).toFixed(1)}%)</span>
+                                    <span>₹{gstBreakdown.sgst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                </div>
                             </div>
                             <div className="flex justify-between">
                                 <span>Shipping</span>
