@@ -25,6 +25,7 @@ export type Product = {
     images: string[];
     stock?: number;
     tags?: string[];
+    colors?: string[];   // E.g., ["#000000", "#FF0000"] used for swatches
     // 👇 YE 3 NAYI LINES ZAROORI HAIN DATA SAVE KARNE KE LIYE
     material?: string;
     warranty?: string;
@@ -156,7 +157,7 @@ type Store = {
     siteText: SiteText;
 
     // App State
-    cart: { product: Product; qty: number; selectedSize?: string }[];
+    cart: { product: Product; qty: number; selectedSize?: string; selectedColor?: string }[];
     wishlist: Product[];
     isCartOpen: boolean;
     currentUser: User | null;
@@ -167,7 +168,7 @@ type Store = {
     couponDiscount: number;       // ✅ Naya State
 
     // Cart Actions
-    addToCart: (product: Product, qty?: number, size?: string) => void;
+   addToCart: (product: Product, qty?: number, size?: string, color?: string) => void;
     removeFromCart: (id: string) => void;
     toggleCart: (status: boolean) => void;
     toggleWishlist: (product: Product) => void;
@@ -305,29 +306,37 @@ export const useStore = create<Store>()(
             removeCoupon: () => set({ appliedCoupon: null, couponDiscount: 0 }),
             // --- CART & WISHLIST ---
             // ✅ NAYA CODE (Stock Check ke saath)
-            addToCart: (product, qty = 1, size) => {
-                // 1. Pehle check karo stock hai ya nahi
+           // ✅ FIXED: addToCart Logic (Checks ID + Size + Color)
+            addToCart: (product, qty = 1, size, color) => {
                 if (!product.stock || product.stock < qty) {
                     alert(`Sorry, "${product.name}" is currently Out of Stock!`);
                     return;
                 }
 
                 set((state) => {
+                    // Check if SAME item (ID + Size + Color) exists
                     const existingItemIndex = state.cart.findIndex(
-                        (item) => (size ? (item.product.id === product.id && item.selectedSize === size) : item.product.id === product.id)
+                        (item) => 
+                            item.product.id === product.id && 
+                            item.selectedSize === size && 
+                            item.selectedColor === color
                     );
 
                     let newCart = [...state.cart];
 
                     if (existingItemIndex > -1) {
-                        // Agar cart mein add karne se stock limit cross ho rahi hai to roko
                         if (newCart[existingItemIndex].qty + qty > (product.stock || 0)) {
                             alert("Cannot add more. You reached the stock limit.");
                             return state;
                         }
                         newCart[existingItemIndex].qty += qty;
                     } else {
-                        newCart.push({ product, qty, selectedSize: size });
+                        newCart.push({ 
+                            product, 
+                            qty, 
+                            selectedSize: size, 
+                            selectedColor: color // ✅ Added Color
+                        });
                     }
 
                     return { cart: newCart, isCartOpen: true };
@@ -402,30 +411,16 @@ export const useStore = create<Store>()(
             // ✅ NAYA CODE (Login + Stock Check + Inventory Update)
           // --- ORDERS ---
             // ✅ UPDATED: Ab ye Checkout Page se aayi hui exact values save karega
+          // ✅ FIXED: placeOrder Logic (Saves Size & Color correctly)
             placeOrder: async (details) => {
                 const state = get();
 
-                // 1. SECURITY CHECKS
                 if (!state.currentUser && !details.email) {
                     alert("🔒 Email is required to place an order.");
                     throw new Error("EMAIL_REQUIRED");
                 }
 
-                // 2. EXTRACT DATA FROM CHECKOUT PAGE
-                // Checkout page se hum bhej rahe hain: total, subtotal, tax, shipping, discount, items
-                const { 
-                    name, 
-                    email, 
-                    address, 
-                    total, 
-                    subtotal, 
-                    tax, 
-                    shipping, 
-                    discount, 
-                    items, 
-                    paymentMethod 
-                } = details;
-                
+                const { name, email, address, total, subtotal, tax, shipping, discount, items, paymentMethod } = details;
                 const orderId = `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
 
                 const newOrder: Order = {
@@ -433,52 +428,42 @@ export const useStore = create<Store>()(
                     customerName: name, 
                     customerEmail: email, 
                     address: address,
-                    
-                    // ✅ DIRECT ASSIGNMENT (Jo checkout par dikha, wahi save hoga)
                     total: total || 0, 
                     subtotal: subtotal || 0, 
                     tax: tax || 0, 
-                    discount: discount || 0, // ✅ Coupon Value Ab Save Hogi
+                    discount: discount || 0,
                     shipping: shipping || 0,
-                    
                     status: 'Pending',
                     date: new Date().toLocaleDateString('en-IN'),
                     
-                    // Agar checkout se items aaye to wo use karo, nahi to cart se lo
+                    // ✅ CRITICAL FIX: Mapping Size AND Color
                     items: items || state.cart.map(item => ({
-                        name: item.product.name, qty: item.qty, price: item.product.price,
-                        image: item.product.image, size: item.selectedSize || 'N/A'
+                        name: item.product.name, 
+                        qty: item.qty, 
+                        price: item.product.price,
+                        image: item.product.image, 
+                        selectedSize: item.selectedSize || 'N/A',
+                        selectedColor: item.selectedColor || null // ✅ Saving Color to DB
                     })),
                     
                     paymentMethod: paymentMethod || 'COD',
                     invoiceNo: `INV/${new Date().getFullYear()}/${orderId.split('-')[1]}`
                 };
 
-                // 3. DATABASE SAVE
                 await setDoc(doc(db, "orders", orderId), newOrder);
 
-                // Inventory Update (Stock kam karna)
                 state.cart.forEach(async (item) => {
                     if (item.product.id) {
-                        const productRef = doc(db, "products", item.product.id);
-                        // Current stock check karke update karein (optional safe logic)
-                        // ...
+                       // Inventory update logic here
                     }
                 });
 
-                // Notification Logic
                 await addDoc(collection(db, "notifications"), {
-                    userId: email, 
-                    title: 'Order Placed', 
-                    message: `Order #${orderId} confirmed successfully.`, 
-                    date: new Date().toLocaleDateString('en-IN'), 
-                    isRead: false
+                    userId: email, title: 'Order Placed', message: `Order #${orderId} confirmed successfully.`, 
+                    date: new Date().toLocaleDateString('en-IN'), isRead: false
                 });
 
-                // 4. RESET STATE
-                // Order hone ke baad cart aur coupon clear kar do
                 set({ cart: [], appliedCoupon: null, couponDiscount: 0 });
-                
                 return orderId;
             },
 

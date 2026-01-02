@@ -31,19 +31,20 @@ const Toast = ({ message, type, onClose }: { message: string, type: 'success' | 
         <button onClick={onClose}><X className="w-4 h-4 opacity-50 hover:opacity-100" /></button>
     </motion.div>
 );
+
 // --- GOVT. STANDARD GST CALCULATOR (Inclusive Method) ---
 const calculateInclusiveGST = (amount: number, rate: number) => {
-    // Formula: Amount / (1 + (Rate/100))
     const basePrice = amount / (1 + rate / 100);
     const totalTax = amount - basePrice;
     
     return {
-        basePrice: basePrice, // Asli keemat bina tax ke
-        totalTax: totalTax,   // Total Tax amount
-        cgst: totalTax / 2,   // Central Tax (Half)
-        sgst: totalTax / 2    // State Tax (Half)
+        basePrice: basePrice,
+        totalTax: totalTax,
+        cgst: totalTax / 2,
+        sgst: totalTax / 2
     };
 };
+
 export default function CheckoutPage() {
     const router = useRouter();
     const store = useStore() as any;
@@ -72,15 +73,14 @@ export default function CheckoutPage() {
     // Settings Fetch
     const [liveSettings, setLiveSettings] = useState<any>(null);
 
-   useEffect(() => {
-  if (!(window as any).Razorpay) {
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.async = true;
-    document.body.appendChild(script);
-  }
-}, []);
-
+    useEffect(() => {
+        if (!(window as any).Razorpay) {
+            const script = document.createElement("script");
+            script.src = "https://checkout.razorpay.com/v1/checkout.js";
+            script.async = true;
+            document.body.appendChild(script);
+        }
+    }, []);
 
     // User Data Fetch
     useEffect(() => {
@@ -142,13 +142,8 @@ export default function CheckoutPage() {
         );
     }
 
-   // --- STANDARD E-COMMERCE CALCULATIONS ---
     const subtotal = cart.reduce((sum: number, item: any) => sum + item.product.price * item.qty, 0);
-    
-    // Default Jewelry Tax is 3% in India if not set
     const taxRate = Number(systemSettings?.taxRate) || 3; 
-    
-    // Reverse Calculate Tax Breakdown (Standard Invoice Method)
     const gstBreakdown = calculateInclusiveGST(subtotal, taxRate);
 
     const shippingThreshold = Number(systemSettings?.shippingThreshold) || 5000;
@@ -156,9 +151,8 @@ export default function CheckoutPage() {
     const isFreeShipping = subtotal >= shippingThreshold;
     const shipping = isFreeShipping ? 0 : baseShipping;
 
-    // Final Total: Subtotal mein tax already included hai, isliye dobara add nahi karenge
     const total = subtotal + shipping - discountAmount;
-    // --- HELPERS ---
+
     const showToast = (msg: string, type: 'success' | 'error') => {
         setToast({ msg, type });
         setTimeout(() => setToast(null), 4000);
@@ -245,7 +239,7 @@ export default function CheckoutPage() {
         setToast({ msg: "Coupon Removed", type: "success" });
     };
 
-   const handlePlaceOrder = async () => {
+    const handlePlaceOrder = async () => {
         const finalEmail = formData.email?.trim().toLowerCase() || currentUser?.email?.trim().toLowerCase();
         if (!finalEmail || !formData.firstName || !formData.address || !formData.pincode || !formData.phone) {
             showToast("Please fill all delivery details.", 'error');
@@ -259,20 +253,14 @@ export default function CheckoutPage() {
             const state = useStore.getState();
             const settings = liveSettings || state.systemSettings || {};
             const paymentConfig = settings.payment || {};
-
-            // ✅ CRITICAL FIX: Ye wahi calculation hai jo screen par dikh rahi hai
             const finalAmount = total; 
             
-            // Payment Logic (Online/COD) starts here...
             if (paymentMethod === 'online') {
-               // ... (Online Payment Code Same rahega) ...
-               // Agar online payment integrate kar rahe hain to wahan bhi metadata mein bhejna padega
-               // filhal COD fix karte hain jo direct DB save karta hai:
-               
+                // Online Payment Logic Placeholder
                 if (paymentConfig?.instamojoEnabled) {
-                    // ... Instamojo code ...
+                    // Instamojo
                 } else if (paymentConfig?.razorpay?.enabled) {
-                   // ... Razorpay code ...
+                   // Razorpay
                 } else {
                     throw new Error("Online Payment is currently unavailable. Please select COD.");
                 }
@@ -281,7 +269,6 @@ export default function CheckoutPage() {
                 const action = state.placeOrder;
                 await new Promise(resolve => setTimeout(resolve, 1500));
 
-                // 👇👇👇 YAHAN CHANGE KIYA HAI 👇👇👇
                 const orderDetails = {
                     name: `${formData.firstName} ${formData.lastName}`,
                     email: finalEmail,
@@ -295,26 +282,26 @@ export default function CheckoutPage() {
                     },
                     status: 'Pending',
                     paymentMethod: 'COD',
-                    date: new Date().toLocaleDateString('en-IN'), // Indian Date Format
+                    date: new Date().toLocaleDateString('en-IN'),
                     
-                    // ✅ MONEY VALUES (Jo screen par hain, wahi DB mein jayengi)
-                    total: finalAmount,           // Final Amount to Pay
-                    subtotal: subtotal,           // Item Total
-                    shipping: shipping,           // Shipping Cost
-                    discount: discountAmount,     // ✅ COUPON AMOUNT AB SAVE HOGA
-                    tax: gstBreakdown.totalTax,   // Tax Amount
+                    total: finalAmount,
+                    subtotal: subtotal,
+                    shipping: shipping,
+                    discount: discountAmount,
+                    tax: gstBreakdown.totalTax,
                     
-                    // ✅ Items List with Price Snapshot
+                    // ✅ FIXED: Mapping Size and Color correctly for Admin Panel
                     items: cart.map((item: any) => ({
                         name: item.product.name,
                         qty: item.qty,
                         price: item.product.price,
                         image: item.product.image,
-                        // Agar size/variant hai to wo bhi add karein
+                        // 👇 Ye do lines zaroori hain Admin page ke liye
+                        selectedSize: item.selectedSize || null,
+                        selectedColor: item.selectedColor || null
                     }))
                 };
 
-                // Ab Store.ts wala function in sab values ko DB mein save karega
                 await action(orderDetails);
                 
                 if (typeof clearCart === 'function') clearCart();
@@ -600,15 +587,24 @@ export default function CheckoutPage() {
                             )}
                         </div>
 
-                        {/* CART ITEMS */}
+                        {/* CART ITEMS WITH DELETE BUTTON */}
                         <div className="space-y-4 mb-6 max-h-80 overflow-y-auto custom-scrollbar pr-2">
                             {cart.map((item: any) => (
-                                <div key={item.product.id} className="flex gap-4 relative bg-stone-50 p-2 rounded-xl">
+                                <div key={item.product.id} className="flex gap-4 relative bg-stone-50 p-2 rounded-xl group">
                                     <div className="relative w-14 h-14 bg-white rounded-lg overflow-hidden border border-stone-200 flex-shrink-0">
                                         <Image src={item.product.image} alt={item.product.name} fill className="object-cover" />
                                     </div>
                                     <div className="flex-1">
                                         <h4 className="font-serif text-xs text-[#0a1f1c] leading-tight truncate pr-4">{item.product.name}</h4>
+                                        
+                                        {/* Display Variant Info in Cart Summary */}
+                                        {(item.selectedSize || item.selectedColor) && (
+                                            <div className="flex gap-2 mt-1">
+                                                {item.selectedSize && <span className="text-[9px] text-stone-500 bg-white px-1.5 rounded border border-stone-200">Size: {item.selectedSize}</span>}
+                                                {item.selectedColor && <span className="text-[9px] text-stone-500 bg-white px-1.5 rounded border border-stone-200 flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-current" style={{color: item.selectedColor}}></span> {item.selectedColor}</span>}
+                                            </div>
+                                        )}
+
                                         <div className="flex justify-between items-center mt-2">
                                             {/* Qty Controls */}
                                             <div className="flex items-center bg-white border border-stone-200 rounded h-6">
@@ -619,6 +615,15 @@ export default function CheckoutPage() {
                                             <span className="font-bold text-xs text-amber-600">₹{(item.product.price * item.qty).toLocaleString()}</span>
                                         </div>
                                     </div>
+
+                                    {/* ✅ RESTORED DELETE BUTTON */}
+                                    <button 
+                                        onClick={() => removeFromCart(item.product.id)}
+                                        className="absolute top-2 right-2 text-stone-300 hover:text-red-500 transition p-1 hover:bg-red-50 rounded-full"
+                                        title="Remove Item"
+                                    >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
                                 </div>
                             ))}
                         </div>

@@ -17,7 +17,7 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 // ✅ Is line ko file ke sabse top par add karein
 import PopupManager from '@/components/admin/PopupManager';
-import { signInWithEmailAndPassword, signOut } from 'firebase/auth'; 
+import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
 import Link from 'next/link';
 import jsPDF from 'jspdf';
@@ -86,6 +86,7 @@ interface AdminProductForm extends Partial<Product> {
     stock?: number; tags?: string[]; galleryImages?: string[]; seoTitle?: string; seoDesc?: string; material?: string;
     warranty?: string;
     care?: string;
+    colors?: string[];
 }
 
 // --- NEW: Notification Interface ---
@@ -208,86 +209,86 @@ export default function AdminPage() {
         showToast('Logged out successfully', 'info');
     };
 
-  // --- UPDATED LOGIN HANDLER (Firebase Based) ---
-   // ✅ FIXED LOGIN HANDLER
-// ✅ REAL FIREBASE LOGIN HANDLER (Admin + Staff + Manager)
-const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+    // --- UPDATED LOGIN HANDLER (Firebase Based) ---
+    // ✅ FIXED LOGIN HANDLER
+    // ✅ REAL FIREBASE LOGIN HANDLER (Admin + Staff + Manager)
+    const handleLogin = async (e: React.FormEvent) => {
+        e.preventDefault();
 
-    try {
-        // ---------------------------------------------------------
-        // 1. SUPER ADMIN CHECK (Database Settings se)
-        // ---------------------------------------------------------
-        const docRef = doc(db, "settings", "super_admin");
-        const docSnap = await getDoc(docRef);
+        try {
+            // ---------------------------------------------------------
+            // 1. SUPER ADMIN CHECK (Database Settings se)
+            // ---------------------------------------------------------
+            const docRef = doc(db, "settings", "super_admin");
+            const docSnap = await getDoc(docRef);
 
-        if (docSnap.exists()) {
-            const adminData = docSnap.data();
-            // Agar email/pass DB wale super admin se match kare
-            if (email.toLowerCase() === adminData.email.toLowerCase() && password === adminData.password) {
+            if (docSnap.exists()) {
+                const adminData = docSnap.data();
+                // Agar email/pass DB wale super admin se match kare
+                if (email.toLowerCase() === adminData.email.toLowerCase() && password === adminData.password) {
+                    setIsAuthenticated(true);
+                    setUserRole('admin');
+                    setCurrentUser({
+                        name: 'Super Admin',
+                        email: adminData.email,
+                        role: 'admin',
+                        image: 'https://cdn-icons-png.flaticon.com/512/2942/2942813.png'
+                    });
+                    showToast('Welcome Super Admin', 'success');
+                    return;
+                }
+            }
+
+            // ---------------------------------------------------------
+            // 2. STAFF / MANAGER CHECK (Real Firebase Auth)
+            // ---------------------------------------------------------
+
+            // A. Firebase se Email/Pass verify karein
+            const userCredential = await signInWithEmailAndPassword(auth, email, password);
+            const user = userCredential.user;
+
+            // B. Ab check karein ki ye user hamare Database mein kya role rakhta hai
+            const foundUser = allUsers?.find((u: any) => u.email.toLowerCase() === email.toLowerCase());
+
+            if (foundUser) {
+                // C. Role Verification
+                if (foundUser.role === 'banned') {
+                    await signOut(auth); // Login cancel karo
+                    return showToast('Access Denied: Your account is banned.', 'error');
+                }
+
+                if (foundUser.role === 'customer') {
+                    await signOut(auth); // Login cancel karo (Customer allowed nahi hai)
+                    return showToast('Access Denied: Customers cannot access Admin Panel.', 'error');
+                }
+
+                // D. Success! (Admin / Manager / Staff)
                 setIsAuthenticated(true);
-                setUserRole('admin');
-                setCurrentUser({
-                    name: 'Super Admin',
-                    email: adminData.email,
-                    role: 'admin',
-                    image: 'https://cdn-icons-png.flaticon.com/512/2942/2942813.png'
-                });
-                showToast('Welcome Super Admin', 'success');
-                return;
-            }
-        }
+                setUserRole(foundUser.role); // Role set karo (manager/staff/admin)
+                setCurrentUser(foundUser);
+                showToast(`Welcome back, ${foundUser.name}`, 'success');
 
-        // ---------------------------------------------------------
-        // 2. STAFF / MANAGER CHECK (Real Firebase Auth)
-        // ---------------------------------------------------------
-        
-        // A. Firebase se Email/Pass verify karein
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
-        const user = userCredential.user;
-
-        // B. Ab check karein ki ye user hamare Database mein kya role rakhta hai
-        const foundUser = allUsers?.find((u: any) => u.email.toLowerCase() === email.toLowerCase());
-
-        if (foundUser) {
-            // C. Role Verification
-            if (foundUser.role === 'banned') {
-                await signOut(auth); // Login cancel karo
-                return showToast('Access Denied: Your account is banned.', 'error');
-            }
-            
-            if (foundUser.role === 'customer') {
-                await signOut(auth); // Login cancel karo (Customer allowed nahi hai)
-                return showToast('Access Denied: Customers cannot access Admin Panel.', 'error');
+            } else {
+                // Agar user auth mein hai par database list mein nahi mila
+                await signOut(auth);
+                showToast('User record not found in database.', 'error');
             }
 
-            // D. Success! (Admin / Manager / Staff)
-            setIsAuthenticated(true);
-            setUserRole(foundUser.role); // Role set karo (manager/staff/admin)
-            setCurrentUser(foundUser);
-            showToast(`Welcome back, ${foundUser.name}`, 'success');
+        } catch (error: any) {
+            console.error("Login Error:", error);
 
-        } else {
-            // Agar user auth mein hai par database list mein nahi mila
-            await signOut(auth);
-            showToast('User record not found in database.', 'error');
+            // Error Messages ko user-friendly banayein
+            if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+                showToast('Incorrect Email or Password.', 'error');
+            } else if (error.code === 'auth/user-not-found') {
+                showToast('No user found with this email.', 'error');
+            } else if (error.code === 'auth/too-many-requests') {
+                showToast('Too many failed attempts. Try later.', 'error');
+            } else {
+                showToast('Login failed. Check console.', 'error');
+            }
         }
-
-    } catch (error: any) {
-        console.error("Login Error:", error);
-        
-        // Error Messages ko user-friendly banayein
-        if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
-            showToast('Incorrect Email or Password.', 'error');
-        } else if (error.code === 'auth/user-not-found') {
-            showToast('No user found with this email.', 'error');
-        } else if (error.code === 'auth/too-many-requests') {
-            showToast('Too many failed attempts. Try later.', 'error');
-        } else {
-            showToast('Login failed. Check console.', 'error');
-        }
-    }
-};
+    };
 
     useEffect(() => {
         setIsMounted(true);
@@ -395,81 +396,80 @@ const handleLogin = async (e: React.FormEvent) => {
             {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
 
             {/* SIDEBAR */}
-           {/* ✅ FIXED SIDEBAR FOR MANAGER ACCESS */}
-<aside className="w-20 lg:w-72 bg-[#0f2925] border-r border-white/5 flex flex-col flex-shrink-0 transition-all duration-300 z-20">
-    <div className="p-6 flex items-center justify-center lg:justify-start lg:px-8 border-b border-white/5 h-24">
-        <div className="text-center lg:text-left">
-            <h2 className="font-serif text-2xl tracking-widest text-white hidden lg:block">ZERIMI</h2>
-            <div className="flex items-center justify-center lg:justify-start gap-2 mt-1">
-                <span className={`w-2 h-2 rounded-full animate-pulse ${
-                    userRole === 'admin' ? 'bg-red-500' : 
-                    userRole === 'manager' ? 'bg-amber-500' : 
-                    'bg-blue-500'
-                }`}></span>
-                
-                {/* 👇 YE LABEL LOGIC FIX KIYA HAI */}
-                <p className="text-[9px] text-white/50 uppercase tracking-widest hidden lg:block">
-                    {userRole === 'admin' ? 'GOD MODE' : 
-                     userRole === 'manager' ? 'MANAGER PANEL' : 
-                     'STAFF PANEL'}
-                </p>
-            </div>
-        </div>
-    </div>
+            {/* ✅ FIXED SIDEBAR FOR MANAGER ACCESS */}
+            <aside className="w-20 lg:w-72 bg-[#0f2925] border-r border-white/5 flex flex-col flex-shrink-0 transition-all duration-300 z-20">
+                <div className="p-6 flex items-center justify-center lg:justify-start lg:px-8 border-b border-white/5 h-24">
+                    <div className="text-center lg:text-left">
+                        <h2 className="font-serif text-2xl tracking-widest text-white hidden lg:block">ZERIMI</h2>
+                        <div className="flex items-center justify-center lg:justify-start gap-2 mt-1">
+                            <span className={`w-2 h-2 rounded-full animate-pulse ${userRole === 'admin' ? 'bg-red-500' :
+                                    userRole === 'manager' ? 'bg-amber-500' :
+                                        'bg-blue-500'
+                                }`}></span>
 
-    <nav className="flex-1 py-6 px-4 space-y-1 overflow-y-auto custom-scrollbar">
-        {/* 1. SABKE LIYE (Staff + Manager + Admin) */}
-        <p className="px-4 py-2 text-[10px] text-white/20 uppercase tracking-widest hidden lg:block">Operations</p>
-        <SidebarBtn icon={<BarChart3 />} label="Overview" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
-        <SidebarBtn icon={<Truck />} label="Order Management" active={activeTab === 'orders'} onClick={() => setActiveTab('orders')} />
-        <SidebarBtn icon={<Package />} label="Inventory" active={activeTab === 'products'} onClick={() => setActiveTab('products')} />
-        
-        <div className="relative">
-            <SidebarBtn icon={<Mail />} label="Inbox" active={activeTab === 'inbox'} onClick={() => setActiveTab('inbox')} />
-            {inboxUnreadCount > 0 && (
-                <span className="absolute left-10 top-2 bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full animate-pulse border border-[#0f2925]">
-                    {inboxUnreadCount}
-                </span>
-            )}
-        </div>
+                            {/* 👇 YE LABEL LOGIC FIX KIYA HAI */}
+                            <p className="text-[9px] text-white/50 uppercase tracking-widest hidden lg:block">
+                                {userRole === 'admin' ? 'GOD MODE' :
+                                    userRole === 'manager' ? 'MANAGER PANEL' :
+                                        'STAFF PANEL'}
+                            </p>
+                        </div>
+                    </div>
+                </div>
 
-        {/* 2. SIRF MANAGER AUR ADMIN KE LIYE (Staff ko nahi dikhega) */}
-        {(userRole === 'admin' || userRole === 'manager') && (
-            <>
-                <p className="px-4 py-2 text-[10px] text-white/20 uppercase tracking-widest hidden lg:block mt-4">Growth Engine</p>
-                <SidebarBtn icon={<Layout />} label="Homepage Editor" active={activeTab === 'cms'} onClick={() => setActiveTab('cms')} />
-                <SidebarBtn icon={<Ticket />} label="Coupons & Offers" active={activeTab === 'coupons'} onClick={() => setActiveTab('coupons')} />
-                <SidebarBtn icon={<Megaphone />} label="Marketing" active={activeTab === 'marketing'} onClick={() => setActiveTab('marketing')} />
-                
-                <button
-                    onClick={() => setActiveTab('popup')}
-                    className={`flex items-center justify-center lg:justify-start gap-4 w-full p-3 rounded-lg text-sm tracking-wide transition-all duration-300 group ${activeTab === 'popup' ? 'bg-amber-600 text-white shadow-lg' : 'text-white/40 hover:bg-white/5 hover:text-white'}`}
-                >
-                    <span className={`w-5 h-5 ${activeTab === 'popup' ? 'text-white' : 'group-hover:text-amber-400'}`}>
-                        <Sparkles className="w-5 h-5" />
-                    </span>
-                    <span className="hidden lg:inline">Popup Manager</span>
-                </button>
+                <nav className="flex-1 py-6 px-4 space-y-1 overflow-y-auto custom-scrollbar">
+                    {/* 1. SABKE LIYE (Staff + Manager + Admin) */}
+                    <p className="px-4 py-2 text-[10px] text-white/20 uppercase tracking-widest hidden lg:block">Operations</p>
+                    <SidebarBtn icon={<BarChart3 />} label="Overview" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
+                    <SidebarBtn icon={<Truck />} label="Order Management" active={activeTab === 'orders'} onClick={() => setActiveTab('orders')} />
+                    <SidebarBtn icon={<Package />} label="Inventory" active={activeTab === 'products'} onClick={() => setActiveTab('products')} />
 
-                <p className="px-4 py-2 text-[10px] text-white/20 uppercase tracking-widest hidden lg:block mt-4">Administration</p>
-                <SidebarBtn icon={<Users />} label="Staff & Users" active={activeTab === 'users'} onClick={() => setActiveTab('users')} />
-            </>
-        )}
+                    <div className="relative">
+                        <SidebarBtn icon={<Mail />} label="Inbox" active={activeTab === 'inbox'} onClick={() => setActiveTab('inbox')} />
+                        {inboxUnreadCount > 0 && (
+                            <span className="absolute left-10 top-2 bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full animate-pulse border border-[#0f2925]">
+                                {inboxUnreadCount}
+                            </span>
+                        )}
+                    </div>
 
-        {/* 3. SIRF ADMIN KE LIYE (Manager ko bhi nahi dikhega) */}
-        {userRole === 'admin' && (
-            <>
-                <SidebarBtn icon={<Settings />} label="Payment & Config" active={activeTab === 'config'} onClick={() => setActiveTab('config')} />
-                <SidebarBtn icon={<AlertOctagon />} label="Danger Zone" active={activeTab === 'danger'} onClick={() => setActiveTab('danger')} />
-            </>
-        )}
-    </nav>
+                    {/* 2. SIRF MANAGER AUR ADMIN KE LIYE (Staff ko nahi dikhega) */}
+                    {(userRole === 'admin' || userRole === 'manager') && (
+                        <>
+                            <p className="px-4 py-2 text-[10px] text-white/20 uppercase tracking-widest hidden lg:block mt-4">Growth Engine</p>
+                            <SidebarBtn icon={<Layout />} label="Homepage Editor" active={activeTab === 'cms'} onClick={() => setActiveTab('cms')} />
+                            <SidebarBtn icon={<Ticket />} label="Coupons & Offers" active={activeTab === 'coupons'} onClick={() => setActiveTab('coupons')} />
+                            <SidebarBtn icon={<Megaphone />} label="Marketing" active={activeTab === 'marketing'} onClick={() => setActiveTab('marketing')} />
 
-    <div className="p-4 border-t border-white/5">
-        <div className="flex justify-between text-[10px] text-stone-400 mb-1 px-2"><span>DB Usage</span><span>{storageUsed.toFixed(1)}%</span></div>
-        <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden mx-2 mb-4 max-w-[90%]"><div className={`h-full ${storageUsed > 90 ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${Math.min(storageUsed, 100)}%` }}></div></div>
-    </div>
-</aside>
+                            <button
+                                onClick={() => setActiveTab('popup')}
+                                className={`flex items-center justify-center lg:justify-start gap-4 w-full p-3 rounded-lg text-sm tracking-wide transition-all duration-300 group ${activeTab === 'popup' ? 'bg-amber-600 text-white shadow-lg' : 'text-white/40 hover:bg-white/5 hover:text-white'}`}
+                            >
+                                <span className={`w-5 h-5 ${activeTab === 'popup' ? 'text-white' : 'group-hover:text-amber-400'}`}>
+                                    <Sparkles className="w-5 h-5" />
+                                </span>
+                                <span className="hidden lg:inline">Popup Manager</span>
+                            </button>
+
+                            <p className="px-4 py-2 text-[10px] text-white/20 uppercase tracking-widest hidden lg:block mt-4">Administration</p>
+                            <SidebarBtn icon={<Users />} label="Staff & Users" active={activeTab === 'users'} onClick={() => setActiveTab('users')} />
+                        </>
+                    )}
+
+                    {/* 3. SIRF ADMIN KE LIYE (Manager ko bhi nahi dikhega) */}
+                    {userRole === 'admin' && (
+                        <>
+                            <SidebarBtn icon={<Settings />} label="Payment & Config" active={activeTab === 'config'} onClick={() => setActiveTab('config')} />
+                            <SidebarBtn icon={<AlertOctagon />} label="Danger Zone" active={activeTab === 'danger'} onClick={() => setActiveTab('danger')} />
+                        </>
+                    )}
+                </nav>
+
+                <div className="p-4 border-t border-white/5">
+                    <div className="flex justify-between text-[10px] text-stone-400 mb-1 px-2"><span>DB Usage</span><span>{storageUsed.toFixed(1)}%</span></div>
+                    <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden mx-2 mb-4 max-w-[90%]"><div className={`h-full ${storageUsed > 90 ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${Math.min(storageUsed, 100)}%` }}></div></div>
+                </div>
+            </aside>
             {/* MAIN CONTENT */}
             <main className="flex-1 overflow-y-auto h-full relative" onClick={() => { if (showProfileMenu) setShowProfileMenu(false); if (showNotifMenu) setShowNotifMenu(false); }}>
                 <header className="bg-[#0a1f1c]/90 backdrop-blur-md border-b border-white/5 px-8 h-24 flex justify-between items-center sticky top-0 z-30">
@@ -571,14 +571,14 @@ const handleLogin = async (e: React.FormEvent) => {
 
                     {activeTab === 'products' && <ProductManager products={products} addProduct={addProduct} updateProduct={updateProduct} deleteProduct={(id: string) => handleProductDelete(id)} />}
 
-                   
-{activeTab === 'orders' && (
-    <OrderManager 
-        orders={orders} 
-        updateOrderStatus={handleStatusUpdate} 
-        settings={store.systemSettings} // 👈 YE ADD KAREIN
-    />
-)}
+
+                    {activeTab === 'orders' && (
+                        <OrderManager
+                            orders={orders}
+                            updateOrderStatus={handleStatusUpdate}
+                            settings={store.systemSettings} // 👈 YE ADD KAREIN
+                        />
+                    )}
                     {/* 👇 STEP 3: INBOX MANAGER COMPONENT */}
                     {activeTab === 'inbox' && (
                         <InboxManager
@@ -592,25 +592,25 @@ const handleLogin = async (e: React.FormEvent) => {
                     {['admin', 'manager'].includes(userRole) && (
                         <>
                             {activeTab === 'coupons' && <CouponManager coupons={coupons} onAdd={addCoupon} onDelete={deleteCoupon} showToast={showToast} />}
-                            
-                            {activeTab === 'cms' && <CMSManager 
+
+                            {activeTab === 'cms' && <CMSManager
                                 banner={banner} updateBanner={updateBanner}
                                 categories={categories} updateCategories={updateCategories}
                                 featured={featured} updateFeatured={updateFeatured}
                                 promo={promo} updatePromo={updatePromo}
                                 blogs={blogs} addBlog={addBlog} deleteBlog={deleteBlog}
                                 siteText={store.siteText} updateSiteText={store.updateSiteText}
-                                showToast={showToast} 
+                                showToast={showToast}
                             />}
 
                             {activeTab === 'marketing' && <MarketingManager allUsers={allUsers} sendNotification={sendNotification} showToast={showToast} />}
-                            
+
                             {activeTab === 'popup' && <div className="animate-fade-in"><PopupManager siteText={store.siteText} onSave={store.updateSiteText} /></div>}
 
-                            {activeTab === 'users' && <UserManager 
-                                allUsers={allUsers} 
-                                updateUserRole={updateUserRole} 
-                                deleteUser={store.deleteUser} 
+                            {activeTab === 'users' && <UserManager
+                                allUsers={allUsers}
+                                updateUserRole={updateUserRole}
+                                deleteUser={store.deleteUser}
                                 showToast={showToast}
                                 currentUser={currentUser} // ✅ Safety Prop
                             />}
@@ -698,155 +698,156 @@ const numberToWords = (num: number): string => {
    ✅ EXACT REPLICA OF CUSTOMER INVOICE (ADMIN SIDE)
 ---------------------------------------------------- */
 const generateAdminInvoice = (order: any, settings: any) => {
-  if (!order) return;
-  
-  const doc = new jsPDF();
-  const pageWidth = doc.internal.pageSize.width;
+    if (!order) return;
 
-  // 1. EXTRACT DATA (Same variables as Customer Side)
-  const subtotal = Number(order.subtotal || 0);
-  const taxAmount = Number(order.tax || 0);
-  const shipping = Number(order.shipping || 0);
-  const discount = Number(order.discount || 0);
-  const grandTotal = Number(order.total || 0);
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.width;
 
-  // 2. HEADER DESIGN
-  doc.setFontSize(24);
-  doc.setTextColor(212, 175, 55); // Gold Color
-  doc.setFont("helvetica", "bold");
-  doc.text("ZERIMI", 14, 20);
+    // 1. EXTRACT DATA (Same variables as Customer Side)
+    const subtotal = Number(order.subtotal || 0);
+    const taxAmount = Number(order.tax || 0);
+    const shipping = Number(order.shipping || 0);
+    const discount = Number(order.discount || 0);
+    const grandTotal = Number(order.total || 0);
 
-  doc.setFontSize(10);
-  doc.setTextColor(100);
-  doc.setFont("helvetica", "normal");
-  doc.text("Luxury Jewelry & Accessories", 14, 26);
-  doc.text(settings?.invoice?.address || "Mumbai, Maharashtra, India", 14, 31);
-  doc.text(`GSTIN: ${settings?.invoice?.gstin || "27ABCDE1234F1Z5"}`, 14, 36);
-  doc.text("Email: support@zerimi.com", 14, 41);
+    // 2. HEADER DESIGN
+    doc.setFontSize(24);
+    doc.setTextColor(212, 175, 55); // Gold Color
+    doc.setFont("helvetica", "bold");
+    doc.text("ZERIMI", 14, 20);
 
-  doc.setFontSize(16);
-  doc.setTextColor(0);
-  doc.text("TAX INVOICE", pageWidth - 14, 20, { align: "right" });
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.setFont("helvetica", "normal");
+    doc.text("Luxury Jewelry & Accessories", 14, 26);
+    doc.text(settings?.invoice?.address || "Mumbai, Maharashtra, India", 14, 31);
+    doc.text(`GSTIN: ${settings?.invoice?.gstin || "27ABCDE1234F1Z5"}`, 14, 36);
+    doc.text("Email: support@zerimi.com", 14, 41);
 
-  doc.setFontSize(10);
-  doc.text(`Invoice #: ${order.invoiceNo || "INV-" + order.id}`, pageWidth - 14, 30, { align: "right" });
-  doc.text(`Date: ${order.date}`, pageWidth - 14, 35, { align: "right" });
-  doc.text(`Order ID: #${order.id}`, pageWidth - 14, 40, { align: "right" });
+    doc.setFontSize(16);
+    doc.setTextColor(0);
+    doc.text("TAX INVOICE", pageWidth - 14, 20, { align: "right" });
 
-  doc.line(14, 48, pageWidth - 14, 48);
+    doc.setFontSize(10);
+    doc.text(`Invoice #: ${order.invoiceNo || "INV-" + order.id}`, pageWidth - 14, 30, { align: "right" });
+    doc.text(`Date: ${order.date}`, pageWidth - 14, 35, { align: "right" });
+    doc.text(`Order ID: #${order.id}`, pageWidth - 14, 40, { align: "right" });
 
-  // 3. BILL TO SECTION
-  const billingY = 55;
-  doc.setFont("helvetica", "bold");
-  doc.text("Bill To:", 14, billingY);
-  doc.setFont("helvetica", "normal");
-  
-  const custName = order.name || order.customerName || "Valued Customer";
-  doc.text(custName, 14, billingY + 5);
+    doc.line(14, 48, pageWidth - 14, 48);
 
-  let addressStr = "";
-  if (typeof order.address === "string") {
-      addressStr = order.address;
-  } else if (order.address) {
-      addressStr = `${order.address.street || ""}, ${order.address.city || ""} - ${order.address.pincode || ""}`;
-  }
-      
-  doc.text(doc.splitTextToSize(addressStr, 80), 14, billingY + 10);
+    // 3. BILL TO SECTION
+    const billingY = 55;
+    doc.setFont("helvetica", "bold");
+    doc.text("Bill To:", 14, billingY);
+    doc.setFont("helvetica", "normal");
 
-  // 4. ITEMS TABLE (Same Grid Theme)
-  const tableRows = order.items.map((item: any, index: number) => {
-      const unitPrice = Number(item.price);
-      const qty = Number(item.qty);
-      const totalVal = unitPrice * qty;
-      return [
-        index + 1,
-        item.name,
-        qty,
-        `Rs.${unitPrice.toLocaleString()}`,
-        `Rs.${totalVal.toLocaleString()}`
-      ];
-  });
+    const custName = order.name || order.customerName || "Valued Customer";
+    doc.text(custName, 14, billingY + 5);
 
-  // @ts-ignore
-  autoTable(doc, {
-    startY: billingY + 35,
-    head: [["Sn", "Item Description", "Qty", "Unit Price", "Taxable Value"]],
-    body: tableRows,
-    theme: "grid",
-    headStyles: { fillColor: [15, 41, 37], textColor: 255, fontSize: 9 }, // ZERIMI Green Header
-    bodyStyles: { fontSize: 9 },
-    columnStyles: {
-      3: { halign: "right" },
-      4: { halign: "right" }
-    },
-  });
+    let addressStr = "";
+    if (typeof order.address === "string") {
+        addressStr = order.address;
+    } else if (order.address) {
+        addressStr = `${order.address.street || ""}, ${order.address.city || ""} - ${order.address.pincode || ""}`;
+    }
 
-  // 5. TOTALS CALCULATION
-  // @ts-ignore
-  const finalY = doc.lastAutoTable.finalY + 10;
-  const rightX = pageWidth - 14;
-  const labelX = rightX - 60;
+    doc.text(doc.splitTextToSize(addressStr, 80), 14, billingY + 10);
 
-  doc.setFontSize(10);
-  doc.setTextColor(0);
+    // 4. ITEMS TABLE (Same Grid Theme)
+    const tableRows = order.items.map((item: any, index: number) => {
+        const unitPrice = Number(item.price);
+        const qty = Number(item.qty);
+        const totalVal = unitPrice * qty;
+        return [
+            index + 1,
+            item.name,
+            qty,
+            `Rs.${unitPrice.toLocaleString()}`,
+            `Rs.${totalVal.toLocaleString()}`
+        ];
+    });
 
-  // Subtotal
-  doc.text("Taxable Amount (Subtotal):", labelX, finalY);
-  doc.text(`Rs.${subtotal.toLocaleString()}`, rightX, finalY, { align: "right" });
+    // @ts-ignore
+    autoTable(doc, {
+        startY: billingY + 35,
+        head: [["Sn", "Item Description", "Qty", "Unit Price", "Taxable Value"]],
+        body: tableRows,
+        theme: "grid",
+        headStyles: { fillColor: [15, 41, 37], textColor: 255, fontSize: 9 }, // ZERIMI Green Header
+        bodyStyles: { fontSize: 9 },
+        columnStyles: {
+            3: { halign: "right" },
+            4: { halign: "right" }
+        },
+    });
 
-  // Tax
-  doc.text(`Total GST (${settings?.store?.taxRate || 3}%):`, labelX, finalY + 6);
-  doc.text(`+ Rs.${taxAmount.toLocaleString()}`, rightX, finalY + 6, { align: "right" });
+    // 5. TOTALS CALCULATION
+    // @ts-ignore
+    const finalY = doc.lastAutoTable.finalY + 10;
+    const rightX = pageWidth - 14;
+    const labelX = rightX - 60;
 
-  // Shipping
-  doc.text("Shipping Charges:", labelX, finalY + 12);
-  doc.text(shipping === 0 ? "Free" : `+ Rs.${shipping.toFixed(2)}`, rightX, finalY + 12, { align: "right" });
+    doc.setFontSize(10);
+    doc.setTextColor(0);
 
-  let currentY = finalY + 18;
+    // Subtotal
+    doc.text("Taxable Amount (Subtotal):", labelX, finalY);
+    doc.text(`Rs.${subtotal.toLocaleString()}`, rightX, finalY, { align: "right" });
 
-  // Discount (Green Color)
-  if (discount > 0) {
-    doc.setTextColor(22, 163, 74); // Green
-    doc.text("Coupon Discount:", labelX, currentY);
-    doc.text(`- Rs.${discount.toLocaleString()}`, rightX, currentY, { align: "right" });
-    currentY += 6;
-  }
+    // Tax
+    doc.text(`Total GST (${settings?.store?.taxRate || 3}%):`, labelX, finalY + 6);
+    doc.text(`+ Rs.${taxAmount.toLocaleString()}`, rightX, finalY + 6, { align: "right" });
 
-  // Grand Total (Gold & Bold)
-  doc.setFontSize(14);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(212, 140, 0); // Gold
-  doc.line(labelX, currentY, rightX, currentY);
-  
-  doc.text("Grand Total:", labelX, currentY + 8);
-  doc.text(`Rs.${grandTotal.toLocaleString()}`, rightX, currentY + 8, { align: "right" });
+    // Shipping
+    doc.text("Shipping Charges:", labelX, finalY + 12);
+    doc.text(shipping === 0 ? "Free" : `+ Rs.${shipping.toFixed(2)}`, rightX, finalY + 12, { align: "right" });
 
-  // 6. FOOTER (Words & Declaration)
-  doc.setFontSize(9);
-  doc.setTextColor(80);
-  doc.setFont("helvetica", "normal");
-  
-  doc.text(`Amount in Words: ${numberToWords(grandTotal)}`, 14, currentY + 8);
+    let currentY = finalY + 18;
 
-  // Declaration Box (Ye missing tha admin side pe)
-  doc.rect(14, currentY + 20, pageWidth - 28, 20);
-  doc.setFontSize(8);
-  doc.text("Declaration:", 16, currentY + 25);
-  doc.text(
-    "We declare that this invoice shows the actual price of the goods described above and that all particulars are true and correct.",
-    16, currentY + 30
-  );
+    // Discount (Green Color)
+    if (discount > 0) {
+        doc.setTextColor(22, 163, 74); // Green
+        doc.text("Coupon Discount:", labelX, currentY);
+        doc.text(`- Rs.${discount.toLocaleString()}`, rightX, currentY, { align: "right" });
+        currentY += 6;
+    }
 
-  // Signature
-  doc.setFont("helvetica", "bold");
-  doc.text("For ZERIMI", pageWidth - 40, currentY + 35, { align: "center" });
+    // Grand Total (Gold & Bold)
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(212, 140, 0); // Gold
+    doc.line(labelX, currentY, rightX, currentY);
 
-  doc.save(`Invoice_${order.id}.pdf`);
+    doc.text("Grand Total:", labelX, currentY + 8);
+    doc.text(`Rs.${grandTotal.toLocaleString()}`, rightX, currentY + 8, { align: "right" });
+
+    // 6. FOOTER (Words & Declaration)
+    doc.setFontSize(9);
+    doc.setTextColor(80);
+    doc.setFont("helvetica", "normal");
+
+    doc.text(`Amount in Words: ${numberToWords(grandTotal)}`, 14, currentY + 8);
+
+    // Declaration Box (Ye missing tha admin side pe)
+    doc.rect(14, currentY + 20, pageWidth - 28, 20);
+    doc.setFontSize(8);
+    doc.text("Declaration:", 16, currentY + 25);
+    doc.text(
+        "We declare that this invoice shows the actual price of the goods described above and that all particulars are true and correct.",
+        16, currentY + 30
+    );
+
+    // Signature
+    doc.setFont("helvetica", "bold");
+    doc.text("For ZERIMI", pageWidth - 40, currentY + 35, { align: "center" });
+
+    doc.save(`Invoice_${order.id}.pdf`);
 };
 // --- ORDER MANAGER (Updates Trigger Notification) ---
 // --- ORDER MANAGER (Fixed Return Logic) ---
 // --- ORDER MANAGER (PREMIUM: Search, Filters & Timeline) ---
-function OrderManager({ orders, updateOrderStatus, settings }: any) {
+// --- ORDER MANAGER (UPDATED: Size/Color + Delete Feature) ---
+function OrderManager({ orders, updateOrderStatus, settings, deleteOrder }: any) {
     const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
     const [viewingOrder, setViewingOrder] = useState<any | null>(null);
 
@@ -890,7 +891,6 @@ function OrderManager({ orders, updateOrderStatus, settings }: any) {
             case 'Delivered': return 'bg-green-500/20 text-green-400 border-green-500/50';
             case 'Processing': return 'bg-blue-500/20 text-blue-400 border-blue-500/50';
             case 'Shipped': return 'bg-amber-500/20 text-amber-400 border-amber-500/50';
-            // ✅ NAYA STATUS ADD KIYA
             case 'Out for Delivery': return 'bg-purple-500/20 text-purple-400 border-purple-500/50 animate-pulse';
             case 'Return Requested': return 'bg-orange-500/20 text-orange-400 animate-pulse border-orange-500/50';
             case 'Return Approved': return 'bg-emerald-600/20 text-emerald-500 border-emerald-500/50';
@@ -975,9 +975,22 @@ function OrderManager({ orders, updateOrderStatus, settings }: any) {
                                         {o.status}
                                     </span>
                                 </td>
-                                <td className="p-5 text-right">
-                                    <button onClick={() => setViewingOrder(o)} className="p-2 bg-white/5 hover:bg-white/10 hover:text-amber-400 rounded-lg transition">
+                                <td className="p-5 text-right flex justify-end gap-2">
+                                    <button onClick={() => setViewingOrder(o)} className="p-2 bg-white/5 hover:bg-white/10 hover:text-amber-400 rounded-lg transition" title="View Details">
                                         <Eye className="w-4 h-4" />
+                                    </button>
+                                    {/* ✅ DELETE BUTTON ADDED HERE */}
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (confirm(`⚠️ DELETE ORDER #${o.id}?\nThis cannot be undone.`)) {
+                                                deleteOrder(o.id);
+                                            }
+                                        }}
+                                        className="p-2 bg-red-500/10 hover:bg-red-500 hover:text-white text-red-400 rounded-lg transition"
+                                        title="Delete Order"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
                                     </button>
                                 </td>
                             </tr>
@@ -1017,28 +1030,24 @@ function OrderManager({ orders, updateOrderStatus, settings }: any) {
                             {/* Left: Timeline & Items */}
                             <div className="lg:col-span-2 space-y-8">
 
-                                {/* VISUAL TIMELINE (UPDATED) */}
+                                {/* VISUAL TIMELINE */}
                                 <div className="bg-black/20 p-6 rounded-xl border border-white/5">
                                     <h4 className="text-[10px] text-white/40 uppercase tracking-widest font-bold mb-6">Order Progress</h4>
                                     <div className="flex items-center justify-between relative">
-                                        {/* Line Background */}
                                         <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-1 bg-white/5 z-0"></div>
-                                        
-                                        {/* Active Progress Line */}
                                         <div className={`absolute left-0 top-1/2 -translate-y-1/2 h-1 bg-amber-600 transition-all duration-500 z-0`} style={{
-                                            width: viewingOrder.status === 'Delivered' ? '100%' 
-                                                 : viewingOrder.status === 'Out for Delivery' ? '75%' 
-                                                 : viewingOrder.status === 'Shipped' ? '50%' 
-                                                 : viewingOrder.status === 'Processing' ? '25%' 
-                                                 : '0%'
+                                            width: viewingOrder.status === 'Delivered' ? '100%'
+                                                : viewingOrder.status === 'Out for Delivery' ? '75%'
+                                                    : viewingOrder.status === 'Shipped' ? '50%'
+                                                        : viewingOrder.status === 'Processing' ? '25%'
+                                                            : '0%'
                                         }}></div>
 
-                                        {/* Steps */}
                                         {['Pending', 'Processing', 'Shipped', 'Out for Delivery', 'Delivered'].map((step, idx) => {
                                             const stepsOrder = ['Pending', 'Processing', 'Shipped', 'Out for Delivery', 'Delivered'];
                                             const currentIdx = stepsOrder.indexOf(viewingOrder.status);
                                             const isCompleted = currentIdx >= idx;
-                                            
+
                                             return (
                                                 <div key={step} className="relative z-10 flex flex-col items-center gap-2">
                                                     <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${isCompleted ? 'bg-amber-600 border-amber-600 text-white shadow-[0_0_10px_rgba(245,158,11,0.5)]' : 'bg-[#0f2925] border-white/10 text-white/20'}`}>
@@ -1053,7 +1062,7 @@ function OrderManager({ orders, updateOrderStatus, settings }: any) {
                                     </div>
                                 </div>
 
-                                {/* Items List */}
+                                {/* ✅ ITEMS ORDERED LIST (SIZE & COLOR ADDED) */}
                                 <div>
                                     <h4 className="text-xs text-amber-500 uppercase tracking-widest font-bold mb-4">Items Ordered</h4>
                                     <div className="space-y-3">
@@ -1064,7 +1073,29 @@ function OrderManager({ orders, updateOrderStatus, settings }: any) {
                                                 </div>
                                                 <div className="flex-1">
                                                     <p className="text-white font-serif">{item.name}</p>
-                                                    <p className="text-xs text-white/50 mt-1">Qty: {item.qty} x ₹{item.price.toLocaleString()}</p>
+
+                                                    {/* Qty, Size & Color Display */}
+                                                    <div className="text-xs text-white/50 mt-1 flex flex-col gap-1">
+                                                        <span>Qty: {item.qty} x ₹{item.price.toLocaleString()}</span>
+
+                                                        {/* Size */}
+                                                        {item.selectedSize && (
+                                                            <span className="text-amber-500 font-bold bg-amber-500/10 px-2 py-0.5 rounded w-fit border border-amber-500/20">
+                                                                Size: {item.selectedSize}
+                                                            </span>
+                                                        )}
+
+                                                        {/* Color */}
+                                                        {item.selectedColor && (
+                                                            <span className="flex items-center gap-2 mt-1">
+                                                                <span className="text-white/60">Color:</span>
+                                                                <div className="flex items-center gap-1 bg-white/5 px-2 py-0.5 rounded border border-white/10">
+                                                                    <span className="w-3 h-3 rounded-full border border-white/30" style={{ backgroundColor: item.selectedColor }}></span>
+                                                                    <span className="text-white font-mono">{item.selectedColor}</span>
+                                                                </div>
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </div>
                                                 <div className="text-right">
                                                     <p className="text-amber-400 font-bold">₹{(item.price * item.qty).toLocaleString()}</p>
@@ -1105,42 +1136,38 @@ function OrderManager({ orders, updateOrderStatus, settings }: any) {
                                     </div>
                                 </div>
 
-                                {/* Actions Card */}
+                                {/* Actions Card (SHIPROCKET CODE INTACT) */}
                                 <div className="bg-black/20 p-5 rounded-xl border border-white/5">
                                     <h4 className="text-[10px] text-white/40 uppercase tracking-widest mb-4">Update Status</h4>
 
                                     <div className="space-y-3">
                                         {/* 🚚 SHIPROCKET BUTTON */}
-{viewingOrder.status === 'Processing' && (
-  <button
-    onClick={async () => {
-      try {
-        const res = await fetch("/api/shiprocket/create-shipment", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(viewingOrder)
-        });
-
-        const data = await res.json();
-
-        if (!data.success) {
-          alert("❌ Shiprocket shipment failed");
-          return;
-        }
-
-        alert("✅ Shipment created in Shiprocket (Test Mode)");
-      } catch (err) {
-        alert("❌ Shiprocket error");
-      }
-    }}
-    className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs uppercase tracking-wide transition flex items-center justify-center gap-2 shadow-lg"
-  >
-    🚚 Create Shipment (Shiprocket)
-  </button>
-)}
+                                        {viewingOrder.status === 'Processing' && (
+                                            <button
+                                                onClick={async () => {
+                                                    try {
+                                                        const res = await fetch("/api/shiprocket/create-shipment", {
+                                                            method: "POST",
+                                                            headers: { "Content-Type": "application/json" },
+                                                            body: JSON.stringify(viewingOrder)
+                                                        });
+                                                        const data = await res.json();
+                                                        if (!data.success) {
+                                                            alert("❌ Shiprocket shipment failed");
+                                                            return;
+                                                        }
+                                                        alert("✅ Shipment created in Shiprocket (Test Mode)");
+                                                    } catch (err) {
+                                                        alert("❌ Shiprocket error");
+                                                    }
+                                                }}
+                                                className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs uppercase tracking-wide transition flex items-center justify-center gap-2 shadow-lg"
+                                            >
+                                                🚚 Create Shipment (Shiprocket)
+                                            </button>
+                                        )}
 
                                         {/* Status Logic */}
-                                        {/* PENDING -> PROCESSING */}
                                         {viewingOrder.status === 'Pending' && (
                                             <>
                                                 <button onClick={() => handleStatusUpdate(viewingOrder.id, 'Processing')} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-xs uppercase tracking-wide transition flex items-center justify-center gap-2 shadow-lg shadow-blue-900/20">
@@ -1151,28 +1178,24 @@ function OrderManager({ orders, updateOrderStatus, settings }: any) {
                                                 </button>
                                             </>
                                         )}
-
-                                        {/* PROCESSING -> SHIPPED */}
                                         {viewingOrder.status === 'Processing' && (
                                             <button onClick={() => handleStatusUpdate(viewingOrder.id, 'Shipped')} className="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-xs uppercase tracking-wide transition flex items-center justify-center gap-2 shadow-lg shadow-amber-900/20">
                                                 <Truck className="w-4 h-4" /> Mark as Shipped
                                             </button>
                                         )}
 
-                                        {/* ✅ SHIPPED -> OUT FOR DELIVERY (Ye Naya Hai) */}
                                         {viewingOrder.status === 'Shipped' && (
                                             <button onClick={() => handleStatusUpdate(viewingOrder.id, 'Out for Delivery')} className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold text-xs uppercase tracking-wide transition flex items-center justify-center gap-2 shadow-lg shadow-purple-900/20">
                                                 <Bike className="w-4 h-4" /> Mark Out for Delivery
                                             </button>
                                         )}
 
-                                        {/* ✅ OUT FOR DELIVERY -> DELIVERED (Ye bhi Update Hua) */}
                                         {viewingOrder.status === 'Out for Delivery' && (
                                             <button onClick={() => handleStatusUpdate(viewingOrder.id, 'Delivered')} className="w-full py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold text-xs uppercase tracking-wide transition flex items-center justify-center gap-2 shadow-lg shadow-green-900/20">
                                                 <Check className="w-4 h-4" /> Complete Delivery
                                             </button>
                                         )}
-                                        {/* Return Logic */}
+
                                         {viewingOrder.status === 'Return Requested' && (
                                             <div className="bg-orange-500/10 border border-orange-500/30 p-4 rounded-xl">
                                                 <p className="text-orange-400 text-xs font-bold mb-3 flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> Return Request</p>
@@ -1207,7 +1230,14 @@ function ProductManager({ products, addProduct, updateProduct, deleteProduct }: 
     const [filterCategory, setFilterCategory] = useState('All');
 
     // Form State
-    const [formData, setFormData] = useState<AdminProductForm>({ images: [], galleryImages: [], tags: [], stock: 10 });
+    // ✅ colors: [] add kar diya gaya hai
+    const [formData, setFormData] = useState<AdminProductForm>({
+        images: [],
+        galleryImages: [],
+        tags: [],
+        stock: 10,
+        colors: []
+    });
 
     // Refs
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1284,6 +1314,7 @@ function ProductManager({ products, addProduct, updateProduct, deleteProduct }: 
             hoverImage: formData.hoverImage || formData.image,
             images: allImages.length > 0 ? allImages : [formData.image || ''],
             stock: Number(formData.stock),
+            colors: formData.colors?.map(c => c.trim()).filter(Boolean) || [],
             tags: formData.tags || [],
             // 👇 YE 3 LINES NAYI HAIN
             material: formData.material || 'Premium Quality Material',
@@ -1459,7 +1490,51 @@ function ProductManager({ products, addProduct, updateProduct, deleteProduct }: 
                                     />
                                 </div>
                                 {/* 👆 Naye Fields Yahan Khatam */}
-                                <div className="space-y-2"><label className="text-[10px] text-white/40 uppercase font-bold">Tags</label><div className="flex flex-wrap gap-2">{availableTags.map(tag => (<button key={tag} onClick={() => { const tags = formData.tags || []; setFormData({ ...formData, tags: tags.includes(tag) ? tags.filter(t => t !== tag) : [...tags, tag] }) }} className={`text-[10px] px-3 py-1.5 rounded-full border transition-all uppercase font-bold ${formData.tags?.includes(tag) ? 'bg-amber-600 border-amber-600 text-white' : 'border-white/20 text-white/40'}`}>{tag}</button>))}</div></div>
+                                {/* ✅ APNA NAYA CODE YAHAN PASTE KAREIN 👇 */}
+                                <div className="grid grid-cols-2 gap-4 mt-4 p-4 bg-white/5 rounded-xl border border-white/10">
+                                    {/* ... Aapka Stock, Tags, Colors wala code ... */}
+                                </div>
+                                {/* 👆 AAPKA CODE YAHAN KHATAM */}
+                                {/* --- NAYA CODE: TAGS & COLORS INPUT --- */}
+                                <div className="bg-white/5 p-4 rounded-xl border border-white/10 mt-4 space-y-4">
+
+                                    {/* 1. TAGS INPUT (Buttons ki jagah ab Type karein) */}
+                                    <div>
+                                        <label className="text-[10px] text-white/40 uppercase font-bold block mb-2">Tags (comma separated)</label>
+                                        <input
+                                            type="text"
+                                            placeholder="New, Sale, Bestseller"
+                                            value={formData.tags?.join(', ') || ''}
+                                            onChange={(e) => setFormData({ ...formData, tags: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
+                                            className="w-full p-3 bg-black/20 border border-white/10 rounded-lg text-white text-sm outline-none focus:border-amber-500/50"
+                                        />
+                                    </div>
+
+                                    {/* 2. COLORS INPUT (Hex Codes) */}
+                                    {/* COLORS INPUT (UPDATED FIX) */}
+                                    <div>
+                                        <label className="text-[10px] text-white/40 uppercase font-bold block mb-2">Colors (Hex Codes)</label>
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="text"
+                                                placeholder="#FF0000,#000000"
+                                                // ✅ CHANGE 1: Comma ke baad space mat do
+                                                value={formData.colors?.join(',') || ''}
+                                                // ✅ CHANGE 2: Type karte waqt filter mat karo (Sidha split karo)
+                                                onChange={(e) => setFormData({ ...formData, colors: e.target.value.split(',') })}
+                                                className="flex-1 p-3 bg-black/20 border border-white/10 rounded-lg text-white text-sm outline-none focus:border-amber-500/50 font-mono"
+                                            />
+                                            {/* Color Preview */}
+                                            <div className="flex gap-1 items-center bg-black/40 p-2 rounded-lg border border-white/10 min-w-[60px] h-[46px]">
+                                                {formData.colors?.map((c: string, i: number) => (
+                                                    <div key={i} className="w-5 h-5 rounded-full border border-white/20 shadow-sm" style={{ backgroundColor: c.trim() }} title={c}></div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <p className="text-[9px] text-white/30 mt-1">Example: #FF0000,#000000 (Comma se alag karein)</p>
+                                    </div>
+
+                                </div>
                                 <div className="pt-4"><button disabled={uploading} onClick={handleSave} className="w-full bg-amber-600 text-white py-4 rounded-xl uppercase tracking-widest text-xs font-bold hover:bg-amber-700 transition flex items-center justify-center gap-2">{uploading ? 'Uploading Images...' : <><Save className="w-4 h-4" /> Save Product</>}</button></div>
                             </div>
 
@@ -1494,14 +1569,14 @@ function ConfigManager({ showToast, updateSystemConfig }: any) {
             maintenanceMode: false,
             globalAlert: 'Welcome to ZERIMI - Premium Jewelry'
         },
-        
+
         invoice: {
-        companyName: 'ZERIMI JEWELS',
-        address: '',
-        gstin: '',
-        terms: 'Goods once sold cannot be returned after 7 days.',
-        logoUrl: '' 
-    }
+            companyName: 'ZERIMI JEWELS',
+            address: '',
+            gstin: '',
+            terms: 'Goods once sold cannot be returned after 7 days.',
+            logoUrl: ''
+        }
     });
 
     const [loading, setLoading] = useState(false);
@@ -1553,12 +1628,12 @@ function ConfigManager({ showToast, updateSystemConfig }: any) {
         setShowSecret(prev => ({ ...prev, [field]: !prev[field] }));
     };
 
-  const handleSave = async () => {
+    const handleSave = async () => {
         // --- 1. VALIDATION PART (Suraksha) ---
         // Agar Razorpay ON hai par Key ID khali hai to roko
         if (config.razorpay.enabled && !config.razorpay.keyId) {
             showToast("⚠️ Razorpay Key ID is required!", "error");
-            return; 
+            return;
         }
 
         // Agar Live Mode ON hai to warning do
@@ -1622,12 +1697,12 @@ function ConfigManager({ showToast, updateSystemConfig }: any) {
                         {config.razorpay.enabled && (
                             <div className="space-y-4 animate-fade-in-up relative z-10">
                                 <div><label className="text-[10px] text-white/40 uppercase font-bold mb-1 block">Key ID</label><input value={config.razorpay.keyId} onChange={(e) => handleChange('razorpay', 'keyId', e.target.value)} placeholder="rzp_live_..." className="w-full p-4 bg-black/40 border border-white/10 rounded-xl text-white text-sm outline-none focus:border-blue-500/50 transition font-mono" /></div>
-                               <div className="relative">
-  <label className="text-[10px] text-white/40 uppercase font-bold mb-1 block">Key ID</label>
-  <input
-    type="text"
-    value={config.razorpay.keyId}
- onChange={(e) => handleChange('razorpay', 'keySecret', e.target.value)} placeholder="••••••••••••••••" className="w-full p-4 bg-black/40 border border-white/10 rounded-xl text-white text-sm outline-none focus:border-blue-500/50 transition font-mono" /><button onClick={() => toggleSecret('rzp')} className="absolute right-4 top-9 text-white/30 hover:text-white"><Eye className="w-4 h-4" /></button></div>
+                                <div className="relative">
+                                    <label className="text-[10px] text-white/40 uppercase font-bold mb-1 block">Key ID</label>
+                                    <input
+                                        type="text"
+                                        value={config.razorpay.keyId}
+                                        onChange={(e) => handleChange('razorpay', 'keySecret', e.target.value)} placeholder="••••••••••••••••" className="w-full p-4 bg-black/40 border border-white/10 rounded-xl text-white text-sm outline-none focus:border-blue-500/50 transition font-mono" /><button onClick={() => toggleSecret('rzp')} className="absolute right-4 top-9 text-white/30 hover:text-white"><Eye className="w-4 h-4" /></button></div>
                                 <button onClick={() => testConnection('Razorpay')} disabled={testingConnection === 'Razorpay'} className="w-full py-3 mt-2 border border-blue-500/30 text-blue-400 text-xs font-bold uppercase rounded-xl hover:bg-blue-500/10 transition flex items-center justify-center gap-2">{testingConnection === 'Razorpay' ? <Activity className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}{testingConnection === 'Razorpay' ? 'Verifying...' : 'Test Connection'}</button>
                             </div>
                         )}
@@ -1745,53 +1820,53 @@ function ConfigManager({ showToast, updateSystemConfig }: any) {
                     <div className="bg-[#0f2925] p-8 rounded-3xl border border-white/5 relative overflow-hidden">
                         <h3 className="text-white font-serif text-lg mb-6 flex items-center gap-2"><Settings className="w-5 h-5 text-purple-400" /> Site Controls</h3>
                         {/* 7. INVOICE SETTINGS (Admin Control) */}
-<div className="bg-[#0f2925] p-8 rounded-3xl border border-white/5 relative overflow-hidden mt-8">
-    <h3 className="text-white font-serif text-lg mb-6 flex items-center gap-2">
-        <Printer className="w-5 h-5 text-amber-400" /> Invoice Configuration
-    </h3>
-    <div className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-                <label className="text-[10px] text-white/40 uppercase font-bold mb-1 block">Company Name</label>
-                <input 
-                    value={config.invoice?.companyName || ''} 
-                    onChange={(e) => handleChange('invoice', 'companyName', e.target.value)} 
-                    placeholder="ZERIMI JEWELS" 
-                    className="w-full p-3 bg-black/40 border border-white/10 rounded-xl text-white text-sm outline-none focus:border-amber-500/50" 
-                />
-            </div>
-            <div>
-                <label className="text-[10px] text-white/40 uppercase font-bold mb-1 block">GSTIN (Optional)</label>
-                <input 
-                    value={config.invoice?.gstin || ''} 
-                    onChange={(e) => handleChange('invoice', 'gstin', e.target.value)} 
-                    placeholder="27AABCU..." 
-                    className="w-full p-3 bg-black/40 border border-white/10 rounded-xl text-white text-sm outline-none focus:border-amber-500/50 font-mono" 
-                />
-            </div>
-        </div>
-        
-        <div>
-            <label className="text-[10px] text-white/40 uppercase font-bold mb-1 block">Full Address</label>
-            <textarea 
-                value={config.invoice?.address || ''} 
-                onChange={(e) => handleChange('invoice', 'address', e.target.value)} 
-                placeholder="Shop No. 1, Luxury Lane, Mumbai..." 
-                className="w-full p-3 bg-black/40 border border-white/10 rounded-xl text-white text-sm outline-none focus:border-amber-500/50 h-20 resize-none" 
-            />
-        </div>
+                        <div className="bg-[#0f2925] p-8 rounded-3xl border border-white/5 relative overflow-hidden mt-8">
+                            <h3 className="text-white font-serif text-lg mb-6 flex items-center gap-2">
+                                <Printer className="w-5 h-5 text-amber-400" /> Invoice Configuration
+                            </h3>
+                            <div className="space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-[10px] text-white/40 uppercase font-bold mb-1 block">Company Name</label>
+                                        <input
+                                            value={config.invoice?.companyName || ''}
+                                            onChange={(e) => handleChange('invoice', 'companyName', e.target.value)}
+                                            placeholder="ZERIMI JEWELS"
+                                            className="w-full p-3 bg-black/40 border border-white/10 rounded-xl text-white text-sm outline-none focus:border-amber-500/50"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] text-white/40 uppercase font-bold mb-1 block">GSTIN (Optional)</label>
+                                        <input
+                                            value={config.invoice?.gstin || ''}
+                                            onChange={(e) => handleChange('invoice', 'gstin', e.target.value)}
+                                            placeholder="27AABCU..."
+                                            className="w-full p-3 bg-black/40 border border-white/10 rounded-xl text-white text-sm outline-none focus:border-amber-500/50 font-mono"
+                                        />
+                                    </div>
+                                </div>
 
-        <div>
-            <label className="text-[10px] text-white/40 uppercase font-bold mb-1 block">Terms & Conditions</label>
-            <textarea 
-                value={config.invoice?.terms || ''} 
-                onChange={(e) => handleChange('invoice', 'terms', e.target.value)} 
-                placeholder="No returns without video proof..." 
-                className="w-full p-3 bg-black/40 border border-white/10 rounded-xl text-white text-sm outline-none focus:border-amber-500/50 h-20 resize-none" 
-            />
-        </div>
-    </div>
-</div>
+                                <div>
+                                    <label className="text-[10px] text-white/40 uppercase font-bold mb-1 block">Full Address</label>
+                                    <textarea
+                                        value={config.invoice?.address || ''}
+                                        onChange={(e) => handleChange('invoice', 'address', e.target.value)}
+                                        placeholder="Shop No. 1, Luxury Lane, Mumbai..."
+                                        className="w-full p-3 bg-black/40 border border-white/10 rounded-xl text-white text-sm outline-none focus:border-amber-500/50 h-20 resize-none"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="text-[10px] text-white/40 uppercase font-bold mb-1 block">Terms & Conditions</label>
+                                    <textarea
+                                        value={config.invoice?.terms || ''}
+                                        onChange={(e) => handleChange('invoice', 'terms', e.target.value)}
+                                        placeholder="No returns without video proof..."
+                                        className="w-full p-3 bg-black/40 border border-white/10 rounded-xl text-white text-sm outline-none focus:border-amber-500/50 h-20 resize-none"
+                                    />
+                                </div>
+                            </div>
+                        </div>
                         <div className="space-y-6">
                             <div><label className="text-[10px] text-white/40 uppercase font-bold mb-1 block">Global Announcement Bar</label><div className="relative"><Megaphone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" /><input value={config.store.globalAlert} onChange={(e) => handleChange('store', 'globalAlert', e.target.value)} placeholder="e.g. FLAT 20% OFF on all Diamonds!" className="w-full p-3 pl-10 bg-black/40 border border-white/10 rounded-xl text-white text-sm outline-none focus:border-purple-500/50" /></div></div>
                             <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl flex items-center justify-between">
@@ -1802,8 +1877,8 @@ function ConfigManager({ showToast, updateSystemConfig }: any) {
                     </div>
                 </div>
             </div>
-             
-  
+
+
 
 
             {/* SAVE BUTTON */}
@@ -2597,7 +2672,7 @@ function UserManager({ allUsers, updateUserRole, deleteUser, showToast, currentU
     // HANDLERS
     const handleRoleChange = async (targetEmail: string, newRole: string) => {
         if (currentUser?.email === targetEmail) return showToast("You cannot change your own role!", "error");
-        
+
         setProcessingUser(targetEmail);
         try {
             await updateUserRole(targetEmail, newRole);
