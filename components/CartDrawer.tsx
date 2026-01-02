@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useStore } from '@/lib/store';
 import {
     X, Plus, Minus, Trash2, ShoppingBag, ArrowRight, Truck,
-    Gift, Clock, CreditCard, ShieldCheck, FileText
+    Gift, Clock, CreditCard, ShieldCheck, FileText, Sparkles
 } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
@@ -210,24 +210,31 @@ export default function CartDrawer() {
                     {/* --- UPSELL: GIFT WRAP & NOTE --- */}
                     {cart.length > 0 && (
                         <div className="space-y-4 pt-2">
-                            {/* Gift Wrap Toggle */}
-                            <div
-                                onClick={() => setGiftWrap(!giftWrap)}
-                                className={`flex items-center justify-between p-4 rounded-xl border cursor-pointer transition-all duration-300 ${giftWrap ? 'bg-[#0a1f1c]/5 border-[#0a1f1c]/20' : 'bg-white border-stone-100 hover:border-stone-300'}`}
-                            >
-                                <div className="flex items-center gap-3">
-                                    <div className={`p-2 rounded-full ${giftWrap ? 'bg-[#0a1f1c] text-white' : 'bg-stone-100 text-stone-400'}`}>
-                                        <Gift className="w-4 h-4" />
-                                    </div>
-                                    <div>
-                                        <p className="text-xs font-bold text-[#0a1f1c]">Add Gift Wrapping?</p>
-                                        <p className="text-[10px] text-stone-500">Premium box & ribbon (+₹50)</p>
-                                    </div>
-                                </div>
-                                <div className={`w-5 h-5 rounded border flex items-center justify-center transition ${giftWrap ? 'bg-[#0a1f1c] border-[#0a1f1c]' : 'border-stone-300'}`}>
-                                    {giftWrap && <ArrowRight className="w-3 h-3 text-white" />}
-                                </div>
-                            </div>
+                            {/* ✨ SECRET GIFT MODE TEASER (Marketing Banner) */}
+<div className="mb-4 p-4 rounded-xl bg-gradient-to-r from-amber-50 to-[#fff8f0] border border-amber-200 relative overflow-hidden group">
+    
+    {/* Shine Animation */}
+    <div className="absolute top-0 right-0 w-20 h-20 bg-amber-500/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
+
+    <div className="flex items-start gap-3 relative z-10">
+        <div className="p-2 bg-white rounded-lg shadow-sm border border-amber-100 text-amber-600">
+            <Gift className="w-5 h-5" />
+        </div>
+        
+        <div className="flex-1">
+            <h4 className="text-sm font-serif font-bold text-amber-900 flex items-center gap-2">
+                Sending a Surprise? 
+                <Sparkles className="w-3 h-3 text-amber-500 animate-pulse" />
+            </h4>
+            <p className="text-[11px] text-amber-800/70 mt-1 leading-relaxed">
+                Unlock <strong>Secret Gift Mode™</strong> at Checkout. We’ll hide the price tag & send it anonymously.
+            </p>
+            <div className="mt-2 inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-white/50 px-2 py-1 rounded border border-amber-200/50">
+                <span>Select option at next step</span>
+            </div>
+        </div>
+    </div>
+</div>
 
                             {/* Order Note */}
                             <div className="relative">

@@ -68,7 +68,10 @@ export type Coupon = {
     expiryDate?: string;
     allowedEmail?: string; // ✅ YE LINE ADD KAREIN (Lock feature ke liye)
 };
-export type Order = { id: string; customerName: string; customerEmail?: string; address: Address; total: number; subtotal: number; tax: number; discount: number; shipping: number; status: string; date: string; items: any[]; paymentMethod: string; invoiceNo: string; };
+export type Order = { id: string; customerName: string; customerEmail?: string; address: Address; total: number; subtotal: number; tax: number; discount: number; shipping: number; status: string; date: string; items: any[]; paymentMethod: string; invoiceNo: string; // ✅ YE 3 LINES ADD KAREIN:
+    isGift?: boolean;
+    giftMessage?: string;
+    giftWrapPrice?: number; };
 export type Warranty = { id: string; userEmail: string; productName: string; expiryDate: string; certificateId: string; image: string; purchaseDate: string; };
 export type SystemSettings = {
     maintenanceMode: boolean;
@@ -78,7 +81,7 @@ export type SystemSettings = {
     shippingThreshold: number;
     globalAlert: string;
     shippingCost?: number;
-
+giftModeCost?: number;
     // ✅ UPDATED PAYMENT STRUCTURE
     payment?: {
         // Instamojo Keys
@@ -114,6 +117,11 @@ export type SiteText = {
     promoText: string;
     promoBtn: string;
     blogTitle: string;
+    secretGiftBadge: string;
+    secretGiftTitle: string;
+    secretGiftSub: string;
+    secretGiftQuote: string;
+    secretGiftImage?: string;
 };
 
 // Default Data
@@ -129,7 +137,12 @@ const DEFAULT_TEXT: SiteText = {
     promoTitle: "Special Offer",
     promoText: "Limited time deals on our finest jewelry.",
     promoBtn: "Discover More",
-    blogTitle: "From Our Journal"
+    blogTitle: "From Our Journal",
+    secretGiftBadge: "New Feature",
+    secretGiftTitle: "The Art of Secret Gifting",
+    secretGiftSub: "Surprise your loved ones with luxury...",
+    secretGiftQuote: "I wanted to see you smile...",
+    secretGiftImage: "" // ✅ NEW: Default Empty
 };
 
 // ==========================================
@@ -195,6 +208,8 @@ type Store = {
     deleteProduct: (id: string) => void;
 
     updateOrderStatus: (id: string, status: string) => void;
+    // ✅ ADD THIS LINE HERE:
+    deleteOrder: (id: string) => Promise<void>;
     updateUserRole: (email: string, role: string) => Promise<void>;
     deleteUser: (id: string) => Promise<void>;
 
@@ -412,7 +427,7 @@ export const useStore = create<Store>()(
           // --- ORDERS ---
             // ✅ UPDATED: Ab ye Checkout Page se aayi hui exact values save karega
           // ✅ FIXED: placeOrder Logic (Saves Size & Color correctly)
-            placeOrder: async (details) => {
+           placeOrder: async (details) => {
                 const state = get();
 
                 if (!state.currentUser && !details.email) {
@@ -420,7 +435,9 @@ export const useStore = create<Store>()(
                     throw new Error("EMAIL_REQUIRED");
                 }
 
-                const { name, email, address, total, subtotal, tax, shipping, discount, items, paymentMethod } = details;
+                // ✅ NEW: isGift, giftMessage, giftWrapPrice extract karein
+                const { name, email, address, total, subtotal, tax, shipping, discount, items, paymentMethod, isGift, giftMessage, giftWrapPrice } = details;
+                
                 const orderId = `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
 
                 const newOrder: Order = {
@@ -433,17 +450,22 @@ export const useStore = create<Store>()(
                     tax: tax || 0, 
                     discount: discount || 0,
                     shipping: shipping || 0,
+                    
+                    // ✅ NEW: Gift Details Save Karein
+                    isGift: isGift || false,
+                    giftMessage: giftMessage || '',
+                    giftWrapPrice: giftWrapPrice || 0,
+
                     status: 'Pending',
                     date: new Date().toLocaleDateString('en-IN'),
                     
-                    // ✅ CRITICAL FIX: Mapping Size AND Color
                     items: items || state.cart.map(item => ({
                         name: item.product.name, 
                         qty: item.qty, 
                         price: item.product.price,
                         image: item.product.image, 
                         selectedSize: item.selectedSize || 'N/A',
-                        selectedColor: item.selectedColor || null // ✅ Saving Color to DB
+                        selectedColor: item.selectedColor || null 
                     })),
                     
                     paymentMethod: paymentMethod || 'COD',
@@ -473,7 +495,22 @@ export const useStore = create<Store>()(
             deleteProduct: async (id) => { await deleteDoc(doc(db, "products", id)); },
 
             updateOrderStatus: async (id, status) => { await updateDoc(doc(db, "orders", id), { status }); },
-
+// ✅ ADD THIS FUNCTION HERE:
+            deleteOrder: async (id) => {
+                if (!id) return;
+                try {
+                    // 1. Delete from Firebase
+                    await deleteDoc(doc(db, "orders", id));
+                    
+                    // 2. Update Local State immediately (so it disappears from UI)
+                    set((state) => ({ 
+                        orders: state.orders.filter((o) => o.id !== id) 
+                    }));
+                } catch (e) { 
+                    console.error("Delete Order Failed:", e); 
+                    throw e; 
+                }
+            },
             updateUserRole: async (email, role) => {
                 const state = get();
                 const user = state.allUsers.find((u) => u.email === email);
@@ -511,6 +548,8 @@ export const useStore = create<Store>()(
                             taxRate: Number(data.store?.taxRate) || 3,
                             shippingCost: Number(data.store?.shippingCost) || 150,
                             shippingThreshold: Number(data.store?.freeShippingThreshold) || 5000,
+                            // ✅ YE LINE ADD KAREIN:
+                            giftModeCost: Number(data.store?.giftModeCost) || 50,
                             maintenanceMode: data.store?.maintenanceMode || false,
                             globalAlert: data.store?.globalAlert || '',
 
@@ -680,6 +719,8 @@ const initListeners = () => {
                             taxRate: Number(data.store?.taxRate) || 3,
                             shippingThreshold: Number(data.store?.freeShippingThreshold) || 5000,
                             shippingCost: Number(data.store?.shippingCost) || 150,
+                            // ✅ YE LINE ADD KAREIN:
+                            giftModeCost: Number(data.store?.giftModeCost) || 50,
                             globalAlert: data.store?.globalAlert || '',
 
                             // Payment Data Load

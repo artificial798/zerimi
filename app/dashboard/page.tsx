@@ -58,61 +58,32 @@ const numberToWords = (price: number) => {
    FINAL INVOICE GENERATOR
    (CHECKOUT TRUTH BASED)
 ---------------------------------------- */
+/* ----------------------------------------
+   ✅ UPDATED CUSTOMER INVOICE (With Secret Gift & Tax Breakup)
+---------------------------------------- */
 export const downloadInvoice = (order: any, settings: any) => {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.width;
 
-  /* ========================================
-     1. CORE DATA LOGIC (NO GUESSING)
-  ======================================== */
+  // 1. EXTRACT DATA (Consistent with Admin Logic)
+  const inclusiveSubtotal = Number(order.subtotal || 0);
+  const taxAmount = Number(order.tax || 0);
+  // Base Amount = Subtotal minus Tax
+  const baseAmount = inclusiveSubtotal - taxAmount; 
 
-  // A. Items MRP Total (GST INCLUDED)
-  const itemsMrpTotal = order.items.reduce(
-    (sum: number, item: any) =>
-      sum + Number(item.price) * Number(item.qty),
-    0
-  );
-
-  // B. Final Paid Amount (SOURCE OF TRUTH)
-  const paidAmount = Number(order.total);
-
-  // C. Explicit Checkout Values
-  const shippingCost = Number(
-    order.shipping ?? order.shippingCost ?? 0
-  );
-  const discountAmount = Number(
-    order.discount ?? order.couponDiscount ?? 0
-  );
-
-  // Safety check (logs only)
-  const calcTotal =
-    itemsMrpTotal + shippingCost - discountAmount;
-
-  if (Math.abs(calcTotal - paidAmount) > 1) {
-    console.warn("Invoice mismatch detected", {
-      itemsMrpTotal,
-      shippingCost,
-      discountAmount,
-      paidAmount,
-    });
-  }
+  const shipping = Number(order.shipping || 0);
+  const discount = Number(order.discount || 0);
+  
+  // ✅ NEW: Gift Price Extract
+  const giftWrapPrice = Number(order.giftWrapPrice || 0);
+  
+  const grandTotal = Number(order.total || 0);
 
   /* ========================================
-     2. TAX LOGIC (INFORMATIONAL ONLY)
+     2. HEADER
   ======================================== */
-
-  const taxRate = 3; // Jewellery GST
-  const totalBasePrice =
-    itemsMrpTotal / (1 + taxRate / 100);
-  const totalTaxAmount =
-    itemsMrpTotal - totalBasePrice;
-
-  /* ========================================
-     3. HEADER
-  ======================================== */
-
   doc.setFontSize(24);
-  doc.setTextColor(212, 175, 55);
+  doc.setTextColor(212, 175, 55); // Gold
   doc.setFont("helvetica", "bold");
   doc.text("ZERIMI", 14, 20);
 
@@ -121,199 +92,159 @@ export const downloadInvoice = (order: any, settings: any) => {
   doc.setFont("helvetica", "normal");
   doc.text("Luxury Jewelry & Accessories", 14, 26);
   doc.text("Mumbai, Maharashtra, 400001", 14, 31);
-  doc.text(
-    `GSTIN: ${settings?.gstNo || "27ABCDE1234F1Z5"}`,
-    14,
-    36
-  );
+  doc.text(`GSTIN: ${settings?.gstNo || "27ABCDE1234F1Z5"}`, 14, 36);
   doc.text("Email: support@zerimi.com", 14, 41);
+
   doc.setFontSize(16);
   doc.setTextColor(0);
-  doc.text("TAX INVOICE", pageWidth - 14, 20, {
-    align: "right",
-  });
+  doc.text("TAX INVOICE", pageWidth - 14, 20, { align: "right" });
 
   doc.setFontSize(10);
-  doc.text(
-    `Invoice #: ${order.invoiceNo || "INV-" + order.id.slice(0, 6)}`,
-    pageWidth - 14,
-    30,
-    { align: "right" }
-  );
-  doc.text(
-    `Date: ${new Date(order.date).toLocaleDateString("en-IN")}`,
-    pageWidth - 14,
-    35,
-    { align: "right" }
-  );
-  doc.text(
-    `Order ID: #${order.id}`,
-    pageWidth - 14,
-    40,
-    { align: "right" }
-  );
+  doc.text(`Invoice #: ${order.invoiceNo || "INV-" + order.id.slice(0, 6)}`, pageWidth - 14, 30, { align: "right" });
+  doc.text(`Date: ${new Date(order.date).toLocaleDateString("en-IN")}`, pageWidth - 14, 35, { align: "right" });
+  doc.text(`Order ID: #${order.id}`, pageWidth - 14, 40, { align: "right" });
 
   doc.line(14, 48, pageWidth - 14, 48);
 
   /* ========================================
-     4. BILL TO
+     3. BILL TO
   ======================================== */
-
   const billingY = 55;
   doc.setFont("helvetica", "bold");
   doc.text("Bill To:", 14, billingY);
 
   doc.setFont("helvetica", "normal");
-  const custName =
-    order.name || order.customerName || "Customer";
+  const custName = order.name || order.customerName || "Customer";
   doc.text(custName, 14, billingY + 5);
 
-  const address =
-    typeof order.address === "string"
-      ? order.address
-      : `${order.address?.street || ""}, ${order.address?.city || ""} - ${
-          order.address?.pincode || ""
-        }`;
+  let addressStr = typeof order.address === "string" 
+      ? order.address 
+      : `${order.address?.street || ""}, ${order.address?.city || ""} - ${order.address?.pincode || ""}`;
 
-  doc.text(
-    doc.splitTextToSize(address, 80),
-    14,
-    billingY + 10
-  );
+  // Phone number add karein
+  if (order.address?.phone) {
+      addressStr += `\nPhone: ${order.address.phone}`;
+  }
+
+  doc.text(doc.splitTextToSize(addressStr, 80), 14, billingY + 10);
 
   /* ========================================
-     5. ITEMS TABLE
+     4. ITEMS TABLE
   ======================================== */
-
-  const tableRows = order.items.map(
-    (item: any, index: number) => {
-      const mrp = Number(item.price);
+  const tableRows = order.items.map((item: any, index: number) => {
+      const unitPrice = Number(item.price);
       const qty = Number(item.qty);
-      const totalMrp = mrp * qty;
-
-      const basePrice = mrp / (1 + taxRate / 100);
-      const taxAmt = totalMrp - basePrice * qty;
-
+      const totalVal = unitPrice * qty;
+      
       return [
         index + 1,
         item.name,
         qty,
-        `Rs.${basePrice.toFixed(2)}`,
-        `Rs.${taxAmt.toFixed(2)}`,
-        `Rs.${totalMrp.toFixed(2)}`,
+        `Rs.${unitPrice.toLocaleString()}`,
+        `Rs.${totalVal.toLocaleString()}`,
       ];
-    }
-  );
+  });
 
+  // @ts-ignore
   autoTable(doc, {
     startY: billingY + 35,
-    head: [
-      ["Sn", "Item Description", "Qty", "Taxable Val", "GST Amt", "Total (MRP)"],
-    ],
+    head: [["Sn", "Item Description", "Qty", "Unit Price", "Total Value"]],
     body: tableRows,
     theme: "grid",
-    headStyles: {
-      fillColor: [15, 41, 37],
-      textColor: 255,
-      fontSize: 8,
-    },
-    bodyStyles: { fontSize: 8 },
+    headStyles: { fillColor: [15, 41, 37], textColor: 255, fontSize: 9 },
+    bodyStyles: { fontSize: 9 },
     columnStyles: {
       3: { halign: "right" },
       4: { halign: "right" },
-      5: { halign: "right", fontStyle: "bold" },
     },
   });
 
   /* ========================================
-     6. TOTALS (CHECKOUT MATCHED)
+     5. TOTALS (Professional Calculation)
   ======================================== */
-
-  const finalY = (doc as any).lastAutoTable.finalY + 10;
+  // @ts-ignore
+  let currentY = doc.lastAutoTable.finalY + 10;
   const rightX = pageWidth - 14;
+  const labelX = rightX - 75;
 
   doc.setFontSize(10);
-  doc.text("Subtotal (MRP):", rightX - 60, finalY);
-  doc.text(`Rs.${itemsMrpTotal.toLocaleString()}`, rightX, finalY, {
-    align: "right",
-  });
+  doc.setTextColor(80); // Grey text for breakdown
 
-  doc.setFontSize(8);
-  doc.setTextColor(100);
-  doc.text(
-    `(Includes GST @3%: Rs.${totalTaxAmount.toFixed(2)})`,
-    rightX,
-    finalY + 5,
-    { align: "right" }
-  );
+  // A. Taxable Value (Base)
+  doc.text("Taxable Value (Excl. Tax):", labelX, currentY);
+  doc.text(`Rs.${baseAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, rightX, currentY, { align: "right" });
+  currentY += 6;
 
-  doc.setFontSize(10);
-  doc.setTextColor(0);
-  doc.text("Shipping Charges:", rightX - 60, finalY + 12);
-  doc.text(
-    shippingCost === 0 ? "Free" : `Rs.${shippingCost.toFixed(2)}`,
-    rightX,
-    finalY + 12,
-    { align: "right" }
-  );
+  // B. GST
+  doc.text(`Total GST (3%):`, labelX, currentY);
+  doc.text(`+ Rs.${taxAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, rightX, currentY, { align: "right" });
+  currentY += 2;
 
-  let currentY = finalY + 18;
+  // Divider
+  doc.setLineWidth(0.1);
+  doc.line(labelX, currentY + 2, rightX, currentY + 2);
+  currentY += 7;
 
-  if (discountAmount > 0) {
-    doc.setTextColor(22, 163, 74);
-    doc.text("Coupon Discount:", rightX - 60, currentY);
-    doc.text(
-      `- Rs.${discountAmount.toLocaleString()}`,
-      rightX,
-      currentY,
-      { align: "right" }
-    );
+  // C. Subtotal (Inclusive)
+  doc.setTextColor(0); // Black
+  doc.setFont("helvetica", "bold");
+  doc.text("Net Item Total:", labelX, currentY);
+  doc.text(`Rs.${inclusiveSubtotal.toLocaleString()}`, rightX, currentY, { align: "right" });
+  doc.setFont("helvetica", "normal");
+  currentY += 6;
+
+  // D. Shipping
+  doc.text("Shipping Charges:", labelX, currentY);
+  doc.text(shipping === 0 ? "Free" : `+ Rs.${shipping.toFixed(2)}`, rightX, currentY, { align: "right" });
+  currentY += 6;
+
+  // ✅ E. SECRET GIFT PACKAGING
+  if (giftWrapPrice > 0) {
+    doc.setTextColor(217, 119, 6); // Amber Color
+    doc.text("Secret Gift Packaging:", labelX, currentY);
+    doc.text(`+ Rs.${giftWrapPrice.toLocaleString()}`, rightX, currentY, { align: "right" });
+    doc.setTextColor(0); // Reset Color
     currentY += 6;
   }
 
-  doc.setTextColor(0);
-  doc.setFontSize(8);
-  doc.text("NET PAYABLE", rightX, currentY + 5, {
-    align: "right",
-  });
+  // F. Discount
+  if (discount > 0) {
+    doc.setTextColor(22, 163, 74); // Green
+    doc.text("Coupon Discount:", labelX, currentY);
+    doc.text(`- Rs.${discount.toLocaleString()}`, rightX, currentY, { align: "right" });
+    doc.setTextColor(0); // Reset Color
+    currentY += 6;
+  }
 
-  doc.setFontSize(16);
+  // Final Divider
+  currentY += 2;
+  doc.setLineWidth(0.5);
+  doc.line(labelX, currentY, rightX, currentY);
+  currentY += 8;
+
+  // G. GRAND TOTAL
+  doc.setFontSize(14);
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(212, 140, 0);
-  doc.text(
-    `Rs.${paidAmount.toLocaleString()}`,
-    rightX,
-    currentY + 12,
-    { align: "right" }
-  );
-  doc.text("Grand Total", rightX - 60, currentY + 12);
+  doc.setTextColor(212, 140, 0); // Gold
+  doc.text("Grand Total:", labelX, currentY);
+  doc.text(`Rs.${grandTotal.toLocaleString()}`, rightX, currentY, { align: "right" });
 
   /* ========================================
-     7. FOOTER
+     6. FOOTER
   ======================================== */
-
   doc.setFontSize(9);
   doc.setTextColor(0);
   doc.setFont("helvetica", "normal");
-  doc.text(
-    `Amount in Words: ${numberToWords(paidAmount)}`,
-    14,
-    currentY + 12
-  );
+  doc.text(`Amount in Words: ${numberToWords(grandTotal)}`, 14, currentY);
 
-  doc.rect(14, currentY + 20, pageWidth - 28, 20);
+  doc.rect(14, currentY + 10, pageWidth - 28, 20);
   doc.setFontSize(8);
-  doc.text("Declaration:", 16, currentY + 25);
-  doc.text(
-    "We declare that this invoice shows the actual price of the goods described above.",
-    16,
-    currentY + 30
-  );
+  doc.text("Declaration:", 16, currentY + 15);
+  doc.text("We declare that this invoice shows the actual price of the goods described above.", 16, currentY + 20);
 
   doc.setFont("helvetica", "bold");
-  doc.text("For ZERIMI", pageWidth - 40, currentY + 35, {
-    align: "center",
-  });
+  doc.text("For ZERIMI", pageWidth - 40, currentY + 25, { align: "center" });
+
   doc.save(`Invoice_${order.id}.pdf`);
 };
 

@@ -4,7 +4,7 @@ import { useStore } from '@/lib/store';
 import { useRouter } from 'next/navigation';
 import {
     ShieldCheck, Truck, ArrowRight, MapPin,
-    Ticket, Check, AlertCircle, ShoppingBag, Lock, ChevronLeft, Loader2, X, Trash2
+    Ticket, Check, AlertCircle, ShoppingBag, Lock, ChevronLeft, Loader2, X, Trash2, Gift
 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -48,6 +48,9 @@ const calculateInclusiveGST = (amount: number, rate: number) => {
 export default function CheckoutPage() {
     const router = useRouter();
     const store = useStore() as any;
+    // ✅ YE 2 LINES ADD KAREIN:
+    const [isGift, setIsGift] = useState(false);
+    const [giftMessage, setGiftMessage] = useState('');
 
     const {
         cart,
@@ -151,7 +154,12 @@ export default function CheckoutPage() {
     const isFreeShipping = subtotal >= shippingThreshold;
     const shipping = isFreeShipping ? 0 : baseShipping;
 
-    const total = subtotal + shipping - discountAmount;
+   // 1. Gift Cost Nikalein (Settings se ya Default 50)
+const giftModeCost = Number(systemSettings?.giftModeCost) || 50; 
+const currentGiftCost = isGift ? giftModeCost : 0;
+
+// 2. Total mein Add Karein
+const total = subtotal + shipping - discountAmount + currentGiftCost;
 
     const showToast = (msg: string, type: 'success' | 'error') => {
         setToast({ msg, type });
@@ -241,6 +249,8 @@ export default function CheckoutPage() {
 
     const handlePlaceOrder = async () => {
         const finalEmail = formData.email?.trim().toLowerCase() || currentUser?.email?.trim().toLowerCase();
+        
+        // Validation
         if (!finalEmail || !formData.firstName || !formData.address || !formData.pincode || !formData.phone) {
             showToast("Please fill all delivery details.", 'error');
             setStep(1);
@@ -252,61 +262,75 @@ export default function CheckoutPage() {
         try {
             const state = useStore.getState();
             const settings = liveSettings || state.systemSettings || {};
-            const paymentConfig = settings.payment || {};
-            const finalAmount = total; 
             
+            // ✅ PRICE CALCULATIONS (Gift Cost Added)
+            const giftModeCost = Number(settings?.giftModeCost) || 50;
+            const currentGiftCost = isGift ? giftModeCost : 0;
+            
+            // Total Recalculate taaki server pe sahi amount jaye
+            const finalTotal = subtotal + shipping + currentGiftCost - discountAmount;
+
             if (paymentMethod === 'online') {
-                // Online Payment Logic Placeholder
-                if (paymentConfig?.instamojoEnabled) {
-                    // Instamojo
-                } else if (paymentConfig?.razorpay?.enabled) {
-                   // Razorpay
-                } else {
-                    throw new Error("Online Payment is currently unavailable. Please select COD.");
-                }
+                 // Online Logic (Future Scope)
+                 showToast("Online payment coming soon. Please select COD.", 'error');
+                 setLoading(false);
+                 return;
             } else if (paymentMethod === 'cod') {
                 console.log("Processing COD Order...");
                 const action = state.placeOrder;
+                
+                // Fake Delay for UX
                 await new Promise(resolve => setTimeout(resolve, 1500));
 
+                // ✅ FIXED ORDER DETAILS OBJECT
                 const orderDetails = {
                     name: `${formData.firstName} ${formData.lastName}`,
                     email: finalEmail,
+                    
+                    // 1. Address Object (Isme Gift info MAT dalna)
                     address: {
                         id: `addr_${Date.now()}`,
                         street: formData.address,
                         city: formData.city,
                         state: formData.state,
                         pincode: formData.pincode,
-                        phone: formData.phone
+                        phone: formData.phone,
                     },
+
+                    // 2. Main Order Flags (Ye Address se BAHAR hone chahiye)
+                    isGift: isGift, 
+                    giftMessage: giftMessage || "",
+                    giftWrapPrice: currentGiftCost, // ✅ Database mein price save hoga
+
+                    // 3. Payment & Status
                     status: 'Pending',
                     paymentMethod: 'COD',
                     date: new Date().toLocaleDateString('en-IN'),
                     
-                    total: finalAmount,
+                    // 4. Amounts
+                    total: finalTotal, 
                     subtotal: subtotal,
                     shipping: shipping,
                     discount: discountAmount,
                     tax: gstBreakdown.totalTax,
                     
-                    // ✅ FIXED: Mapping Size and Color correctly for Admin Panel
+                    // 5. Items (Size & Color Mapped)
                     items: cart.map((item: any) => ({
                         name: item.product.name,
                         qty: item.qty,
                         price: item.product.price,
                         image: item.product.image,
-                        // 👇 Ye do lines zaroori hain Admin page ke liye
                         selectedSize: item.selectedSize || null,
                         selectedColor: item.selectedColor || null
                     }))
                 };
 
+                // Action Call
                 await action(orderDetails);
                 
                 if (typeof clearCart === 'function') clearCart();
                 setLoading(false);
-                setStep(3);
+                setStep(3); // Success Screen
                 return;
             }
         } catch (error: any) {
@@ -395,27 +419,27 @@ export default function CheckoutPage() {
                     {step === 1 && (
                         <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="space-y-8">
                             <div className="bg-white p-8 rounded-2xl border border-stone-200/60 shadow-sm hover:shadow-md transition duration-300">
-                                <h3 className="font-bold text-sm uppercase tracking-widest mb-6 text-stone-400 flex items-center gap-2">
-                                    <span className="w-6 h-6 rounded-full bg-[#0a1f1c] text-white flex items-center justify-center text-[10px]">1</span>
-                                    Contact Info
-                                </h3>
+                               <h3 className="font-bold text-sm uppercase tracking-widest mb-6 text-stone-400 flex items-center gap-2">
+    <span className="w-6 h-6 rounded-full bg-[#0a1f1c] text-white flex items-center justify-center text-[10px]">1</span>
+    {isGift ? "Your Details (For Bill)" : "Contact Info"}
+</h3>
                                 <div className="space-y-4">
                                     <input
-                                        type="email"
-                                        placeholder="Email Address"
-                                        className="w-full p-4 bg-stone-50 border-none rounded-xl outline-none focus:ring-2 focus:ring-amber-500/20 transition placeholder:text-stone-400"
-                                        value={formData.email}
-                                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                    />
+    type="email"
+    placeholder={isGift ? "Enter YOUR Email (Bill will be sent here)" : "Email Address"} // ✅ Placeholder update
+    className="..."
+    value={formData.email}
+    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+/>
                                 </div>
                             </div>
 
                             <div className="bg-white p-8 rounded-2xl border border-stone-200/60 shadow-sm hover:shadow-md transition duration-300">
                                 <div className="flex justify-between items-center mb-6">
                                     <h3 className="font-bold text-sm uppercase tracking-widest text-stone-400 flex items-center gap-2">
-                                        <span className="w-6 h-6 rounded-full bg-[#0a1f1c] text-white flex items-center justify-center text-[10px]">2</span>
-                                        Shipping Address
-                                    </h3>
+    <span className="w-6 h-6 rounded-full bg-[#0a1f1c] text-white flex items-center justify-center text-[10px]">2</span>
+    {isGift ? "Recipient's Shipping Address" : "Shipping Address"} {/* ✅ Label Changed */}
+</h3>
                                     {currentUser && (
                                         <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-100 px-3 py-1 rounded-full font-bold uppercase tracking-wide">
                                             Auto-Filled
@@ -423,9 +447,29 @@ export default function CheckoutPage() {
                                     )}
                                 </div>
                                 <div className="grid grid-cols-2 gap-4 mb-4">
-                                    <input placeholder="First Name" className="p-4 bg-stone-50 border-none rounded-xl outline-none focus:ring-2 focus:ring-amber-500/20 transition placeholder:text-stone-400" value={formData.firstName} onChange={(e) => setFormData({ ...formData, firstName: e.target.value })} />
-                                    <input placeholder="Last Name" className="p-4 bg-stone-50 border-none rounded-xl outline-none focus:ring-2 focus:ring-amber-500/20 transition placeholder:text-stone-400" value={formData.lastName} onChange={(e) => setFormData({ ...formData, lastName: e.target.value })} />
-                                </div>
+    <div>
+        <label className="text-[10px] font-bold text-stone-400 uppercase mb-1 block">
+            {isGift ? "Recipient's First Name" : "First Name"} {/* ✅ Label */}
+        </label>
+        <input 
+            placeholder={isGift ? "e.g. Priya" : "First Name"} 
+            className="..." 
+            value={formData.firstName} 
+            onChange={(e) => setFormData({ ...formData, firstName: e.target.value })} 
+        />
+    </div>
+    <div>
+        <label className="text-[10px] font-bold text-stone-400 uppercase mb-1 block">
+            {isGift ? "Recipient's Last Name" : "Last Name"} {/* ✅ Label */}
+        </label>
+        <input 
+            placeholder={isGift ? "e.g. Sharma" : "Last Name"} 
+            className="..." 
+            value={formData.lastName} 
+            onChange={(e) => setFormData({ ...formData, lastName: e.target.value })} 
+        />
+    </div>
+</div>
                                 <div className="space-y-4">
                                     <div className="relative">
                                         <MapPin className="absolute left-4 top-4 w-5 h-5 text-stone-300" />
@@ -436,10 +480,92 @@ export default function CheckoutPage() {
                                         <input placeholder="State" className="p-4 bg-stone-50 border-none rounded-xl outline-none focus:ring-2 focus:ring-amber-500/20 transition placeholder:text-stone-400" value={formData.state} onChange={(e) => setFormData({ ...formData, state: e.target.value })} />
                                         <input placeholder="PIN Code" className="p-4 bg-stone-50 border-none rounded-xl outline-none focus:ring-2 focus:ring-amber-500/20 transition placeholder:text-stone-400" value={formData.pincode} onChange={(e) => setFormData({ ...formData, pincode: e.target.value })} />
                                     </div>
-                                    <input placeholder="Phone Number" className="w-full p-4 bg-stone-50 border-none rounded-xl outline-none focus:ring-2 focus:ring-amber-500/20 transition placeholder:text-stone-400" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} />
+                                    <div>
+    <label className="text-[10px] font-bold text-stone-400 uppercase mb-1 block">
+        {isGift ? "Recipient's Phone (For Delivery)" : "Phone Number"} {/* ✅ Label */}
+    </label>
+    <input 
+        placeholder="Phone Number" 
+        className="..." 
+        value={formData.phone} 
+        onChange={(e) => setFormData({ ...formData, phone: e.target.value })} 
+    />
+    {/* ✅ Extra Helper Text for Gift */}
+    {isGift && <p className="text-[10px] text-amber-600 mt-1">Don't worry, we won't reveal your identity on call.</p>}
+</div>
                                 </div>
                             </div>
+{/* --- ✅ SECRET GIFT MODE SECTION (Paste Here) --- */}
+<div className={`p-6 rounded-2xl border transition-all duration-500 relative overflow-hidden group mb-6 ${isGift ? 'bg-[#0a1f1c] border-amber-500/50 shadow-[0_0_30px_rgba(245,158,11,0.15)]' : 'bg-white border-stone-200'}`}>
+    
+    {/* Background Animation (Active Mode) */}
+    {isGift && (
+        <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none animate-pulse"></div>
+    )}
 
+    <div className="flex items-start gap-4 relative z-10">
+        {/* Icon Box */}
+        <div className={`p-3 rounded-xl transition-colors duration-300 ${isGift ? 'bg-amber-600 text-white shadow-lg' : 'bg-stone-100 text-stone-400'}`}>
+            {isGift ? <Lock className="w-6 h-6" /> : <Gift className="w-6 h-6" />}
+        </div>
+
+        <div className="flex-1">
+            <div className="flex justify-between items-center mb-1">
+                <div>
+                    <h3 className={`font-serif text-lg tracking-wide flex items-center gap-2 ${isGift ? 'text-white' : 'text-stone-800'}`}>
+                        Secret Gift Mode™ 
+                        {isGift && <span className="text-[9px] bg-amber-600 text-white px-2 py-0.5 rounded-full uppercase tracking-widest font-bold">Active</span>}
+                    </h3>
+                </div>
+                
+                {/* Toggle Switch */}
+                <div 
+                    onClick={() => setIsGift(!isGift)}
+                    className={`w-12 h-6 rounded-full p-1 cursor-pointer transition-colors duration-300 ${isGift ? 'bg-amber-600' : 'bg-stone-300'}`}
+                >
+                    <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-300 ${isGift ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                </div>
+            </div>
+            
+            <p className={`text-xs leading-relaxed mb-4 ${isGift ? 'text-white/60' : 'text-stone-500'}`}>
+                Surprise them with luxury. We’ll hide your identity and the price tag.
+            </p>
+
+            {/* Hidden Message Box */}
+            <AnimatePresence>
+                {isGift && (
+                    <motion.div 
+                        initial={{ height: 0, opacity: 0 }} 
+                        animate={{ height: 'auto', opacity: 1 }} 
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden"
+                    >
+                        {/* Features Badges */}
+                        <div className="grid grid-cols-2 gap-3 mb-4">
+                            <div className="flex items-center gap-2 text-[10px] text-amber-100/80 bg-white/5 p-2 rounded-lg border border-white/5">
+                                <span className="p-1 bg-amber-500/20 rounded-full text-amber-500">🎁</span> Unbranded Box
+                            </div>
+                            <div className="flex items-center gap-2 text-[10px] text-amber-100/80 bg-white/5 p-2 rounded-lg border border-white/5">
+                                <span className="p-1 bg-red-500/20 rounded-full text-red-400">🙈</span> No Invoice
+                            </div>
+                        </div>
+
+                        {/* Message Input */}
+                        <textarea
+                            value={giftMessage}
+                            onChange={(e) => setGiftMessage(e.target.value)}
+                            placeholder="Type your secret message here..."
+                            className="w-full p-4 bg-black/30 border border-white/10 rounded-xl text-white text-sm outline-none focus:border-amber-500/50 resize-none h-24 font-serif placeholder:text-white/20"
+                        />
+                        <p className="text-[10px] text-amber-500 mt-3 flex items-center gap-1">
+                            <ShieldCheck className="w-3 h-3" /> They’ll never know who sent it.
+                        </p>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
+    </div>
+</div>
                             <div className="flex justify-end pt-4">
                                 <button onClick={() => setStep(2)} className="bg-[#0a1f1c] text-white px-10 py-4 rounded-xl text-xs uppercase tracking-widest font-bold hover:bg-amber-700 transition flex items-center gap-3 shadow-xl hover:shadow-2xl transform hover:-translate-y-1">
                                     Continue to Payment <ArrowRight className="w-4 h-4" />
@@ -653,7 +779,13 @@ export default function CheckoutPage() {
                                 <span>Shipping</span>
                                 <span className="font-medium text-[#0a1f1c]">{shipping === 0 ? <span className="text-green-600 font-bold">Free</span> : `₹${shipping}`}</span>
                             </div>
-
+{/* ✅ NEW: GIFT COST ROW */}
+{isGift && (
+    <div className="flex justify-between text-amber-600 bg-amber-50 px-2 py-1 rounded mt-1">
+        <span className="flex items-center gap-1 text-xs font-bold"><Gift className="w-3 h-3" /> Secret Gift Mode</span>
+        <span className="font-bold text-xs">+ ₹{giftModeCost}</span>
+    </div>
+)}
                             {discountAmount > 0 && (
                                 <div className="flex justify-between text-green-600 font-bold">
                                     <span>Discount</span>
