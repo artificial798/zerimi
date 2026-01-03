@@ -101,7 +101,7 @@ export const downloadInvoice = (order: any, settings: any) => {
 
   doc.setFontSize(10);
   doc.text(`Invoice #: ${order.invoiceNo || "INV-" + order.id.slice(0, 6)}`, pageWidth - 14, 30, { align: "right" });
-  doc.text(`Date: ${new Date(order.date).toLocaleDateString("en-IN")}`, pageWidth - 14, 35, { align: "right" });
+  doc.text(`Date: ${new Date(order.date).toLocaleDateString("en-GB")}`, pageWidth - 14, 35, { align: "right" });
   doc.text(`Order ID: #${order.id}`, pageWidth - 14, 40, { align: "right" });
 
   doc.line(14, 48, pageWidth - 14, 48);

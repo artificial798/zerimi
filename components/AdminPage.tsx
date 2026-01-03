@@ -991,17 +991,19 @@ function OrderManager({ orders, updateOrderStatus, settings, deleteOrder }: any)
                         {filteredOrders?.map((o: any) => (
                             <tr key={o.id} className={`hover:bg-white/5 transition duration-200 group ${selectedOrders.includes(o.id) ? 'bg-amber-900/10' : ''}`}>
                                 <td className="p-5"><input type="checkbox" checked={selectedOrders.includes(o.id)} onChange={() => toggleSelect(o.id)} className="accent-amber-600 w-4 h-4 cursor-pointer" /></td>
-                               <td className="p-5">
-    <span className="font-mono text-xs text-white/50 block">#{o.id.slice(-6)}</span>
-    <span className="text-[10px] text-white/30">{o.date}</span>
-    
-    {/* ✅ NAYA CODE: Agar Gift hai to yahan Icon dikhao */}
-    {o.isGift && (
-        <span className="mt-2 inline-flex items-center gap-1 px-2 py-1 rounded bg-amber-500/20 text-amber-500 text-[9px] font-bold uppercase border border-amber-500/30 animate-pulse">
-            <Gift className="w-3 h-3" /> Secret Gift
-        </span>
-    )}
-</td>
+                              {/* ✅ FIXED: FULL ID DISPLAY */}
+                                <td className="p-5">
+                                    <span className="font-mono text-xs text-white block mb-1">#{o.id}</span>
+                                    {o.invoiceNo && <span className="text-[10px] text-white/30 block">Inv: {o.invoiceNo}</span>}
+                                    <span className="text-[10px] text-white/30 block">{o.date}</span>
+                                    
+                                    {/* Gift Badge */}
+                                    {o.isGift && (
+                                        <span className="mt-2 inline-flex items-center gap-1 px-2 py-1 rounded bg-amber-500/20 text-amber-500 text-[9px] font-bold uppercase border border-amber-500/30 animate-pulse">
+                                            <Gift className="w-3 h-3" /> Secret Gift
+                                        </span>
+                                    )}
+                                </td>
                                 <td className="p-5 text-white">
                                     <p className="font-bold text-sm">{o.customerName}</p>
                                     <span className="text-[10px] text-white/40">{o.customerEmail}</span>
@@ -1259,30 +1261,50 @@ function OrderManager({ orders, updateOrderStatus, settings, deleteOrder }: any)
 
                                     <div className="space-y-3">
                                         {/* 🚚 SHIPROCKET BUTTON */}
-                                        {viewingOrder.status === 'Processing' && (
-                                            <button
-                                                onClick={async () => {
-                                                    try {
-                                                        const res = await fetch("/api/shiprocket/create-shipment", {
-                                                            method: "POST",
-                                                            headers: { "Content-Type": "application/json" },
-                                                            body: JSON.stringify(viewingOrder)
-                                                        });
-                                                        const data = await res.json();
-                                                        if (!data.success) {
-                                                            alert("❌ Shiprocket shipment failed");
-                                                            return;
-                                                        }
-                                                        alert("✅ Shipment created in Shiprocket (Test Mode)");
-                                                    } catch (err) {
-                                                        alert("❌ Shiprocket error");
-                                                    }
-                                                }}
-                                                className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs uppercase tracking-wide transition flex items-center justify-center gap-2 shadow-lg"
-                                            >
-                                                🚚 Create Shipment (Shiprocket)
-                                            </button>
-                                        )}
+                                        {/* 🚚 SHIPROCKET BUTTON (Updated Code) */}
+{viewingOrder.status === 'Processing' && (
+    <button
+        onClick={async () => {
+            // Confirmation taaki galti se click na ho jaye
+            if(!confirm("Are you sure you want to create a label on Shiprocket?")) return;
+
+            try {
+                // Button text change karne ke liye temporary alert
+                const btn = document.getElementById('ship-btn');
+                if(btn) btn.innerText = "Generating...";
+
+                // ✅ CORRECT URL (Jo humne backend file banayi thi)
+                const res = await fetch("/api/shiprocket/create-order", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(viewingOrder) // Pura order data bhej rahe hain
+                });
+
+                const data = await res.json();
+
+                if (!data.success) {
+                    // Agar error aaye to exact reason dikhayein
+                    alert("❌ Failed: " + (data.error?.message || JSON.stringify(data.error)));
+                    return;
+                }
+
+                // Success hone par AWB number dikhayein
+                alert("✅ Shipment Created! AWB: " + (data.data.awb_code || "Generated"));
+                
+                // Optional: Page refresh karein status update ke liye
+                // window.location.reload();
+
+            } catch (err: any) {
+                console.error(err);
+                alert("❌ System Error: " + err.message);
+            }
+        }}
+        id="ship-btn"
+        className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs uppercase tracking-wide transition flex items-center justify-center gap-2 shadow-lg"
+    >
+        🚚 Create Shipment (Shiprocket)
+    </button>
+)}
 
                                         {/* Status Logic */}
                                         {viewingOrder.status === 'Pending' && (

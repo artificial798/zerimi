@@ -428,66 +428,80 @@ export const useStore = create<Store>()(
             // ✅ UPDATED: Ab ye Checkout Page se aayi hui exact values save karega
           // ✅ FIXED: placeOrder Logic (Saves Size & Color correctly)
            placeOrder: async (details) => {
-                const state = get();
+    const state = get();
 
-                if (!state.currentUser && !details.email) {
-                    alert("🔒 Email is required to place an order.");
-                    throw new Error("EMAIL_REQUIRED");
-                }
+    if (!state.currentUser && !details.email) {
+        alert("🔒 Email is required to place an order.");
+        throw new Error("EMAIL_REQUIRED");
+    }
 
-                // ✅ NEW: isGift, giftMessage, giftWrapPrice extract karein
-                const { name, email, address, total, subtotal, tax, shipping, discount, items, paymentMethod, isGift, giftMessage, giftWrapPrice } = details;
-                
-                const orderId = `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
+    // --- 1. PROFESSIONAL ID GENERATION START ---
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0'); // e.g. "01"
+    const day = String(now.getDate()).padStart(2, '0');        // e.g. "25"
+    
+    // Unique Random String (4 chars)
+    const uniqueSuffix = Math.floor(1000 + Math.random() * 9000).toString();
 
-                const newOrder: Order = {
-                    id: orderId,
-                    customerName: name, 
-                    customerEmail: email, 
-                    address: address,
-                    total: total || 0, 
-                    subtotal: subtotal || 0, 
-                    tax: tax || 0, 
-                    discount: discount || 0,
-                    shipping: shipping || 0,
-                    
-                    // ✅ NEW: Gift Details Save Karein
-                    isGift: isGift || false,
-                    giftMessage: giftMessage || '',
-                    giftWrapPrice: giftWrapPrice || 0,
+    // ✅ ORDER ID FORMAT: ZER-20240125-9821 (ZER-YYYYMMDD-RANDOM)
+    // Isse Admin ko date dekh kar hi order ka pata chal jayega
+    const orderId = `ZER-${year}${month}${day}-${uniqueSuffix}`;
 
-                    status: 'Pending',
-                    date: new Date().toLocaleDateString('en-IN'),
-                    
-                    items: items || state.cart.map(item => ({
-                        name: item.product.name, 
-                        qty: item.qty, 
-                        price: item.product.price,
-                        image: item.product.image, 
-                        selectedSize: item.selectedSize || 'N/A',
-                        selectedColor: item.selectedColor || null 
-                    })),
-                    
-                    paymentMethod: paymentMethod || 'COD',
-                    invoiceNo: `INV/${new Date().getFullYear()}/${orderId.split('-')[1]}`
-                };
+    // ✅ INVOICE NO FORMAT: INV/2024/9821
+    // Professional Accounting format
+    const invoiceNo = `INV/${year}/${uniqueSuffix}`;
+    // --- PROFESSIONAL ID GENERATION END ---
 
-                await setDoc(doc(db, "orders", orderId), newOrder);
+    // ✅ Data Preparation
+    const { name, email, address, total, subtotal, tax, shipping, discount, items, paymentMethod, isGift, giftMessage, giftWrapPrice } = details;
+    
+    const newOrder: Order = {
+        id: orderId,          // 👈 Yahan generated ID use hogi
+        invoiceNo: invoiceNo, // 👈 Yahan Invoice No use hoga
+        
+        customerName: name, 
+        customerEmail: email, 
+        address: address,
+        total: total || 0, 
+        subtotal: subtotal || 0, 
+        tax: tax || 0, 
+        discount: discount || 0,
+        shipping: shipping || 0,
+        
+        // Gift Details
+        isGift: isGift || false,
+        giftMessage: giftMessage || '',
+        giftWrapPrice: giftWrapPrice || 0,
 
-                state.cart.forEach(async (item) => {
-                    if (item.product.id) {
-                       // Inventory update logic here
-                    }
-                });
+        status: 'Pending',
+        date: new Date().toLocaleDateString('en-IN'), // Display Date
+        
+        items: items || state.cart.map(item => ({
+            name: item.product.name, 
+            qty: item.qty, 
+            price: item.product.price,
+            image: item.product.image, 
+            selectedSize: item.selectedSize || 'N/A',
+            selectedColor: item.selectedColor || null 
+        })),
+        
+        paymentMethod: paymentMethod || 'COD',
+    };
 
-                await addDoc(collection(db, "notifications"), {
-                    userId: email, title: 'Order Placed', message: `Order #${orderId} confirmed successfully.`, 
-                    date: new Date().toLocaleDateString('en-IN'), isRead: false
-                });
+    // Database Save
+    await setDoc(doc(db, "orders", orderId), newOrder);
 
-                set({ cart: [], appliedCoupon: null, couponDiscount: 0 });
-                return orderId;
-            },
+    // ... Baaki ka code same rahega (Notifications & Clear Cart) ...
+
+    await addDoc(collection(db, "notifications"), {
+        userId: email, title: 'Order Placed', message: `Order #${orderId} confirmed successfully.`, 
+        date: new Date().toLocaleDateString('en-IN'), isRead: false
+    });
+
+    set({ cart: [], appliedCoupon: null, couponDiscount: 0 });
+    return orderId;
+},
 
             // --- ADMIN ACTIONS ---
             addProduct: async (p) => { await setDoc(doc(db, "products", p.id), p); },

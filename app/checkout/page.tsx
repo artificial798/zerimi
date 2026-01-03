@@ -4,7 +4,7 @@ import { useStore } from '@/lib/store';
 import { useRouter } from 'next/navigation';
 import {
     ShieldCheck, Truck, ArrowRight, MapPin,
-    Ticket, Check, AlertCircle, ShoppingBag, Lock, ChevronLeft, Loader2, X, Trash2, Gift
+    Ticket, Check, AlertCircle, ShoppingBag, Lock, ChevronLeft, Loader2, X, Trash2, Gift, CreditCard
 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -12,7 +12,16 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-
+// --- RAZORPAY LOADER ---
+const initializeRazorpay = () => {
+    return new Promise((resolve) => {
+        const script = document.createElement("script");
+        script.src = "https://checkout.razorpay.com/v1/checkout.js";
+        script.onload = () => resolve(true);
+        script.onerror = () => resolve(false);
+        document.body.appendChild(script);
+    });
+};
 // --- CUSTOM TOAST COMPONENT ---
 const Toast = ({ message, type, onClose }: { message: string, type: 'success' | 'error', onClose: () => void }) => (
     <motion.div
@@ -48,9 +57,13 @@ const calculateInclusiveGST = (amount: number, rate: number) => {
 export default function CheckoutPage() {
     const router = useRouter();
     const store = useStore() as any;
-    // ✅ YE 2 LINES ADD KAREIN:
+
     const [isGift, setIsGift] = useState(false);
     const [giftMessage, setGiftMessage] = useState('');
+
+    // ✅ FIX 1: Real Order ID Store karne ke liye State
+    const [confirmedOrderId, setConfirmedOrderId] = useState<string>("");
+    const [successDetails, setSuccessDetails] = useState<any>(null);
 
     const {
         cart,
@@ -76,6 +89,82 @@ export default function CheckoutPage() {
     // Settings Fetch
     const [liveSettings, setLiveSettings] = useState<any>(null);
 
+    // Form Data
+    const [formData, setFormData] = useState({
+        email: '',
+        firstName: '',
+        lastName: '',
+        address: '',
+        city: '',
+        state: '',
+        pincode: '',
+        phone: '',
+        saveInfo: true
+    });
+
+    const [paymentMethod, setPaymentMethod] = useState('cod'); // Default COD set kiya hai safe side ke liye
+
+    // --- CALCULATIONS ---
+    const subtotal = cart.reduce((sum: number, item: any) => sum + item.product.price * item.qty, 0);
+    const taxRate = Number(systemSettings?.taxRate) || 3; 
+    const gstBreakdown = calculateInclusiveGST(subtotal, taxRate);
+
+    const shippingThreshold = Number(systemSettings?.shippingThreshold) || 5000;
+    const baseShipping = Number(systemSettings?.shippingCost) || 150;
+    const isFreeShipping = subtotal >= shippingThreshold;
+    const shipping = isFreeShipping ? 0 : baseShipping;
+
+    // Gift Cost
+    const giftModeCost = Number(systemSettings?.giftModeCost) || 50; 
+    const currentGiftCost = isGift ? giftModeCost : 0;
+
+    // Total
+    const total = subtotal + shipping - discountAmount + currentGiftCost;
+
+    const showToast = (msg: string, type: 'success' | 'error') => {
+        setToast({ msg, type });
+        setTimeout(() => setToast(null), 4000);
+    };
+
+    // --- ✅ FIX 2: AUTO FILL & SECRET GIFT LOGIC ---
+    useEffect(() => {
+        // Agar Secret Gift ON hai, toh fields CLEAR karo
+        if (isGift) {
+            setFormData(prev => ({
+                ...prev,
+                firstName: '',
+                lastName: '',
+                phone: '',     
+                address: '',   
+                city: '',
+                state: '',
+                pincode: '',
+                // Email ko hum retain kar rahe hain taaki Bill aapko aaye
+                email: currentUser?.email || prev.email 
+            }));
+        } 
+        // Agar Secret Gift OFF hai, toh Auto-Fill karo (Agar user logged in hai)
+        else if (currentUser) {
+            let savedAddr = { text: '', pin: '', type: '' };
+            if (currentUser.addresses && currentUser.addresses.length > 0) {
+                savedAddr = currentUser.addresses.find((a: any) => a.isDefault) || currentUser.addresses[0];
+            }
+
+            setFormData(prev => ({
+                ...prev,
+                email: currentUser.email || '',
+                firstName: currentUser.name?.split(' ')[0] || '',
+                lastName: currentUser.name?.split(' ')[1] || '',
+                phone: currentUser.phone || '',
+                address: savedAddr.text ? savedAddr.text.split(',')[0] : '',
+                city: 'Mumbai',
+                state: 'Maharashtra',
+                pincode: savedAddr.pin || ''
+            }));
+        }
+    }, [currentUser, isGift]); // 👈 isGift dependency add ki taaki toggle par chal sake
+
+    // Razorpay Script (Existing)
     useEffect(() => {
         if (!(window as any).Razorpay) {
             const script = document.createElement("script");
@@ -85,10 +174,10 @@ export default function CheckoutPage() {
         }
     }, []);
 
-    // User Data Fetch
+    // Initial User Fetch (Backup for Refresh)
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
-            if (user) {
+            if (user && !isGift) { // Sirf tab fetch karo agar Gift Mode OFF hai
                 try {
                     const docRef = doc(db, "users", user.uid);
                     const docSnap = await getDoc(docRef);
@@ -117,54 +206,7 @@ export default function CheckoutPage() {
             }
         });
         return () => unsubscribe();
-    }, []);
-
-    const [formData, setFormData] = useState({
-        email: '',
-        firstName: '',
-        lastName: '',
-        address: '',
-        city: '',
-        state: '',
-        pincode: '',
-        phone: '',
-        saveInfo: true
-    });
-
-    const [paymentMethod, setPaymentMethod] = useState('online');
-
-    // --- CALCULATIONS ---
-    if (systemSettings?.maintenanceMode) {
-        return (
-            <div className="min-h-screen bg-[#051614] flex flex-col items-center justify-center text-center p-6">
-                <AlertCircle className="w-16 h-16 text-amber-500 mb-4 animate-bounce" />
-                <h1 className="text-3xl font-serif text-white mb-2">Under Maintenance</h1>
-                <p className="text-white/50">Store upgrades in progress. Please check back shortly.</p>
-                <Link href="/" className="mt-6 text-amber-500 hover:underline">Return Home</Link>
-            </div>
-        );
-    }
-
-    const subtotal = cart.reduce((sum: number, item: any) => sum + item.product.price * item.qty, 0);
-    const taxRate = Number(systemSettings?.taxRate) || 3; 
-    const gstBreakdown = calculateInclusiveGST(subtotal, taxRate);
-
-    const shippingThreshold = Number(systemSettings?.shippingThreshold) || 5000;
-    const baseShipping = Number(systemSettings?.shippingCost) || 150;
-    const isFreeShipping = subtotal >= shippingThreshold;
-    const shipping = isFreeShipping ? 0 : baseShipping;
-
-   // 1. Gift Cost Nikalein (Settings se ya Default 50)
-const giftModeCost = Number(systemSettings?.giftModeCost) || 50; 
-const currentGiftCost = isGift ? giftModeCost : 0;
-
-// 2. Total mein Add Karein
-const total = subtotal + shipping - discountAmount + currentGiftCost;
-
-    const showToast = (msg: string, type: 'success' | 'error') => {
-        setToast({ msg, type });
-        setTimeout(() => setToast(null), 4000);
-    };
+    }, [isGift]); // dependency added
 
     // --- EFFECTS ---
     useEffect(() => {
@@ -173,27 +215,6 @@ const total = subtotal + shipping - discountAmount + currentGiftCost;
             return () => clearTimeout(timer);
         }
     }, [cart, router, step]);
-
-    useEffect(() => {
-        if (currentUser) {
-            let savedAddr = { text: '', pin: '', type: '' };
-            if (currentUser.addresses && currentUser.addresses.length > 0) {
-                savedAddr = currentUser.addresses.find((a: any) => a.isDefault) || currentUser.addresses[0];
-            }
-
-            setFormData(prev => ({
-                ...prev,
-                email: currentUser.email || '',
-                firstName: currentUser.name?.split(' ')[0] || '',
-                lastName: currentUser.name?.split(' ')[1] || '',
-                phone: currentUser.phone || '',
-                address: savedAddr.text ? savedAddr.text.split(',')[0] : '',
-                city: 'Mumbai',
-                state: 'Maharashtra',
-                pincode: savedAddr.pin || ''
-            }));
-        }
-    }, [currentUser]);
 
     const handleQuantityChange = (item: any, change: number) => {
         if (item.qty === 1 && change === -1) {
@@ -215,17 +236,17 @@ const total = subtotal + shipping - discountAmount + currentGiftCost;
     });
 
     const handleApplyCoupon = () => {
-        if (!couponCode) return setToast({ msg: "Please enter a code", type: "error" });
+        if (!couponCode) return showToast("Please enter a code", "error");
         const found = coupons?.find((c: any) => c.code.toLowerCase() === couponCode.toLowerCase());
-        if (!found) return setToast({ msg: "Invalid Coupon Code", type: "error" });
+        if (!found) return showToast("Invalid Coupon Code", "error");
 
         if (subtotal < (found.minOrderValue || 0)) {
-            return setToast({ msg: `Add items worth ₹${found.minOrderValue - subtotal} more`, type: "error" });
+            return showToast(`Add items worth ₹${found.minOrderValue - subtotal} more`, "error");
         }
 
         const userEmail = auth.currentUser?.email?.toLowerCase();
         if (found.allowedEmail && found.allowedEmail.toLowerCase() !== userEmail) {
-            return setToast({ msg: "This coupon is not valid for your account", type: "error" });
+            return showToast("This coupon is not valid for your account", "error");
         }
 
         let disc = 0;
@@ -237,20 +258,21 @@ const total = subtotal + shipping - discountAmount + currentGiftCost;
 
         setAppliedCoupon(found);
         setDiscountAmount(disc);
-        setToast({ msg: "Coupon Applied!", type: "success" });
+        showToast("Coupon Applied!", "success");
     };
 
     const handleRemoveCoupon = () => {
         setAppliedCoupon(null);
         setDiscountAmount(0);
         setCouponCode('');
-        setToast({ msg: "Coupon Removed", type: "success" });
+        showToast("Coupon Removed", "success");
     };
 
+  // --- ✅ CORRECT HANDLE PLACE ORDER FUNCTION ---
     const handlePlaceOrder = async () => {
         const finalEmail = formData.email?.trim().toLowerCase() || currentUser?.email?.trim().toLowerCase();
         
-        // Validation
+        // 1. Validation
         if (!finalEmail || !formData.firstName || !formData.address || !formData.pincode || !formData.phone) {
             showToast("Please fill all delivery details.", 'error');
             setStep(1);
@@ -260,34 +282,23 @@ const total = subtotal + shipping - discountAmount + currentGiftCost;
         setLoading(true);
 
         try {
-            const state = useStore.getState();
-            const settings = liveSettings || state.systemSettings || {};
-            
-            // ✅ PRICE CALCULATIONS (Gift Cost Added)
-            const giftModeCost = Number(settings?.giftModeCost) || 50;
-            const currentGiftCost = isGift ? giftModeCost : 0;
-            
-            // Total Recalculate taaki server pe sahi amount jaye
-            const finalTotal = subtotal + shipping + currentGiftCost - discountAmount;
-
+            // ==========================================
+            // OPTION A: ONLINE PAYMENT (RAZORPAY)
+            // ==========================================
             if (paymentMethod === 'online') {
-                 // Online Logic (Future Scope)
-                 showToast("Online payment coming soon. Please select COD.", 'error');
-                 setLoading(false);
-                 return;
-            } else if (paymentMethod === 'cod') {
-                console.log("Processing COD Order...");
-                const action = state.placeOrder;
                 
-                // Fake Delay for UX
-                await new Promise(resolve => setTimeout(resolve, 1500));
+                // 1. Script Load Check
+                const res = await initializeRazorpay();
+                if (!res) {
+                    showToast("Razorpay SDK failed to load. Check internet.", 'error');
+                    setLoading(false);
+                    return;
+                }
 
-                // ✅ FIXED ORDER DETAILS OBJECT
-                const orderDetails = {
+                // 2. Base Order Details (Common for both)
+                const baseOrderDetails = {
                     name: `${formData.firstName} ${formData.lastName}`,
                     email: finalEmail,
-                    
-                    // 1. Address Object (Isme Gift info MAT dalna)
                     address: {
                         id: `addr_${Date.now()}`,
                         street: formData.address,
@@ -296,43 +307,112 @@ const total = subtotal + shipping - discountAmount + currentGiftCost;
                         pincode: formData.pincode,
                         phone: formData.phone,
                     },
-
-                    // 2. Main Order Flags (Ye Address se BAHAR hone chahiye)
-                    isGift: isGift, 
-                    giftMessage: giftMessage || "",
-                    giftWrapPrice: currentGiftCost, // ✅ Database mein price save hoga
-
-                    // 3. Payment & Status
-                    status: 'Pending',
-                    paymentMethod: 'COD',
+                    isGift, 
+                    giftMessage: giftMessage || "", 
+                    giftWrapPrice: currentGiftCost,
                     date: new Date().toLocaleDateString('en-IN'),
-                    
-                    // 4. Amounts
-                    total: finalTotal, 
-                    subtotal: subtotal,
-                    shipping: shipping,
-                    discount: discountAmount,
-                    tax: gstBreakdown.totalTax,
-                    
-                    // 5. Items (Size & Color Mapped)
+                    total, subtotal, shipping, discount: discountAmount, tax: gstBreakdown.totalTax,
                     items: cart.map((item: any) => ({
-                        name: item.product.name,
-                        qty: item.qty,
+                        name: item.product.name, 
+                        qty: item.qty, 
                         price: item.product.price,
-                        image: item.product.image,
-                        selectedSize: item.selectedSize || null,
+                        image: item.product.image, 
+                        selectedSize: item.selectedSize || null, 
                         selectedColor: item.selectedColor || null
                     }))
                 };
 
-                // Action Call
-                await action(orderDetails);
+                // 3. Razorpay Options
+                const options = {
+                    key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID, 
+                    amount: Math.round(total * 100), // Paise mein convert
+                    currency: "INR",
+                    name: "ZERIMI Luxury",
+                    description: "Order Payment",
+                    prefill: {
+                        name: `${formData.firstName} ${formData.lastName}`,
+                        email: finalEmail,
+                        contact: formData.phone,
+                    },
+                    theme: { color: "#d4af37" },
+                    
+                    // 4. Payment Success Handler
+                    handler: async function (response: any) {
+                        const finalOrder = { 
+                            ...baseOrderDetails, 
+                            status: 'Processing',
+                            paymentMethod: 'Online',
+                            paymentId: response.razorpay_payment_id 
+                        };
+
+                        // Order Save Karein
+                        const newOrderId = await placeOrder(finalOrder);
+                        
+                        setConfirmedOrderId(newOrderId || "ZER-PAID");
+                        setSuccessDetails(finalOrder);
+                        
+                        if (typeof clearCart === 'function') clearCart();
+                        setLoading(false);
+                        setStep(3); // Success Screen
+                    },
+                    modal: {
+                        ondismiss: function() {
+                            setLoading(false);
+                            showToast("Payment Cancelled", 'error');
+                        }
+                    }
+                };
+
+                const paymentObject = new (window as any).Razorpay(options);
+                paymentObject.open();
+                return; 
+            } 
+            
+            // ==========================================
+            // OPTION B: CASH ON DELIVERY (COD)
+            // ==========================================
+            else if (paymentMethod === 'cod') {
+                await new Promise(resolve => setTimeout(resolve, 1500)); 
+
+                const orderDetails = {
+                    name: `${formData.firstName} ${formData.lastName}`,
+                    email: finalEmail,
+                    address: {
+                        id: `addr_${Date.now()}`,
+                        street: formData.address,
+                        city: formData.city,
+                        state: formData.state,
+                        pincode: formData.pincode,
+                        phone: formData.phone,
+                    },
+                    isGift, 
+                    giftMessage: giftMessage || "", 
+                    giftWrapPrice: currentGiftCost,
+                    status: 'Pending',
+                    paymentMethod: 'COD',
+                    date: new Date().toLocaleDateString('en-IN'),
+                    total, subtotal, shipping, discount: discountAmount, tax: gstBreakdown.totalTax,
+                    items: cart.map((item: any) => ({
+                        name: item.product.name, 
+                        qty: item.qty, 
+                        price: item.product.price,
+                        image: item.product.image, 
+                        selectedSize: item.selectedSize || null, 
+                        selectedColor: item.selectedColor || null
+                    }))
+                };
+
+                const newOrderId = await placeOrder(orderDetails);
                 
+                setConfirmedOrderId(newOrderId || "ZER-PENDING");
+                setSuccessDetails(orderDetails);
+
                 if (typeof clearCart === 'function') clearCart();
                 setLoading(false);
                 setStep(3); // Success Screen
                 return;
             }
+
         } catch (error: any) {
             console.error("Order Error:", error);
             showToast(error.message || "Order Failed", 'error');
@@ -355,46 +435,130 @@ const total = subtotal + shipping - discountAmount + currentGiftCost;
         );
     }
 
+    // --- ✅ STEP 3: PREMIUM SUCCESS SCREEN ---
     if (step === 3) {
         return (
             <div className="min-h-screen bg-[#0a1f1c] flex items-center justify-center p-4 font-sans relative overflow-hidden">
-                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+                {/* Background Pattern & Glow */}
+                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5"></div>
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-amber-500/10 rounded-full blur-[120px] pointer-events-none"></div>
+
                 <motion.div
-                    initial={{ scale: 0.9, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ duration: 0.5 }}
-                    className="bg-white rounded-3xl p-10 max-w-lg w-full text-center relative z-10 shadow-2xl"
+                    initial={{ scale: 0.95, opacity: 0, y: 20 }}
+                    animate={{ scale: 1, opacity: 1, y: 0 }}
+                    transition={{ duration: 0.6, type: "spring" }}
+                    className="bg-[#fcfbf9] rounded-[2rem] max-w-3xl w-full relative z-10 shadow-2xl overflow-hidden flex flex-col md:flex-row min-h-[500px]"
                 >
-                    <div className="w-24 h-24 bg-gradient-to-tr from-green-400 to-emerald-600 rounded-full flex items-center justify-center mx-auto mb-8 shadow-lg shadow-green-200">
-                        <Check className="w-12 h-12 text-white" />
+                    {/* LEFT PANEL: Brand & Success Animation */}
+                    <div className="bg-[#0f2925] p-8 md:w-5/12 flex flex-col items-center justify-center text-center relative overflow-hidden">
+                        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-20"></div>
+                        
+                        <motion.div 
+                            initial={{ scale: 0, rotate: -180 }}
+                            animate={{ scale: 1, rotate: 0 }}
+                            transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
+                            className="w-24 h-24 bg-gradient-to-br from-amber-300 to-amber-600 rounded-full flex items-center justify-center shadow-[0_0_30px_rgba(245,158,11,0.4)] mb-8 relative z-10"
+                        >
+                            <Check className="w-12 h-12 text-[#0f2925] stroke-[3]" />
+                        </motion.div>
+                        
+                        <h2 className="text-3xl font-serif text-white mb-3 relative z-10">Order Confirmed</h2>
+                        <p className="text-amber-100/70 text-sm leading-relaxed relative z-10 px-4">
+                            Thank you, <span className="text-white font-semibold">{successDetails?.name?.split(' ')[0]}</span>.<br/>
+                            Your luxury experience has begun. We have sent a receipt to your email.
+                        </p>
                     </div>
-                    <h2 className="text-4xl font-serif text-[#0a1f1c] mb-3">Order Confirmed</h2>
-                    <p className="text-stone-500 mb-8 leading-relaxed">
-                        Thank you for choosing ZERIMI. A confirmation email has been sent to <span className="font-bold text-[#0a1f1c]">{formData.email}</span>.
-                    </p>
-                    <div className="bg-stone-50 rounded-xl p-6 mb-8 text-left border border-stone-100">
-                        <div className="flex justify-between mb-3 pb-3 border-b border-stone-200">
-                            <span className="text-xs uppercase text-stone-400 tracking-widest">Order ID</span>
-                            <span className="font-mono font-bold text-[#0a1f1c]">#{Math.floor(100000 + Math.random() * 900000)}</span>
+
+                    {/* RIGHT PANEL: Receipt Details */}
+                    <div className="p-8 md:w-7/12 bg-white flex flex-col justify-between">
+                        <div>
+                            {/* Header: ID & Date */}
+                            <div className="flex justify-between items-start border-b border-stone-100 pb-6 mb-6">
+                                <div>
+                                    <p className="text-[10px] uppercase tracking-widest text-stone-400 font-bold mb-1">Order Number</p>
+                                    <p className="text-lg font-mono font-bold text-[#0a1f1c] tracking-tight">#{confirmedOrderId}</p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-[10px] uppercase tracking-widest text-stone-400 font-bold mb-1">Date</p>
+                                    <p className="text-sm font-medium text-[#0a1f1c]">
+                                        {successDetails?.date || new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Details Grid */}
+                            <div className="grid grid-cols-2 gap-y-6 gap-x-4 mb-8">
+                                <div>
+                                    <p className="text-[10px] uppercase tracking-widest text-stone-400 font-bold mb-1.5">Payment Method</p>
+                                    <div className="flex items-center gap-2 bg-stone-50 w-fit px-3 py-1.5 rounded-lg border border-stone-100">
+                                        {successDetails?.paymentMethod === 'COD' 
+                                            ? <Truck className="w-3.5 h-3.5 text-amber-600" /> 
+                                            : <CreditCard className="w-3.5 h-3.5 text-amber-600" />
+                                        }
+                                        <span className="text-xs font-bold text-[#0a1f1c]">
+                                            {successDetails?.paymentMethod === 'COD' ? 'Cash on Delivery' : 'Online Payment'}
+                                        </span>
+                                    </div>
+                                </div>
+                                
+                                <div>
+                                    <p className="text-[10px] uppercase tracking-widest text-stone-400 font-bold mb-1.5">Delivery Estimate</p>
+                                    <p className="text-xs font-bold text-green-700 bg-green-50 w-fit px-3 py-1.5 rounded-lg border border-green-100">
+                                        3-5 Business Days
+                                    </p>
+                                </div>
+
+                                <div className="col-span-2">
+                                    <p className="text-[10px] uppercase tracking-widest text-stone-400 font-bold mb-1.5">Shipping To</p>
+                                    <div className="flex items-start gap-3 p-3 rounded-xl border border-stone-100 bg-stone-50/50">
+                                        <MapPin className="w-4 h-4 text-stone-400 mt-0.5 shrink-0" />
+                                        <div>
+                                            <p className="text-xs font-bold text-[#0a1f1c] mb-0.5">{successDetails?.name}</p>
+                                            <p className="text-xs text-stone-500 leading-relaxed">
+                                                {successDetails?.address?.street}, {successDetails?.address?.city}, {successDetails?.address?.state} - <span className="font-semibold text-[#0a1f1c]">{successDetails?.address?.pincode}</span>
+                                            </p>
+                                            <p className="text-[10px] text-stone-400 mt-1">Contact: {successDetails?.address?.phone}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div className="flex justify-between">
-                            <span className="text-xs uppercase text-stone-400 tracking-widest">Est. Delivery</span>
-                            <span className="font-bold text-amber-600">3-5 Business Days</span>
+
+                        {/* Footer: Amount & Buttons */}
+                        <div>
+                            <div className="bg-[#0a1f1c] rounded-xl p-5 flex justify-between items-center shadow-lg mb-6 relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2"></div>
+                                <div>
+                                    <p className="text-[10px] text-white/50 mb-0.5 uppercase tracking-wider">Total Amount</p>
+                                    <p className="text-xs text-amber-500 font-medium">
+                                        {successDetails?.items?.length} Items Included
+                                    </p>
+                                </div>
+                                <p className="text-2xl font-serif text-white tracking-wide relative z-10">
+                                    ₹{successDetails?.total?.toLocaleString()}
+                                </p>
+                            </div>
+
+                            <div className="flex gap-3">
+                                <button 
+                                    onClick={() => router.push('/dashboard')} 
+                                    className="flex-1 py-3.5 bg-white border-2 border-[#0a1f1c] text-[#0a1f1c] text-[11px] uppercase font-bold tracking-widest rounded-xl hover:bg-[#0a1f1c] hover:text-white transition duration-300"
+                                >
+                                    Track Order
+                                </button>
+                                <button 
+                                    onClick={() => router.push('/')} 
+                                    className="flex-1 py-3.5 bg-amber-600 border-2 border-amber-600 text-white text-[11px] uppercase font-bold tracking-widest rounded-xl hover:bg-amber-700 hover:border-amber-700 transition duration-300 shadow-md"
+                                >
+                                    Shop More
+                                </button>
+                            </div>
                         </div>
-                    </div>
-                    <div className="space-y-3">
-                        <button onClick={() => router.push('/dashboard')} className="w-full py-4 bg-[#0a1f1c] text-white uppercase tracking-widest text-xs font-bold rounded-xl hover:bg-stone-800 transition shadow-lg">
-                            Track My Order
-                        </button>
-                        <button onClick={() => router.push('/')} className="w-full py-4 bg-transparent text-stone-400 uppercase tracking-widest text-xs font-bold hover:text-[#0a1f1c] transition">
-                            Continue Shopping
-                        </button>
                     </div>
                 </motion.div>
             </div>
         );
     }
-
     return (
         <div className="min-h-screen bg-[#f8f5f2] font-sans text-stone-900 pt-28 pb-20">
             <AnimatePresence>
@@ -420,56 +584,56 @@ const total = subtotal + shipping - discountAmount + currentGiftCost;
                         <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="space-y-8">
                             <div className="bg-white p-8 rounded-2xl border border-stone-200/60 shadow-sm hover:shadow-md transition duration-300">
                                <h3 className="font-bold text-sm uppercase tracking-widest mb-6 text-stone-400 flex items-center gap-2">
-    <span className="w-6 h-6 rounded-full bg-[#0a1f1c] text-white flex items-center justify-center text-[10px]">1</span>
-    {isGift ? "Your Details (For Bill)" : "Contact Info"}
-</h3>
+                                    <span className="w-6 h-6 rounded-full bg-[#0a1f1c] text-white flex items-center justify-center text-[10px]">1</span>
+                                    {isGift ? "Your Details (For Bill)" : "Contact Info"}
+                                </h3>
                                 <div className="space-y-4">
                                     <input
-    type="email"
-    placeholder={isGift ? "Enter YOUR Email (Bill will be sent here)" : "Email Address"} // ✅ Placeholder update
-    className="..."
-    value={formData.email}
-    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-/>
+                                        type="email"
+                                        placeholder={isGift ? "Enter YOUR Email (Bill will be sent here)" : "Email Address"}
+                                        className="w-full p-4 bg-stone-50 border-none rounded-xl outline-none focus:ring-2 focus:ring-amber-500/20 transition"
+                                        value={formData.email}
+                                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                    />
                                 </div>
                             </div>
 
                             <div className="bg-white p-8 rounded-2xl border border-stone-200/60 shadow-sm hover:shadow-md transition duration-300">
                                 <div className="flex justify-between items-center mb-6">
                                     <h3 className="font-bold text-sm uppercase tracking-widest text-stone-400 flex items-center gap-2">
-    <span className="w-6 h-6 rounded-full bg-[#0a1f1c] text-white flex items-center justify-center text-[10px]">2</span>
-    {isGift ? "Recipient's Shipping Address" : "Shipping Address"} {/* ✅ Label Changed */}
-</h3>
-                                    {currentUser && (
+                                        <span className="w-6 h-6 rounded-full bg-[#0a1f1c] text-white flex items-center justify-center text-[10px]">2</span>
+                                        {isGift ? "Recipient's Shipping Address" : "Shipping Address"}
+                                    </h3>
+                                    {currentUser && !isGift && (
                                         <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-100 px-3 py-1 rounded-full font-bold uppercase tracking-wide">
                                             Auto-Filled
                                         </span>
                                     )}
                                 </div>
                                 <div className="grid grid-cols-2 gap-4 mb-4">
-    <div>
-        <label className="text-[10px] font-bold text-stone-400 uppercase mb-1 block">
-            {isGift ? "Recipient's First Name" : "First Name"} {/* ✅ Label */}
-        </label>
-        <input 
-            placeholder={isGift ? "e.g. Priya" : "First Name"} 
-            className="..." 
-            value={formData.firstName} 
-            onChange={(e) => setFormData({ ...formData, firstName: e.target.value })} 
-        />
-    </div>
-    <div>
-        <label className="text-[10px] font-bold text-stone-400 uppercase mb-1 block">
-            {isGift ? "Recipient's Last Name" : "Last Name"} {/* ✅ Label */}
-        </label>
-        <input 
-            placeholder={isGift ? "e.g. Sharma" : "Last Name"} 
-            className="..." 
-            value={formData.lastName} 
-            onChange={(e) => setFormData({ ...formData, lastName: e.target.value })} 
-        />
-    </div>
-</div>
+                                    <div>
+                                        <label className="text-[10px] font-bold text-stone-400 uppercase mb-1 block">
+                                            {isGift ? "Recipient's First Name" : "First Name"}
+                                        </label>
+                                        <input 
+                                            placeholder={isGift ? "e.g. Priya" : "First Name"} 
+                                            className="p-4 w-full bg-stone-50 border-none rounded-xl outline-none focus:ring-2 focus:ring-amber-500/20 transition"
+                                            value={formData.firstName} 
+                                            onChange={(e) => setFormData({ ...formData, firstName: e.target.value })} 
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-bold text-stone-400 uppercase mb-1 block">
+                                            {isGift ? "Recipient's Last Name" : "Last Name"}
+                                        </label>
+                                        <input 
+                                            placeholder={isGift ? "e.g. Sharma" : "Last Name"} 
+                                            className="p-4 w-full bg-stone-50 border-none rounded-xl outline-none focus:ring-2 focus:ring-amber-500/20 transition"
+                                            value={formData.lastName} 
+                                            onChange={(e) => setFormData({ ...formData, lastName: e.target.value })} 
+                                        />
+                                    </div>
+                                </div>
                                 <div className="space-y-4">
                                     <div className="relative">
                                         <MapPin className="absolute left-4 top-4 w-5 h-5 text-stone-300" />
@@ -481,91 +645,86 @@ const total = subtotal + shipping - discountAmount + currentGiftCost;
                                         <input placeholder="PIN Code" className="p-4 bg-stone-50 border-none rounded-xl outline-none focus:ring-2 focus:ring-amber-500/20 transition placeholder:text-stone-400" value={formData.pincode} onChange={(e) => setFormData({ ...formData, pincode: e.target.value })} />
                                     </div>
                                     <div>
-    <label className="text-[10px] font-bold text-stone-400 uppercase mb-1 block">
-        {isGift ? "Recipient's Phone (For Delivery)" : "Phone Number"} {/* ✅ Label */}
-    </label>
-    <input 
-        placeholder="Phone Number" 
-        className="..." 
-        value={formData.phone} 
-        onChange={(e) => setFormData({ ...formData, phone: e.target.value })} 
-    />
-    {/* ✅ Extra Helper Text for Gift */}
-    {isGift && <p className="text-[10px] text-amber-600 mt-1">Don't worry, we won't reveal your identity on call.</p>}
-</div>
+                                        <label className="text-[10px] font-bold text-stone-400 uppercase mb-1 block">
+                                            {isGift ? "Recipient's Phone (For Delivery)" : "Phone Number"}
+                                        </label>
+                                        <input 
+                                            placeholder="Phone Number" 
+                                            className="w-full p-4 bg-stone-50 border-none rounded-xl outline-none focus:ring-2 focus:ring-amber-500/20 transition"
+                                            value={formData.phone} 
+                                            onChange={(e) => setFormData({ ...formData, phone: e.target.value })} 
+                                        />
+                                        {isGift && <p className="text-[10px] text-amber-600 mt-1">Don't worry, we won't reveal your identity on call.</p>}
+                                    </div>
                                 </div>
                             </div>
-{/* --- ✅ SECRET GIFT MODE SECTION (Paste Here) --- */}
-<div className={`p-6 rounded-2xl border transition-all duration-500 relative overflow-hidden group mb-6 ${isGift ? 'bg-[#0a1f1c] border-amber-500/50 shadow-[0_0_30px_rgba(245,158,11,0.15)]' : 'bg-white border-stone-200'}`}>
-    
-    {/* Background Animation (Active Mode) */}
-    {isGift && (
-        <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none animate-pulse"></div>
-    )}
+                            
+                            {/* --- SECRET GIFT MODE SECTION --- */}
+                            <div className={`p-6 rounded-2xl border transition-all duration-500 relative overflow-hidden group mb-6 ${isGift ? 'bg-[#0a1f1c] border-amber-500/50 shadow-[0_0_30px_rgba(245,158,11,0.15)]' : 'bg-white border-stone-200'}`}>
+                                
+                                {isGift && (
+                                    <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none animate-pulse"></div>
+                                )}
 
-    <div className="flex items-start gap-4 relative z-10">
-        {/* Icon Box */}
-        <div className={`p-3 rounded-xl transition-colors duration-300 ${isGift ? 'bg-amber-600 text-white shadow-lg' : 'bg-stone-100 text-stone-400'}`}>
-            {isGift ? <Lock className="w-6 h-6" /> : <Gift className="w-6 h-6" />}
-        </div>
+                                <div className="flex items-start gap-4 relative z-10">
+                                    <div className={`p-3 rounded-xl transition-colors duration-300 ${isGift ? 'bg-amber-600 text-white shadow-lg' : 'bg-stone-100 text-stone-400'}`}>
+                                        {isGift ? <Lock className="w-6 h-6" /> : <Gift className="w-6 h-6" />}
+                                    </div>
 
-        <div className="flex-1">
-            <div className="flex justify-between items-center mb-1">
-                <div>
-                    <h3 className={`font-serif text-lg tracking-wide flex items-center gap-2 ${isGift ? 'text-white' : 'text-stone-800'}`}>
-                        Secret Gift Mode™ 
-                        {isGift && <span className="text-[9px] bg-amber-600 text-white px-2 py-0.5 rounded-full uppercase tracking-widest font-bold">Active</span>}
-                    </h3>
-                </div>
-                
-                {/* Toggle Switch */}
-                <div 
-                    onClick={() => setIsGift(!isGift)}
-                    className={`w-12 h-6 rounded-full p-1 cursor-pointer transition-colors duration-300 ${isGift ? 'bg-amber-600' : 'bg-stone-300'}`}
-                >
-                    <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-300 ${isGift ? 'translate-x-6' : 'translate-x-0'}`}></div>
-                </div>
-            </div>
-            
-            <p className={`text-xs leading-relaxed mb-4 ${isGift ? 'text-white/60' : 'text-stone-500'}`}>
-                Surprise them with luxury. We’ll hide your identity and the price tag.
-            </p>
+                                    <div className="flex-1">
+                                        <div className="flex justify-between items-center mb-1">
+                                            <div>
+                                                <h3 className={`font-serif text-lg tracking-wide flex items-center gap-2 ${isGift ? 'text-white' : 'text-stone-800'}`}>
+                                                    Secret Gift Mode™ 
+                                                    {isGift && <span className="text-[9px] bg-amber-600 text-white px-2 py-0.5 rounded-full uppercase tracking-widest font-bold">Active</span>}
+                                                </h3>
+                                            </div>
+                                            
+                                            <div 
+                                                onClick={() => setIsGift(!isGift)}
+                                                className={`w-12 h-6 rounded-full p-1 cursor-pointer transition-colors duration-300 ${isGift ? 'bg-amber-600' : 'bg-stone-300'}`}
+                                            >
+                                                <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-300 ${isGift ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                                            </div>
+                                        </div>
+                                        
+                                        <p className={`text-xs leading-relaxed mb-4 ${isGift ? 'text-white/60' : 'text-stone-500'}`}>
+                                            Surprise them with luxury. We’ll hide your identity and the price tag.
+                                        </p>
 
-            {/* Hidden Message Box */}
-            <AnimatePresence>
-                {isGift && (
-                    <motion.div 
-                        initial={{ height: 0, opacity: 0 }} 
-                        animate={{ height: 'auto', opacity: 1 }} 
-                        exit={{ height: 0, opacity: 0 }}
-                        className="overflow-hidden"
-                    >
-                        {/* Features Badges */}
-                        <div className="grid grid-cols-2 gap-3 mb-4">
-                            <div className="flex items-center gap-2 text-[10px] text-amber-100/80 bg-white/5 p-2 rounded-lg border border-white/5">
-                                <span className="p-1 bg-amber-500/20 rounded-full text-amber-500">🎁</span> Unbranded Box
+                                        <AnimatePresence>
+                                            {isGift && (
+                                                <motion.div 
+                                                    initial={{ height: 0, opacity: 0 }} 
+                                                    animate={{ height: 'auto', opacity: 1 }} 
+                                                    exit={{ height: 0, opacity: 0 }}
+                                                    className="overflow-hidden"
+                                                >
+                                                    <div className="grid grid-cols-2 gap-3 mb-4">
+                                                        <div className="flex items-center gap-2 text-[10px] text-amber-100/80 bg-white/5 p-2 rounded-lg border border-white/5">
+                                                            <span className="p-1 bg-amber-500/20 rounded-full text-amber-500">🎁</span> Unbranded Box
+                                                        </div>
+                                                        <div className="flex items-center gap-2 text-[10px] text-amber-100/80 bg-white/5 p-2 rounded-lg border border-white/5">
+                                                            <span className="p-1 bg-red-500/20 rounded-full text-red-400">🙈</span> No Invoice
+                                                        </div>
+                                                    </div>
+
+                                                    <textarea
+                                                        value={giftMessage}
+                                                        onChange={(e) => setGiftMessage(e.target.value)}
+                                                        placeholder="Type your secret message here..."
+                                                        className="w-full p-4 bg-black/30 border border-white/10 rounded-xl text-white text-sm outline-none focus:border-amber-500/50 resize-none h-24 font-serif placeholder:text-white/20"
+                                                    />
+                                                    <p className="text-[10px] text-amber-500 mt-3 flex items-center gap-1">
+                                                        <ShieldCheck className="w-3 h-3" /> They’ll never know who sent it.
+                                                    </p>
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
+                                    </div>
+                                </div>
                             </div>
-                            <div className="flex items-center gap-2 text-[10px] text-amber-100/80 bg-white/5 p-2 rounded-lg border border-white/5">
-                                <span className="p-1 bg-red-500/20 rounded-full text-red-400">🙈</span> No Invoice
-                            </div>
-                        </div>
-
-                        {/* Message Input */}
-                        <textarea
-                            value={giftMessage}
-                            onChange={(e) => setGiftMessage(e.target.value)}
-                            placeholder="Type your secret message here..."
-                            className="w-full p-4 bg-black/30 border border-white/10 rounded-xl text-white text-sm outline-none focus:border-amber-500/50 resize-none h-24 font-serif placeholder:text-white/20"
-                        />
-                        <p className="text-[10px] text-amber-500 mt-3 flex items-center gap-1">
-                            <ShieldCheck className="w-3 h-3" /> They’ll never know who sent it.
-                        </p>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-        </div>
-    </div>
-</div>
+                            
                             <div className="flex justify-end pt-4">
                                 <button onClick={() => setStep(2)} className="bg-[#0a1f1c] text-white px-10 py-4 rounded-xl text-xs uppercase tracking-widest font-bold hover:bg-amber-700 transition flex items-center gap-3 shadow-xl hover:shadow-2xl transform hover:-translate-y-1">
                                     Continue to Payment <ArrowRight className="w-4 h-4" />
@@ -715,8 +874,9 @@ const total = subtotal + shipping - discountAmount + currentGiftCost;
 
                         {/* CART ITEMS WITH DELETE BUTTON */}
                         <div className="space-y-4 mb-6 max-h-80 overflow-y-auto custom-scrollbar pr-2">
-                            {cart.map((item: any) => (
-                                <div key={item.product.id} className="flex gap-4 relative bg-stone-50 p-2 rounded-xl group">
+                            {/* ✅ FIX 4: Loop mein 'index' daala taaki SAME product error na aaye */}
+                            {cart.map((item: any, index: number) => (
+                                <div key={`${item.product.id}-${index}`} className="flex gap-4 relative bg-stone-50 p-2 rounded-xl group">
                                     <div className="relative w-14 h-14 bg-white rounded-lg overflow-hidden border border-stone-200 flex-shrink-0">
                                         <Image src={item.product.image} alt={item.product.name} fill className="object-cover" />
                                     </div>
@@ -779,13 +939,15 @@ const total = subtotal + shipping - discountAmount + currentGiftCost;
                                 <span>Shipping</span>
                                 <span className="font-medium text-[#0a1f1c]">{shipping === 0 ? <span className="text-green-600 font-bold">Free</span> : `₹${shipping}`}</span>
                             </div>
-{/* ✅ NEW: GIFT COST ROW */}
-{isGift && (
-    <div className="flex justify-between text-amber-600 bg-amber-50 px-2 py-1 rounded mt-1">
-        <span className="flex items-center gap-1 text-xs font-bold"><Gift className="w-3 h-3" /> Secret Gift Mode</span>
-        <span className="font-bold text-xs">+ ₹{giftModeCost}</span>
-    </div>
-)}
+
+                            {/* ✅ GIFT COST ROW */}
+                            {isGift && (
+                                <div className="flex justify-between text-amber-600 bg-amber-50 px-2 py-1 rounded mt-1">
+                                    <span className="flex items-center gap-1 text-xs font-bold"><Gift className="w-3 h-3" /> Secret Gift Mode</span>
+                                    <span className="font-bold text-xs">+ ₹{giftModeCost}</span>
+                                </div>
+                            )}
+
                             {discountAmount > 0 && (
                                 <div className="flex justify-between text-green-600 font-bold">
                                     <span>Discount</span>
