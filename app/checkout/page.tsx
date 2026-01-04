@@ -4,7 +4,7 @@ import { useStore } from '@/lib/store';
 import { useRouter } from 'next/navigation';
 import {
     ShieldCheck, Truck, ArrowRight, MapPin,
-    Ticket, Check, AlertCircle, ShoppingBag, Lock, ChevronLeft, Loader2, X, Trash2, Gift, CreditCard
+    Ticket, Check, AlertCircle, ShoppingBag, Lock, ChevronLeft, Loader2, X, Trash2, Gift, CreditCard, Crown, Sparkles,
 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -68,12 +68,23 @@ export default function CheckoutPage() {
     const {
         cart,
         currentUser,
-        coupons,
         placeOrder,
         clearCart,
         systemSettings,
         removeFromCart,
-        addToCart
+        addToCart,
+       // 👇 NEW: LOYALTY & COUPON FROM STORE
+        pointsDiscount,
+        pointsRedeemed,
+        redeemLoyaltyPoints,
+        removeLoyaltyPoints,
+        
+        // 👇 NEW: Store wale Coupon Variables
+        appliedCoupon,      // Global Coupon
+       couponDiscount: discountAmount, // 👈 MAGIC FIX: Aliasing
+        applyCoupon,        // Global Function
+        removeCoupon,       // Global Function
+        coupons             // List of coupons
     } = store;
 
     // --- STATE ---
@@ -83,8 +94,7 @@ export default function CheckoutPage() {
 
     // Coupon State
     const [couponCode, setCouponCode] = useState('');
-    const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
-    const [discountAmount, setDiscountAmount] = useState(0);
+   
 
     // Settings Fetch
     const [liveSettings, setLiveSettings] = useState<any>(null);
@@ -131,7 +141,16 @@ export default function CheckoutPage() {
     // 5. Discount Logic
     // Admin Logic: netTaxable = totalTaxable - discount
     // Note: Discount Base Price me se minus hoga
-    const netTaxable = Math.max(0, totalBasePrice - discountAmount);
+   // 5. Discount Logic (Coupon + Loyalty Points)
+    // Points discount bhi Base Price se minus hoga
+    const netTaxable = Math.max(0, totalBasePrice - discountAmount - (pointsDiscount || 0));
+    // Loyalty Display Helpers
+    const pointRate = Number(systemSettings?.pointValue) || 1;
+    // Calculate Max Redeemable Points (Total order value se zyada na ho)
+    const maxRedeemable = Math.min(
+        currentUser?.points || 0, 
+        Math.floor(cartInclusiveTotal / pointRate)
+    );
 
     // 6. Tax Calculation (On Net Base)
     // Admin Logic: finalGST = netTaxable * 0.03
@@ -270,38 +289,27 @@ const subtotal = cartInclusiveTotal;
         return false;
     });
 
+  // ✅ NAYA LOGIC (Connected to Store)
     const handleApplyCoupon = () => {
         if (!couponCode) return showToast("Please enter a code", "error");
-        const found = coupons?.find((c: any) => c.code.toLowerCase() === couponCode.toLowerCase());
-        if (!found) return showToast("Invalid Coupon Code", "error");
-
-        if (subtotal < (found.minOrderValue || 0)) {
-            return showToast(`Add items worth ₹${found.minOrderValue - subtotal} more`, "error");
-        }
-
-        const userEmail = auth.currentUser?.email?.toLowerCase();
-        if (found.allowedEmail && found.allowedEmail.toLowerCase() !== userEmail) {
-            return showToast("This coupon is not valid for your account", "error");
-        }
-
-        let disc = 0;
-        if (found.type === 'percent') {
-            disc = Math.round((subtotal * found.discount) / 100);
+        
+        // Store ka function call karein
+        const result = applyCoupon(couponCode);
+        
+        if (result.success) {
+            showToast(result.message, "success");
         } else {
-            disc = found.discount;
+            showToast(result.message, "error");
         }
-
-        setAppliedCoupon(found);
-        setDiscountAmount(disc);
-        showToast("Coupon Applied!", "success");
     };
 
     const handleRemoveCoupon = () => {
-        setAppliedCoupon(null);
-        setDiscountAmount(0);
+        removeCoupon(); // Store reset karega
         setCouponCode('');
         showToast("Coupon Removed", "success");
     };
+
+
 
   // --- ✅ CORRECT HANDLE PLACE ORDER FUNCTION ---
     const handlePlaceOrder = async () => {
@@ -331,36 +339,35 @@ const subtotal = cartInclusiveTotal;
                 }
 
                 // 2. Base Order Details (Common for both)
-                const baseOrderDetails = {
-                    name: `${formData.firstName} ${formData.lastName}`,
-                    email: finalEmail,
-                    address: {
-                        id: `addr_${Date.now()}`,
-                        street: formData.address,
-                        city: formData.city,
-                        state: formData.state,
-                        pincode: formData.pincode,
-                        phone: formData.phone,
-                    },
-                    isGift, 
-                    giftMessage: giftMessage || "", 
-                    giftWrapPrice: currentGiftCost,
-                    date: new Date().toLocaleDateString('en-IN'),
-                   total,
-subtotal: taxableBeforeDiscount,
-shipping,
-discount: discountAmount, // BEFORE TAX
-tax: totalGST,
+             // Inside handlePlaceOrder function...
 
-                    items: cart.map((item: any) => ({
-                        name: item.product.name, 
-                        qty: item.qty, 
-                        price: item.product.price,
-                        image: item.product.image, 
-                        selectedSize: item.selectedSize || null, 
-                        selectedColor: item.selectedColor || null
-                    }))
-                };
+// ✅ Calculate Total Discount (Coupon + Points)
+const totalDiscount = discountAmount + (pointsDiscount || 0);
+
+const baseOrderDetails = {
+    name: `${formData.firstName} ${formData.lastName}`,
+    email: finalEmail,
+    address: {
+        // ... address fields ...
+    },
+    isGift, 
+    giftMessage: giftMessage || "", 
+    giftWrapPrice: currentGiftCost,
+    date: new Date().toLocaleDateString('en-IN'),
+    
+    total,
+    subtotal: taxableBeforeDiscount,
+    shipping,
+    
+    // ✅ FIX: Ab Coupon aur Points dono ka discount database mein jayega
+   discount: discountAmount + (pointsDiscount || 0),
+    
+    tax: totalGST,
+
+    items: cart.map((item: any) => ({
+        // ... items mapping ...
+    }))
+};
 
                 // 3. Razorpay Options
                 const options = {
@@ -868,7 +875,50 @@ tax: totalGST,
                 <div className="lg:col-span-5 space-y-6 h-fit sticky top-28">
                     <div className="bg-white p-6 rounded-2xl border border-stone-200/60 shadow-sm">
                         <h3 className="font-serif text-lg text-[#0a1f1c] mb-6 border-b border-stone-100 pb-4">Order Summary</h3>
+{/* 👑 LOYALTY POINTS CARD */}
+                        {currentUser && currentUser.points > 0 && (
+                            <div className="mb-6 p-1 rounded-xl bg-gradient-to-r from-amber-200 via-yellow-400 to-amber-600 shadow-md">
+                                <div className="bg-white rounded-lg p-4 relative overflow-hidden">
+                                    <div className="flex justify-between items-start relative z-10">
+                                        <div>
+                                            <h3 className="text-amber-600 font-serif text-sm font-bold flex items-center gap-2">
+                                                <Crown className="w-4 h-4 fill-current" />
+                                                Redeem Points
+                                            </h3>
+                                            <p className="text-stone-500 text-[10px] mt-1 font-medium">
+                                                Balance: <span className="text-[#0a1f1c] font-bold">{currentUser.points} Pts</span>
+                                                <span className="mx-2 text-stone-300">|</span>
+                                                Rate: ₹{pointRate}/pt
+                                            </p>
+                                        </div>
+                                        {pointsDiscount > 0 && (
+                                            <span className="bg-green-100 text-green-700 text-[9px] font-bold px-2 py-1 rounded flex items-center gap-1">
+                                                <Check className="w-3 h-3" /> APPLIED
+                                            </span>
+                                        )}
+                                    </div>
 
+                                    <div className="mt-3 pt-3 border-t border-stone-100">
+                                        {pointsDiscount > 0 ? (
+                                            <div className="flex justify-between items-center bg-green-50 p-2 rounded border border-green-200">
+                                                <div>
+                                                    <p className="text-green-700 font-bold text-xs">₹{pointsDiscount} Saved!</p>
+                                                    <p className="text-green-600/70 text-[9px]">Using {pointsRedeemed} Points</p>
+                                                </div>
+                                                <button onClick={removeLoyaltyPoints} className="text-stone-400 hover:text-red-500 transition"><X className="w-4 h-4" /></button>
+                                            </div>
+                                        ) : (
+                                            <button
+                                                onClick={() => redeemLoyaltyPoints(maxRedeemable)}
+                                                className="w-full py-2 bg-[#0a1f1c] hover:bg-amber-600 text-white font-bold text-[10px] uppercase rounded transition flex items-center justify-center gap-2 shadow-lg"
+                                            >
+                                                <Sparkles className="w-3 h-3" /> Use Max Points (₹{Math.floor(maxRedeemable * pointRate)})
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                         {/* COUPON SECTION */}
                         <div className="mb-6">
                             <label className="text-xs font-bold text-gray-400 uppercase mb-2 block">Have a Coupon?</label>
@@ -977,14 +1027,20 @@ tax: totalGST,
                                     <span>Taxable Value (Base Price)</span>
                                     <span>₹{totalBasePrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                 </div>
-                                
+                                {/* 1. COUPON DISCOUNT (Jo gayab ho gaya tha) */}
                                 {discountAmount > 0 && (
                                     <div className="flex justify-between text-[11px] text-green-600 font-bold">
-                                        <span>Less: Discount(Before Tax)</span>
+                                        <span>Less: Coupon Discount</span>
                                         <span>- ₹{discountAmount.toLocaleString()}</span>
                                     </div>
                                 )}
+                                {pointsDiscount > 0 && (
+                                    <div className="flex justify-between text-[11px] text-amber-600 font-bold animate-pulse">
+                                        <span className="flex items-center gap-1"><Crown className="w-3 h-3"/> Loyalty Points</span>
+                                        <span>- ₹{pointsDiscount.toLocaleString()}</span>
+                                    </div>
 
+                                )}
                                 <div className="flex justify-between text-[11px] text-stone-400">
                                     <span>Net Taxable Value</span>
                                     <span>₹{gstBreakdown.basePrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>

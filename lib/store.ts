@@ -81,7 +81,8 @@ export type Coupon = {
     expiryDate?: string;
     allowedEmail?: string; // ✅ YE LINE ADD KAREIN (Lock feature ke liye)
 };
-export type Order = { id: string; customerName: string; customerEmail?: string; address: Address; total: number; subtotal: number; tax: number; discount: number; shipping: number; status: string; date: string; items: any[]; paymentMethod: string; invoiceNo: string; // ✅ YE 3 LINES ADD KAREIN:
+export type Order = { id: string; customerName: string; customerEmail?: string; address: Address; total: number; subtotal: number; tax: number; discount: number; couponDiscount?: number; 
+    pointsDiscount?: number; shipping: number; status: string; date: string; items: any[]; paymentMethod: string; invoiceNo: string; // ✅ YE 3 LINES ADD KAREIN:
     isGift?: boolean;
     giftMessage?: string;
     giftWrapPrice?: number; };
@@ -95,6 +96,18 @@ export type SystemSettings = {
     globalAlert: string;
     shippingCost?: number;
 giftModeCost?: number;
+// 👇 Points Redemption Rate (Ex: 1 Point = ₹0.50)
+    pointValue?: number; 
+
+    // 👇 NEW: ADMIN CONTROL FOR TIERS (Thresholds & Multipliers)
+    tierConfig?: {
+        goldThreshold: number;      // e.g., 1000
+        platinumThreshold: number;  // e.g., 5000
+        solitaireThreshold: number; // e.g., 10000
+        goldMultiplier: number;     // e.g., 1.5x
+        platinumMultiplier: number; // e.g., 2x
+        solitaireMultiplier: number; // e.g., 3x
+    };
     // ✅ UPDATED PAYMENT STRUCTURE
     payment?: {
         // Instamojo Keys
@@ -192,7 +205,11 @@ type Store = {
     loading: boolean;
     appliedCoupon: Coupon | null; // ✅ Naya State
     couponDiscount: number;       // ✅ Naya State
-
+// 👇 YE 4 LINES ADD KAREIN (Loyalty State)
+    pointsRedeemed: number;   
+    pointsDiscount: number;   
+    redeemLoyaltyPoints: (points: number) => void; 
+    removeLoyaltyPoints: () => void;
     // Cart Actions
    addToCart: (product: Product, qty?: number, size?: string, color?: string) => void;
     removeFromCart: (id: string) => void;
@@ -262,7 +279,8 @@ export const useStore = create<Store>()(
             // Initial State
             appliedCoupon: null, // ✅ Default Value
             couponDiscount: 0,   // ✅ Default Value
-
+            pointsRedeemed: 0,
+            pointsDiscount: 0,
             products: [],
 
             reviews: [],
@@ -332,6 +350,39 @@ export const useStore = create<Store>()(
             },
 
             removeCoupon: () => set({ appliedCoupon: null, couponDiscount: 0 }),
+            // 👇 YE DO NAYE FUNCTIONS PASTE KAREIN
+            redeemLoyaltyPoints: (pointsToUse) => {
+                const state = get();
+                const userPoints = state.currentUser?.points || 0;
+                
+                // 1. Admin ki set ki hui Value lo (Default: 1 Point = ₹1)
+                const rate = state.systemSettings.pointValue || 1; 
+
+                // 2. Validation
+                if (pointsToUse > userPoints) {
+                    alert("Insufficient Points!");
+                    return;
+                }
+
+                // 3. Discount Calculate Karo
+                const discountValue = Math.floor(pointsToUse * rate); 
+
+                // 4. Cart Total Check (Discount total se zyada na ho)
+                const subtotal = state.cart.reduce((sum, item) => sum + item.product.price * item.qty, 0);
+                
+                if (discountValue >= subtotal) {
+                    alert("Points discount cannot exceed cart total.");
+                    return;
+                }
+
+                // 5. Apply
+                set({ 
+                    pointsRedeemed: pointsToUse, 
+                    pointsDiscount: discountValue 
+                });
+            },
+
+            removeLoyaltyPoints: () => set({ pointsRedeemed: 0, pointsDiscount: 0 }),
             // --- CART & WISHLIST ---
             // ✅ NAYA CODE (Stock Check ke saath)
            // ✅ FIXED: addToCart Logic (Checks ID + Size + Color)
@@ -440,81 +491,126 @@ export const useStore = create<Store>()(
           // --- ORDERS ---
             // ✅ UPDATED: Ab ye Checkout Page se aayi hui exact values save karega
           // ✅ FIXED: placeOrder Logic (Saves Size & Color correctly)
-           placeOrder: async (details) => {
-    const state = get();
+// ✅ FIXED PLACE ORDER LOGIC (Auto-Calculate Discount)
+            placeOrder: async (details) => {
+                const state = get();
 
-    if (!state.currentUser && !details.email) {
-        alert("🔒 Email is required to place an order.");
-        throw new Error("EMAIL_REQUIRED");
-    }
+                if (!state.currentUser && !details.email) {
+                    alert("🔒 Email is required to place an order.");
+                    throw new Error("EMAIL_REQUIRED");
+                }
 
-    // --- 1. PROFESSIONAL ID GENERATION START ---
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0'); // e.g. "01"
-    const day = String(now.getDate()).padStart(2, '0');        // e.g. "25"
-    
-    // Unique Random String (4 chars)
-    const uniqueSuffix = Math.floor(1000 + Math.random() * 9000).toString();
+                // --- 1. ID GENERATION ---
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                const day = String(now.getDate()).padStart(2, '0');
+                const uniqueSuffix = Math.floor(1000 + Math.random() * 9000).toString();
 
-    // ✅ ORDER ID FORMAT: ZER-20240125-9821 (ZER-YYYYMMDD-RANDOM)
-    // Isse Admin ko date dekh kar hi order ka pata chal jayega
-    const orderId = `ZER-${year}${month}${day}-${uniqueSuffix}`;
+                const orderId = `ZER-${year}${month}${day}-${uniqueSuffix}`;
+                const invoiceNo = `INV/${year}/${uniqueSuffix}`;
 
-    // ✅ INVOICE NO FORMAT: INV/2024/9821
-    // Professional Accounting format
-    const invoiceNo = `INV/${year}/${uniqueSuffix}`;
-    // --- PROFESSIONAL ID GENERATION END ---
+                // --- 2. CALCULATE TOTAL DISCOUNT (Coupon + Points) ---
+                // Hum UI se aayi value par bharosa nahi karenge, Store State use karenge
+               // --- 2. CALCULATE DISCOUNTS ---
+                const cDiscount = state.couponDiscount || 0;
+                const pDiscount = state.pointsDiscount || 0;
+                const totalDiscount = cDiscount + pDiscount;
 
-    // ✅ Data Preparation
-    const { name, email, address, total, subtotal, tax, shipping, discount, items, paymentMethod, isGift, giftMessage, giftWrapPrice } = details;
-    
-    const newOrder: Order = {
-        id: orderId,          // 👈 Yahan generated ID use hogi
-        invoiceNo: invoiceNo, // 👈 Yahan Invoice No use hoga
-        
-        customerName: name, 
-        customerEmail: email, 
-        address: address,
-        total: total || 0, 
-        subtotal: subtotal || 0, 
-        tax: tax || 0, 
-        discount: discount || 0,
-        shipping: shipping || 0,
-        
-        // Gift Details
-        isGift: isGift || false,
-        giftMessage: giftMessage || '',
-        giftWrapPrice: giftWrapPrice || 0,
+                // ✅ Data Preparation
+                const { name, email, address, total, subtotal, tax, shipping, items, paymentMethod, isGift, giftMessage, giftWrapPrice } = details;
 
-        status: 'Pending',
-        date: new Date().toISOString(), // Display Date
-        
-        items: items || state.cart.map(item => ({
-            name: item.product.name, 
-            qty: item.qty, 
-            price: item.product.price,
-            image: item.product.image, 
-            selectedSize: item.selectedSize || 'N/A',
-            selectedColor: item.selectedColor || null 
-        })),
-        
-        paymentMethod: paymentMethod || 'COD',
-    };
+                const newOrder: Order = {
+                    id: orderId,
+                    invoiceNo: invoiceNo,
+                    customerName: name,
+                    customerEmail: email,
+                    address: address,
+                    total: total || 0,
+                    subtotal: subtotal || 0,
+                    tax: tax || 0,
+                    shipping: shipping || 0,
 
-    // Database Save
-    await setDoc(doc(db, "orders", orderId), newOrder);
+                    // ✅ FIX: Ab hum Total bhi bhejenge aur Breakdown bhi
+                    discount: totalDiscount,      // Total Discount (Compatibility ke liye)
+                    couponDiscount: cDiscount,    // Alag se save kiya
+                    pointsDiscount: pDiscount,    // Alag se save kiya
 
-    // ... Baaki ka code same rahega (Notifications & Clear Cart) ...
+                    isGift: isGift || false,
+                    giftMessage: giftMessage || '',
+                    giftWrapPrice: giftWrapPrice || 0,
+                    status: 'Pending',
+                    date: new Date().toISOString(),
+                    items: items || state.cart.map(item => ({
+                        name: item.product.name,
+                        qty: item.qty,
+                        price: item.product.price,
+                        image: item.product.image,
+                        selectedSize: item.selectedSize || 'N/A',
+                        selectedColor: item.selectedColor || null
+                    })),
+                    paymentMethod: paymentMethod || 'COD',
+                };
+                // 3. Database Save
+                await setDoc(doc(db, "orders", orderId), newOrder);
 
-    await addDoc(collection(db, "notifications"), {
-        userId: email, title: 'Order Placed', message: `Order #${orderId} confirmed successfully.`, 
-        date: new Date().toLocaleDateString('en-IN'), isRead: false
-    });
+                // --- 4. LOYALTY LOGIC (Points Earn/Burn) ---
+                if (state.currentUser) {
+                    const currentPoints = state.currentUser.points || 0;
+                    const usedPoints = state.pointsRedeemed || 0; // Jitne points use kiye
 
-    set({ cart: [], appliedCoupon: null, couponDiscount: 0 });
-    return orderId;
-},
+                    // Admin Settings Load
+                    const config = state.systemSettings.tierConfig || {
+                        goldThreshold: 1000, platinumThreshold: 5000, solitaireThreshold: 10000,
+                        goldMultiplier: 1.5, platinumMultiplier: 2, solitaireMultiplier: 3
+                    };
+
+                    // Multiplier Calculation
+                    let multiplier = 1;
+                    if (currentPoints >= config.solitaireThreshold) multiplier = config.solitaireMultiplier;
+                    else if (currentPoints >= config.platinumThreshold) multiplier = config.platinumMultiplier;
+                    else if (currentPoints >= config.goldThreshold) multiplier = config.goldMultiplier;
+
+                    // Earned Points (Spent Amount / 100 * Multiplier)
+                    const basePoints = Math.floor((details.total || 0) / 100);
+                    const earnedPoints = Math.floor(basePoints * multiplier);
+
+                    // Final Points Logic: (Purane + Kamaye - Kharch Kiye)
+                    const newTotalPoints = Math.max(0, currentPoints + earnedPoints - usedPoints);
+
+                    // Update Tier
+                    let newTierName = 'Silver';
+                    if (newTotalPoints >= config.solitaireThreshold) newTierName = 'Solitaire';
+                    else if (newTotalPoints >= config.platinumThreshold) newTierName = 'Platinum';
+                    else if (newTotalPoints >= config.goldThreshold) newTierName = 'Gold';
+
+                    // Update User in DB
+                    const userRef = doc(db, "users", state.currentUser.id);
+                    await updateDoc(userRef, { points: newTotalPoints, tier: newTierName });
+
+                    // Update Local User State
+                    set((prev) => ({
+                        currentUser: prev.currentUser ? { ...prev.currentUser, points: newTotalPoints, tier: newTierName } : null
+                    }));
+                }
+
+                // Notification
+                await addDoc(collection(db, "notifications"), {
+                    userId: email, title: 'Order Placed', message: `Order #${orderId} confirmed.`,
+                    date: new Date().toLocaleDateString('en-IN'), createdAt: new Date().toISOString(), isRead: false
+                });
+
+                // ✅ RESET ALL STATES (Points bhi reset hone chahiye)
+                set({ 
+                    cart: [], 
+                    appliedCoupon: null, 
+                    couponDiscount: 0,
+                    pointsRedeemed: 0,  // 👈 Fix: Points reset
+                    pointsDiscount: 0   // 👈 Fix: Points discount reset
+                });
+                
+                return orderId;
+            },
 
             // --- ADMIN ACTIONS ---
             addProduct: async (p) => { await setDoc(doc(db, "products", p.id), p); },
@@ -570,7 +666,18 @@ export const useStore = create<Store>()(
                     set((state) => ({
                         systemSettings: {
                             ...state.systemSettings,
-                            
+                            pointValue: Number(data.store?.pointValue) || 1,
+
+                // 👇 NEW: Tier Config Load Logic
+                tierConfig: {
+                    goldThreshold: Number(data.store?.tierConfig?.goldThreshold) || 1000,
+                    platinumThreshold: Number(data.store?.tierConfig?.platinumThreshold) || 5000,
+                    solitaireThreshold: Number(data.store?.tierConfig?.solitaireThreshold) || 10000,
+                    
+                    goldMultiplier: Number(data.store?.tierConfig?.goldMultiplier) || 1.5,
+                    platinumMultiplier: Number(data.store?.tierConfig?.platinumMultiplier) || 2,
+                    solitaireMultiplier: Number(data.store?.tierConfig?.solitaireMultiplier) || 3,
+                },
                             // Store Basic Rules
                             taxRate: Number(data.store?.taxRate) || 3,
                             shippingCost: Number(data.store?.shippingCost) || 150,
@@ -688,7 +795,11 @@ export const useStore = create<Store>()(
             partialize: (state) => ({
                 cart: state.cart,
                 wishlist: state.wishlist,
-                currentUser: state.currentUser
+                currentUser: state.currentUser,
+                appliedCoupon: state.appliedCoupon,
+                couponDiscount: state.couponDiscount,
+                pointsRedeemed: state.pointsRedeemed,
+                pointsDiscount: state.pointsDiscount
             }),
             storage: createJSONStorage(() => localStorage),
         }
@@ -756,7 +867,16 @@ const initListeners = () => {
                             // ✅ YE LINE ADD KAREIN:
                             giftModeCost: Number(data.store?.giftModeCost) || 50,
                             globalAlert: data.store?.globalAlert || '',
-
+// 👇 YE PART ADD KAREIN (Isse Admin Settings Customer tak pahunchengi)
+            pointValue: Number(data.store?.pointValue) || 1,
+            tierConfig: {
+                goldThreshold: Number(data.store?.tierConfig?.goldThreshold) || 1000,
+                platinumThreshold: Number(data.store?.tierConfig?.platinumThreshold) || 5000,
+                solitaireThreshold: Number(data.store?.tierConfig?.solitaireThreshold) || 10000,
+                goldMultiplier: Number(data.store?.tierConfig?.goldMultiplier) || 1.5,
+                platinumMultiplier: Number(data.store?.tierConfig?.platinumMultiplier) || 2,
+                solitaireMultiplier: Number(data.store?.tierConfig?.solitaireMultiplier) || 3,
+            },
                             // Payment Data Load
                             payment: {
                                 instamojoApiKey: data.store?.payment?.instamojoApiKey,

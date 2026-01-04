@@ -753,206 +753,266 @@ const formatDate = (input: any) => {
   return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
 };
 
+// =========================================================
+// ✅ FINAL & CLEAN INVOICE GENERATOR (Copy-Paste This)
+// =========================================================
 export const generateAdminInvoice = (order: any, settings: any) => {
   if (!order) return;
 
-  // ---------- COMPANY STATE ----------
-  const companyAddress = settings?.invoice?.address || "";
-  let warehouseState = "Uttar Pradesh";
-  const foundState = STATES.find(s =>
-    companyAddress.toLowerCase().includes(s.toLowerCase())
-  );
-  if (foundState) warehouseState = foundState;
+  // 1. Helper: Date Formatter
+  const formatDate = (dateStr: string) => {
+      try {
+          const d = new Date(dateStr);
+          return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+      } catch (e) { return dateStr; }
+  };
 
-  // ---------- CUSTOMER ADDRESS ----------
-  let customerState = "";
-  let fullAddress = "";
+  // 2. Helper: Number to Words
+  const numberToWords = (num: number): string => {
+      const a = ['', 'One ', 'Two ', 'Three ', 'Four ', 'Five ', 'Six ', 'Seven ', 'Eight ', 'Nine ', 'Ten ', 'Eleven ', 'Twelve ', 'Thirteen ', 'Fourteen ', 'Fifteen ', 'Sixteen ', 'Seventeen ', 'Eighteen ', 'Nineteen '];
+      const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+      if (num === 0) return 'Zero';
+      const n = Math.floor(num);
+      if (n < 20) return a[n] + 'Only';
+      return `Rupees ${n.toLocaleString('en-IN')} Only`;
+  };
 
-  if (typeof order.address === "object") {
-    customerState = order.address.state || "";
-    fullAddress = `${order.address.street || ""}, ${order.address.city || ""}, ${order.address.state || ""} - ${order.address.pincode || ""}`;
-    if (order.address.phone) fullAddress += `\nPhone: ${order.address.phone}`;
-  } else {
-    fullAddress = order.address || "Address not provided";
-    customerState = order.address || "";
-  }
-
-  const isSameState = customerState
-    .toLowerCase()
-    .includes(warehouseState.toLowerCase());
-
-  // ---------- PDF INIT ----------
+  // 3. Initialize PDF
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.width;
+  const TAX_RATE = 3; // 3% GST
 
-  // ---------- HEADER ----------
-  doc.setFont("helvetica","bold");
+  // 4. Company & Customer Details
+  const companyName = settings?.invoice?.companyName || "ZERIMI";
+  const companyAddress = settings?.invoice?.address || "Baraut, Uttar Pradesh, India";
+  const companyGstin = settings?.invoice?.gstin || "";
+  
+  // Customer Address Logic
+  let fullAddress = order.address || "";
+  let customerState = "";
+  if (typeof order.address === 'object') {
+      fullAddress = `${order.address.street || ''}, ${order.address.city || ''}, ${order.address.state || ''} - ${order.address.pincode || ''}\nPhone: ${order.address.phone || ''}`;
+      customerState = order.address.state || "";
+  }
+  
+  // IGST vs SGST Logic (Simple Check: Agar "Uttar Pradesh" match kare to SGST/CGST)
+  // Note: Aap chahein to "Uttar Pradesh" ko settings se dynamic bhi kar sakte hain
+  const isSameState = companyAddress.toLowerCase().includes(customerState.toLowerCase()) || customerState.toLowerCase().includes("uttar pradesh");
+
+  // ---------------------------------------------------------
+  // 🎨 HEADER SECTION
+  // ---------------------------------------------------------
+  doc.setFont("helvetica", "bold");
   doc.setFontSize(22);
-  doc.setTextColor(212,175,55);
-  doc.text(settings?.invoice?.companyName || "ZERIMI", 14, 20);
+  doc.setTextColor(212, 175, 55); // Gold Color
+  doc.text(companyName, 14, 20);
 
-  doc.setFont("helvetica","normal");
+  doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.setTextColor(80);
   doc.text("Luxury Jewelry & Accessories", 14, 26);
-  doc.text(companyAddress || "Uttar Pradesh, India", 14, 31);
-  doc.text(
-    `GSTIN: ${settings?.invoice?.gstin || "GSTIN Not Applicable (Unregistered)"}`,
-    14,
-    36
-  );
-  doc.text(settings?.invoice?.email || "support@zerimi.com", 14, 41);
+  doc.text(doc.splitTextToSize(companyAddress, 80), 14, 31);
+  doc.text(`GSTIN: ${companyGstin}`, 14, 42);
+  doc.text(`Email: support@zerimi.com`, 14, 47);
 
+  // Invoice Info (Right Side)
   doc.setFontSize(16);
   doc.setTextColor(0);
   doc.text("TAX INVOICE", pageWidth - 14, 20, { align: "right" });
-
   doc.setFontSize(10);
-  doc.text(`Invoice #: ${order.invoiceNo || order.id.slice(-6)}`, pageWidth - 14, 30, { align: "right" });
+  doc.text(`Invoice #: ${order.invoiceNo || 'INV-001'}`, pageWidth - 14, 30, { align: "right" });
   doc.text(`Date: ${formatDate(order.date)}`, pageWidth - 14, 35, { align: "right" });
   doc.text(`Order ID: #${order.id}`, pageWidth - 14, 40, { align: "right" });
 
-  doc.line(14, 46, pageWidth - 14, 46);
+  doc.line(14, 52, pageWidth - 14, 52);
 
-  // ---------- BILL TO ----------
-  doc.setFont("helvetica","bold");
-  doc.text("Bill To:", 14, 54);
-  doc.setFont("helvetica","normal");
-  doc.text(order.name || "Valued Customer", 14, 60);
-  doc.text(doc.splitTextToSize(fullAddress, 80), 14, 65);
+  // Bill To
+  doc.setFont("helvetica", "bold");
+  doc.text("Bill To:", 14, 60);
+  doc.setFont("helvetica", "normal");
+  doc.text(order.customerName || "Valued Customer", 14, 66);
+  doc.text(doc.splitTextToSize(fullAddress, 100), 14, 71);
 
-  // ---------- ITEM TABLE ----------
-  const TAX_RATE = 3;
+  // ---------------------------------------------------------
+  // 📦 TABLE CALCULATIONS
+  // ---------------------------------------------------------
   let totalTaxable = 0;
   let totalGST = 0;
-  let giftTaxable = 0;
-  let giftGST = 0;
-
+  
   const tableRows: any[] = [];
 
+  // Items Loop
   order.items.forEach((item: any, index: number) => {
-    const qty = Number(item.qty || 1);
-    const inc = Number(item.price) * qty;
-    const taxable = inc / (1 + TAX_RATE / 100);
-    const tax = inc - taxable;
+      const qty = Number(item.qty || 1);
+      const rate = Number(item.price);
+      const amount = rate * qty;
+      
+      // Reverse Calculation: Price is Inclusive of 3% Tax
+      const taxableValue = amount / (1 + (TAX_RATE / 100)); 
+      const gstValue = amount - taxableValue;
 
-    totalTaxable += taxable;
-    totalGST += tax;
+      totalTaxable += taxableValue;
+      totalGST += gstValue;
 
-    tableRows.push([
-      index + 1,
-      item.name,
-      item.hsn || "7117",
-      qty,
-      `Rs.${(taxable/qty).toFixed(2)}`,
-      `Rs.${taxable.toFixed(2)}`,
-      isSameState ? "1.5%" : "-",
-      isSameState ? (tax/2).toFixed(2) : "-",
-      isSameState ? "1.5%" : "-",
-      isSameState ? (tax/2).toFixed(2) : "-",
-      !isSameState ? "3%" : "-",
-      !isSameState ? tax.toFixed(2) : "-",
-      `Rs.${inc.toFixed(2)}`
-    ]);
+      tableRows.push([
+          index + 1,
+          item.name,
+          "7117", // HSN
+          qty,
+          `Rs.${(taxableValue / qty).toFixed(2)}`,
+          `Rs.${taxableValue.toFixed(2)}`,
+          isSameState ? "1.5%" : "-",
+          isSameState ? (gstValue / 2).toFixed(2) : "-",
+          isSameState ? "1.5%" : "-",
+          isSameState ? (gstValue / 2).toFixed(2) : "-",
+          !isSameState ? "3%" : "-",
+          !isSameState ? gstValue.toFixed(2) : "-",
+          `Rs.${amount.toFixed(2)}`
+      ]);
   });
 
-  // ---------- GIFT PACKAGING (ITEM + SUMMARY BOTH) ----------
-  if (order.giftWrapPrice && order.giftWrapPrice > 0) {
-    const inc = Number(order.giftWrapPrice);
-    giftTaxable = inc / 1.03;
-    giftGST = inc - giftTaxable;
+  // Gift Wrap Logic
+  if (order.giftWrapPrice > 0) {
+      const gAmount = Number(order.giftWrapPrice);
+      const gTaxable = gAmount / 1.03;
+      const gGST = gAmount - gTaxable;
+      
+      totalTaxable += gTaxable;
+      totalGST += gGST;
 
-    totalTaxable += giftTaxable;
-    totalGST += giftGST;
-
-    tableRows.push([
-      tableRows.length + 1,
-      "Gift Packaging (Add-on)",
-      "9985",
-      1,
-      `Rs.${giftTaxable.toFixed(2)}`,
-      `Rs.${giftTaxable.toFixed(2)}`,
-      isSameState ? "1.5%" : "-",
-      isSameState ? (giftGST/2).toFixed(2) : "-",
-      isSameState ? "1.5%" : "-",
-      isSameState ? (giftGST/2).toFixed(2) : "-",
-      !isSameState ? "3%" : "-",
-      !isSameState ? giftGST.toFixed(2) : "-",
-      `Rs.${inc.toFixed(2)}`
-    ]);
+      tableRows.push([
+          tableRows.length + 1,
+          "Gift Packaging",
+          "9985",
+          1,
+          `Rs.${gTaxable.toFixed(2)}`,
+          `Rs.${gTaxable.toFixed(2)}`,
+          isSameState ? "1.5%" : "-",
+          isSameState ? (gGST / 2).toFixed(2) : "-",
+          isSameState ? "1.5%" : "-",
+          isSameState ? (gGST / 2).toFixed(2) : "-",
+          !isSameState ? "3%" : "-",
+          !isSameState ? gGST.toFixed(2) : "-",
+          `Rs.${gAmount.toFixed(2)}`
+      ]);
   }
 
+  // Generate Table
+  // @ts-ignore
   autoTable(doc, {
-    startY: 95,
-    head: [[
-      "Sn","Item","HSN","Qty","Rate","Taxable",
-      "CGST%","Amt","SGST%","Amt","IGST%","Amt","Total"
-    ]],
-    body: tableRows,
-    theme: "grid",
-    styles: { fontSize: 7 }
+      startY: 90,
+      head: [["Sn", "Item", "HSN", "Qty", "Rate", "Taxable", "CGST", "Amt", "SGST", "Amt", "IGST", "Amt", "Total"]],
+      body: tableRows,
+      theme: "grid",
+      styles: { fontSize: 7, halign: 'center' },
+      columnStyles: { 1: { halign: 'left' } }, // Align Item Name Left
+      headStyles: { fillColor: [15, 41, 37], textColor: 255 } // Dark Green Header
   });
 
-  // ---------- SUMMARY (NO MISSING LINE) ----------
-  const discount = Number(order.discount || 0);
-  const netTaxable = totalTaxable - discount;
-  const finalGST = netTaxable * (TAX_RATE / 100);
-  const grandTotal = netTaxable + finalGST + Number(order.shipping || 0);
-
-  let y = (doc as any).lastAutoTable.finalY + 10;
+  // ---------------------------------------------------------
+  // 💰 SUMMARY SECTION (THE FIX)
+  // ---------------------------------------------------------
+  // @ts-ignore
+  let finalY = doc.lastAutoTable.finalY + 10;
   const rightX = pageWidth - 14;
-  const labelX = rightX - 80;
+  const labelX = rightX - 70;
 
-  doc.text("Sub Total (Taxable):", labelX, y);
-  doc.text(`Rs.${totalTaxable.toFixed(2)}`, rightX, y, { align:"right" });
+  // 1. DATA EXTRACTION (Safety Checks)
+  const discountTotal = Number(order.discount || 0);
+  const couponDisc = Number(order.couponDiscount || 0);
+  const pointsDisc = Number(order.pointsDiscount || 0);
+  const shippingCharge = Number(order.shipping || 0);
 
-  if (giftTaxable > 0) {
-    y += 7;
-    doc.text("Gift Packaging (Incl. GST):", labelX, y);
-    doc.text(`Rs.${(giftTaxable + giftGST).toFixed(2)}`, rightX, y, { align:"right" });
-  }
+  // 2. MATH
+  // Net Taxable = Total Taxable - Total Discount
+  const netTaxableValue = Math.max(0, totalTaxable - discountTotal);
+  
+  // Re-calculate GST on Net Value (Tax kam hoga kyunki discount mila hai)
+  const finalGSTVal = netTaxableValue * (TAX_RATE / 100);
+  
+  // Grand Total
+  const grandTotal = Math.round(netTaxableValue + finalGSTVal + shippingCharge);
 
-  if (discount > 0) {
-    y += 7;
-    doc.setTextColor(200,30,30);
-    doc.text("Less: Coupon Discount (Before Tax):", labelX, y);
-    doc.text(`Rs.${discount.toFixed(2)}`, rightX, y, { align:"right" });
-    doc.setTextColor(0);
-  }
-
-  y += 7;
-  doc.text("Net Taxable Value:", labelX, y);
-  doc.text(`Rs.${netTaxable.toFixed(2)}`, rightX, y, { align:"right" });
-
-  y += 7;
-  doc.setTextColor(120);
-  doc.text("Total GST (3%):", labelX, y);
-  doc.text(`Rs.${finalGST.toFixed(2)}`, rightX, y, { align:"right" });
-  doc.setTextColor(0);
-const shippingCharge = Number(order.shipping || 0);
-
-if (shippingCharge > 0) {
-  y += 7;
-  doc.setTextColor(80);
-  doc.text("Shipping Charges:", labelX, y);
-  doc.text(`Rs.${shippingCharge.toFixed(2)}`, rightX, y, { align: "right" });
-  doc.setTextColor(0);
-}
-
-  y += 9;
-  doc.setFont("helvetica","bold");
-  doc.text("Grand Total:", labelX, y);
-  doc.text(`Rs.${grandTotal.toFixed(2)}`, rightX, y, { align:"right" });
-
-  // ---------- DECLARATION ----------
-  y += 14;
+  // 3. DISPLAY
   doc.setFontSize(9);
-  doc.setFont("helvetica","normal");
-  doc.text(
-    "Declaration:\nWe declare that this invoice shows the actual price of the goods and services described\nand that all particulars are true and correct.\n\nFor ZERIMI\nAuthorized Signatory\n(This is a computer-generated invoice)",
-    14,
-    y
-  );
+  doc.setTextColor(0);
+
+  // Subtotal
+  doc.text("Sub Total (Taxable):", labelX, finalY);
+  doc.text(`Rs.${totalTaxable.toFixed(2)}`, rightX, finalY, { align: "right" });
+  finalY += 6;
+
+  // --- COUPON DISCOUNT ---
+  if (couponDisc > 0) {
+      doc.setTextColor(200, 30, 30); // Red
+      doc.text("Less: Coupon Discount:", labelX, finalY);
+      doc.text(`- Rs.${couponDisc.toFixed(2)}`, rightX, finalY, { align: "right" });
+      doc.setTextColor(0);
+      finalY += 6;
+  }
+
+  // --- POINTS DISCOUNT ---
+  if (pointsDisc > 0) {
+      doc.setTextColor(212, 175, 55); // Gold
+      doc.text("Less: Loyalty Points:", labelX, finalY);
+      doc.text(`- Rs.${pointsDisc.toFixed(2)}`, rightX, finalY, { align: "right" });
+      doc.setTextColor(0);
+      finalY += 6;
+  }
+
+  // --- FALLBACK (Agar alag-alag nahi hai, par total hai) ---
+  if (couponDisc === 0 && pointsDisc === 0 && discountTotal > 0) {
+      doc.setTextColor(200, 30, 30);
+      doc.text("Less: Total Discount:", labelX, finalY);
+      doc.text(`- Rs.${discountTotal.toFixed(2)}`, rightX, finalY, { align: "right" });
+      doc.setTextColor(0);
+      finalY += 6;
+  }
+
+  doc.line(labelX, finalY, rightX, finalY); // Divider
+  finalY += 6;
+
+  // Net Taxable
+  doc.text("Net Taxable Value:", labelX, finalY);
+  doc.text(`Rs.${netTaxableValue.toFixed(2)}`, rightX, finalY, { align: "right" });
+  finalY += 6;
+
+  // GST
+  doc.setTextColor(100);
+  doc.text(`Add: GST (${TAX_RATE}%):`, labelX, finalY);
+  doc.text(`+ Rs.${finalGSTVal.toFixed(2)}`, rightX, finalY, { align: "right" });
+  finalY += 6;
+
+  // Shipping
+  doc.text("Add: Shipping Charges:", labelX, finalY);
+  doc.text(`+ Rs.${shippingCharge.toFixed(2)}`, rightX, finalY, { align: "right" });
+  finalY += 8;
+
+  // GRAND TOTAL
+  doc.setFontSize(14);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(0);
+  doc.text("Grand Total:", labelX, finalY);
+  doc.text(`Rs.${grandTotal.toFixed(2)}`, rightX, finalY, { align: "right" });
+
+  // ---------------------------------------------------------
+  // 📝 FOOTER
+  // ---------------------------------------------------------
+  finalY += 15;
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Amount in Words: ${numberToWords(grandTotal)}`, 14, finalY);
+
+  doc.rect(14, finalY + 5, pageWidth - 28, 20);
+  doc.setFontSize(8);
+  doc.text("Declaration:", 16, finalY + 10);
+  doc.text("We declare that this invoice shows the actual price of the goods described above.", 16, finalY + 15);
+
+  doc.setFont("helvetica", "bold");
+  doc.text(`For ${companyName}`, pageWidth - 40, finalY + 20, { align: "center" });
+  doc.setFontSize(7);
+  doc.setFont("helvetica", "normal");
+  doc.text("Authorized Signatory", pageWidth - 40, finalY + 23, { align: "center" });
 
   doc.save(`Invoice_${order.id}.pdf`);
 };
@@ -1811,7 +1871,13 @@ function ConfigManager({ showToast, updateSystemConfig }: any) {
             currency: '₹',
             maintenanceMode: false,
             globalAlert: 'Welcome to ZERIMI - Premium Jewelry',
-            giftModeCost: 50
+            giftModeCost: 50,
+            // 👇 NEW: LOYALTY SETTINGS
+            pointValue: 1, // 1 Point = ₹1
+            tierConfig: {
+                goldThreshold: 1000, platinumThreshold: 5000, solitaireThreshold: 10000,
+                goldMultiplier: 1.5, platinumMultiplier: 2, solitaireMultiplier: 3
+            }
         },
 
         invoice: {
@@ -2046,6 +2112,114 @@ function ConfigManager({ showToast, updateSystemConfig }: any) {
                     </div>
 
                     {/* 5. STORE RULES */}
+                    {/* 🟢 NEW: LOYALTY PROGRAM CONFIGURATION */}
+                    <div className="bg-[#0f2925] p-8 rounded-3xl border border-white/5 relative overflow-hidden group">
+                        {/* Background Decor */}
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-amber-500/20 transition duration-700"></div>
+                        
+                        <h3 className="text-white font-serif text-lg mb-6 flex items-center gap-2 relative z-10">
+                            <span className="bg-amber-500/20 p-1.5 rounded text-amber-500"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14"/></svg></span> 
+                            Loyalty & Rewards
+                        </h3>
+
+                        <div className="space-y-6 relative z-10">
+                            
+                            {/* 1. Point Value */}
+                            <div className="bg-black/20 p-4 rounded-xl border border-white/5">
+                                <label className="text-[10px] text-amber-500 uppercase font-bold mb-2 block">1 Point Value (₹)</label>
+                                <div className="flex gap-4 items-center">
+                                    <input 
+                                        type="number" 
+                                        step="0.1"
+                                        // @ts-ignore
+                                        value={config.store.pointValue} 
+                                        onChange={(e) => handleChange('store', 'pointValue', Number(e.target.value))} 
+                                        className="w-full p-3 bg-black/40 border border-white/10 rounded-xl text-white outline-none focus:border-amber-500/50 font-mono" 
+                                    />
+                                    <div className="text-[10px] text-white/40 leading-tight w-40">
+                                        Example: <br/> 0.5 = ₹50 off for 100 pts <br/> 1.0 = ₹100 off for 100 pts
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 2. Tier Config */}
+                            <div>
+                                <h4 className="text-[10px] text-white/40 uppercase font-bold mb-3">Tier Thresholds & Multipliers</h4>
+                                <div className="space-y-3">
+                                    
+                                    {/* Gold */}
+                                    <div className="flex gap-2 items-center bg-amber-500/5 p-2 rounded-lg border border-amber-500/10">
+                                        <span className="text-[10px] font-bold text-amber-500 w-16 uppercase">Gold</span>
+                                        <input 
+                                            placeholder="Points" 
+                                            type="number" 
+                                            // @ts-ignore
+                                            value={config.store.tierConfig?.goldThreshold} 
+                                            onChange={(e) => setConfig({...config, store: {...config.store, tierConfig: {...config.store.tierConfig, goldThreshold: Number(e.target.value)}}})}
+                                            className="w-20 p-2 bg-black/40 border border-white/10 rounded text-white text-xs outline-none"
+                                        />
+                                        <span className="text-white/30 text-xs">pts</span>
+                                        <input 
+                                            placeholder="Speed" 
+                                            type="number" 
+                                            step="0.1" 
+                                            // @ts-ignore
+                                            value={config.store.tierConfig?.goldMultiplier} 
+                                            onChange={(e) => setConfig({...config, store: {...config.store, tierConfig: {...config.store.tierConfig, goldMultiplier: Number(e.target.value)}}})}
+                                            className="w-16 p-2 bg-black/40 border border-white/10 rounded text-white text-xs outline-none"
+                                        />
+                                        <span className="text-white/30 text-xs">x</span>
+                                    </div>
+
+                                    {/* Platinum */}
+                                    <div className="flex gap-2 items-center bg-cyan-500/5 p-2 rounded-lg border border-cyan-500/10">
+                                        <span className="text-[10px] font-bold text-cyan-400 w-16 uppercase">Platinum</span>
+                                        <input 
+                                            type="number" 
+                                            // @ts-ignore
+                                            value={config.store.tierConfig?.platinumThreshold} 
+                                            onChange={(e) => setConfig({...config, store: {...config.store, tierConfig: {...config.store.tierConfig, platinumThreshold: Number(e.target.value)}}})}
+                                            className="w-20 p-2 bg-black/40 border border-white/10 rounded text-white text-xs outline-none"
+                                        />
+                                        <span className="text-white/30 text-xs">pts</span>
+                                        <input 
+                                            type="number" 
+                                            step="0.1" 
+                                            // @ts-ignore
+                                            value={config.store.tierConfig?.platinumMultiplier} 
+                                            onChange={(e) => setConfig({...config, store: {...config.store, tierConfig: {...config.store.tierConfig, platinumMultiplier: Number(e.target.value)}}})}
+                                            className="w-16 p-2 bg-black/40 border border-white/10 rounded text-white text-xs outline-none"
+                                        />
+                                        <span className="text-white/30 text-xs">x</span>
+                                    </div>
+
+                                    {/* Solitaire */}
+                                    <div className="flex gap-2 items-center bg-rose-500/5 p-2 rounded-lg border border-rose-500/10">
+                                        <span className="text-[10px] font-bold text-rose-400 w-16 uppercase">Solitaire</span>
+                                        <input 
+                                            type="number" 
+                                            // @ts-ignore
+                                            value={config.store.tierConfig?.solitaireThreshold} 
+                                            onChange={(e) => setConfig({...config, store: {...config.store, tierConfig: {...config.store.tierConfig, solitaireThreshold: Number(e.target.value)}}})}
+                                            className="w-20 p-2 bg-black/40 border border-white/10 rounded text-white text-xs outline-none"
+                                        />
+                                        <span className="text-white/30 text-xs">pts</span>
+                                        <input 
+                                            type="number" 
+                                            step="0.1" 
+                                            // @ts-ignore
+                                            value={config.store.tierConfig?.solitaireMultiplier} 
+                                            onChange={(e) => setConfig({...config, store: {...config.store, tierConfig: {...config.store.tierConfig, solitaireMultiplier: Number(e.target.value)}}})}
+                                            className="w-16 p-2 bg-black/40 border border-white/10 rounded text-white text-xs outline-none"
+                                        />
+                                        <span className="text-white/30 text-xs">x</span>
+                                    </div>
+
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
                     <div className="bg-[#0f2925] p-8 rounded-3xl border border-white/5 relative overflow-hidden">
                         <h3 className="text-white font-serif text-lg mb-6 flex items-center gap-2"><DollarSign className="w-5 h-5 text-green-400" /> Financial Rules</h3>
                         <div className="space-y-6">

@@ -1,12 +1,12 @@
 "use client";
 import { useStore, Order } from '@/lib/store';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { 
   Package, User, ShoppingBag, ChevronRight, Heart, 
   FileText, Download, Award, Bell, Key, Camera, Tag, Trash2, 
   Sparkles, RotateCcw, RefreshCcw, Plus, LogOut, X, 
-  Home, Briefcase, Save, Edit2, ShieldCheck, Clock,Lock, Check, Truck, CheckCircle, Info, 
+  Home, Briefcase, Save, Edit2, ShieldCheck, Clock,Lock, Check, Truck, CheckCircle, Info,
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -21,6 +21,16 @@ import { db } from '@/lib/firebase';
 import toast, { Toaster } from 'react-hot-toast';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+
+// --- HELPER: TIER BADGE STYLES ---
+const getTierStyle = (tier: string) => {
+    switch(tier) {
+        case 'Solitaire': return 'text-rose-400 bg-rose-500/10 border-rose-500/20 shadow-[0_0_15px_rgba(244,63,94,0.4)] animate-pulse';
+        case 'Platinum': return 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20 shadow-[0_0_10px_rgba(34,211,238,0.3)]';
+        case 'Gold': return 'text-amber-400 bg-amber-500/10 border-amber-500/20 shadow-[0_0_10px_rgba(251,191,36,0.3)]';
+        default: return 'text-gray-300 bg-white/5 border-white/10'; // Silver
+    }
+};
 // --- HELPER: DATE PARSER (Unchanged) ---
 const parseDate = (dateStr: string) => {
     if (!dateStr) return new Date();
@@ -64,237 +74,229 @@ const numberToWords = (price: number) => {
 /* ----------------------------------------
    ✅ FINAL CUSTOMER INVOICE (MATCHING ADMIN LOGIC)
 ---------------------------------------- */
+// =========================================================
+// ✅ CUSTOMER INVOICE (SYNCED WITH ADMIN)
+// =========================================================
 export const downloadInvoice = (order: any, settings: any) => {
+  if (!order) return;
+
+  // 1. Helper: Date Formatter
+  const formatDate = (dateStr: string) => {
+      try {
+          const d = new Date(dateStr);
+          return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+      } catch (e) { return dateStr; }
+  };
+
+  // 2. Helper: Number to Words
+  const numberToWords = (num: number): string => {
+      const a = ['', 'One ', 'Two ', 'Three ', 'Four ', 'Five ', 'Six ', 'Seven ', 'Eight ', 'Nine ', 'Ten ', 'Eleven ', 'Twelve ', 'Thirteen ', 'Fourteen ', 'Fifteen ', 'Sixteen ', 'Seventeen ', 'Eighteen ', 'Nineteen '];
+      const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+      if (num === 0) return 'Zero';
+      const n = Math.floor(num);
+      if (n < 20) return a[n] + 'Only';
+      return `Rupees ${n.toLocaleString('en-IN')} Only`;
+  };
+
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.width;
+  const TAX_RATE = 3; 
 
-  // --- 1. SETTINGS & LOGIC ---
-  const TAX_RATE = 3;
-  const companyState = "Maharashtra"; // ZERIMI Base Location
+  // --- COMPANY & CUSTOMER INFO ---
+  const companyName = settings?.invoice?.companyName || "ZERIMI";
+  const companyAddress = settings?.invoice?.address || "Baraut, Uttar Pradesh, India";
+  const companyGstin = settings?.invoice?.gstin || "";
   
-  // Customer State Check (For CGST/SGST vs IGST)
-  let customerState = "";
+  // Customer Address
   let fullAddress = "";
-
-  if (typeof order.address === "object") {
-    customerState = order.address.state || "";
-    fullAddress = `${order.address.street || ""}, ${order.address.city || ""}, ${order.address.state || ""} - ${order.address.pincode || ""}`;
-    if (order.address.phone) fullAddress += `\nPhone: ${order.address.phone}`;
+  let customerState = "";
+  if (typeof order.address === 'object') {
+      fullAddress = `${order.address.street || ''}, ${order.address.city || ''}, ${order.address.state || ''} - ${order.address.pincode || ''}\nPhone: ${order.address.phone || ''}`;
+      customerState = order.address.state || "";
   } else {
-    fullAddress = order.address || "Address not provided";
-    customerState = order.address || "";
+      fullAddress = order.address || "";
   }
 
-  const isSameState = customerState.toLowerCase().includes(companyState.toLowerCase());
+  const isSameState = companyAddress.toLowerCase().includes(customerState.toLowerCase()) || customerState.toLowerCase().includes("uttar pradesh");
 
-  /* ========================================
-     2. HEADER
-  ======================================== */
-  doc.setFontSize(24);
-  doc.setTextColor(212, 175, 55); // Gold
+  // --- HEADER ---
   doc.setFont("helvetica", "bold");
-  doc.text("ZERIMI", 14, 20);
+  doc.setFontSize(22);
+  doc.setTextColor(212, 175, 55); // Gold
+  doc.text(companyName, 14, 20);
 
-  doc.setFontSize(10);
-  doc.setTextColor(100);
   doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.setTextColor(80);
   doc.text("Luxury Jewelry & Accessories", 14, 26);
-  doc.text("Mumbai, Maharashtra, 400001", 14, 31);
-  doc.text(`GSTIN: ${settings?.gstNo || "27ABCDE1234F1Z5"}`, 14, 36);
-  doc.text("Email: support@zerimi.com", 14, 41);
+  doc.text(doc.splitTextToSize(companyAddress, 80), 14, 31);
+  doc.text(`GSTIN: ${companyGstin}`, 14, 42);
+  doc.text(`Email: support@zerimi.com`, 14, 47);
 
   doc.setFontSize(16);
   doc.setTextColor(0);
   doc.text("TAX INVOICE", pageWidth - 14, 20, { align: "right" });
-
   doc.setFontSize(10);
-  doc.text(`Invoice #: ${order.invoiceNo || "INV-" + order.id.slice(0, 6)}`, pageWidth - 14, 30, { align: "right" });
-  doc.text(`Date: ${new Date(order.date).toLocaleDateString("en-GB")}`, pageWidth - 14, 35, { align: "right" });
+  doc.text(`Invoice #: ${order.invoiceNo || order.id}`, pageWidth - 14, 30, { align: "right" });
+  doc.text(`Date: ${formatDate(order.date)}`, pageWidth - 14, 35, { align: "right" });
   doc.text(`Order ID: #${order.id}`, pageWidth - 14, 40, { align: "right" });
 
-  doc.line(14, 48, pageWidth - 14, 48);
+  doc.line(14, 52, pageWidth - 14, 52);
 
-  /* ========================================
-     3. BILL TO
-  ======================================== */
-  const billingY = 55;
+  // Bill To
   doc.setFont("helvetica", "bold");
-  doc.text("Bill To:", 14, billingY);
-
+  doc.text("Bill To:", 14, 60);
   doc.setFont("helvetica", "normal");
-  const custName = order.name || order.customerName || "Customer";
-  doc.text(custName, 14, billingY + 5);
-  doc.text(doc.splitTextToSize(fullAddress, 80), 14, billingY + 10);
+  doc.text(order.name || order.customerName || "Valued Customer", 14, 66);
+  doc.text(doc.splitTextToSize(fullAddress, 100), 14, 71);
 
-  /* ========================================
-     4. TABLE DATA CALCULATION (REVERSE GST)
-  ======================================== */
+  // --- TABLE DATA ---
   let totalTaxable = 0;
   let totalGST = 0;
-  let giftTaxable = 0;
-  let giftGST = 0;
-
   const tableRows: any[] = [];
 
-  // A. ITEMS ROW
   order.items.forEach((item: any, index: number) => {
-    const qty = Number(item.qty || 1);
-    const incPrice = Number(item.price); // Inclusive Price
-    const totalInc = incPrice * qty;
-    
-    // Reverse Calc: Taxable = Inclusive / 1.03
-    const taxable = totalInc / (1 + TAX_RATE / 100);
-    const tax = totalInc - taxable;
+      const qty = Number(item.qty || 1);
+      const rate = Number(item.price);
+      const amount = rate * qty;
+      const taxable = amount / 1.03;
+      const gst = amount - taxable;
 
-    totalTaxable += taxable;
-    totalGST += tax;
+      totalTaxable += taxable;
+      totalGST += gst;
 
-    tableRows.push([
-      index + 1,
-      item.name,
-      item.hsn || "7117",
-      qty,
-      `Rs.${(taxable/qty).toFixed(2)}`, // Unit Rate (Taxable)
-      `Rs.${taxable.toFixed(2)}`,       // Total Taxable
-      isSameState ? "1.5%" : "-",
-      isSameState ? (tax/2).toFixed(2) : "-",
-      isSameState ? "1.5%" : "-",
-      isSameState ? (tax/2).toFixed(2) : "-",
-      !isSameState ? "3%" : "-",
-      !isSameState ? tax.toFixed(2) : "-",
-      `Rs.${totalInc.toFixed(2)}`
-    ]);
+      tableRows.push([
+          index + 1,
+          item.name,
+          "7117",
+          qty,
+          `Rs.${(taxable / qty).toFixed(2)}`,
+          `Rs.${taxable.toFixed(2)}`,
+          isSameState ? "1.5%" : "-", isSameState ? (gst / 2).toFixed(2) : "-",
+          isSameState ? "1.5%" : "-", isSameState ? (gst / 2).toFixed(2) : "-",
+          !isSameState ? "3%" : "-", !isSameState ? gst.toFixed(2) : "-",
+          `Rs.${amount.toFixed(2)}`
+      ]);
   });
 
-  // B. GIFT PACKAGING ROW (IF APPLICABLE)
-  const giftWrapPrice = Number(order.giftWrapPrice || 0);
-  if (giftWrapPrice > 0) {
-    giftTaxable = giftWrapPrice / (1 + TAX_RATE / 100);
-    giftGST = giftWrapPrice - giftTaxable;
+  // Gift Wrap
+  if (order.giftWrapPrice > 0) {
+      const gAmount = Number(order.giftWrapPrice);
+      const gTaxable = gAmount / 1.03;
+      const gGST = gAmount - gTaxable;
+      
+      totalTaxable += gTaxable;
+      totalGST += gGST;
 
-    totalTaxable += giftTaxable;
-    totalGST += giftGST;
-
-    tableRows.push([
-      tableRows.length + 1,
-      "Gift Packaging (Add-on)",
-      "9985",
-      1,
-      `Rs.${giftTaxable.toFixed(2)}`,
-      `Rs.${giftTaxable.toFixed(2)}`,
-      isSameState ? "1.5%" : "-",
-      isSameState ? (giftGST/2).toFixed(2) : "-",
-      isSameState ? "1.5%" : "-",
-      isSameState ? (giftGST/2).toFixed(2) : "-",
-      !isSameState ? "3%" : "-",
-      !isSameState ? giftGST.toFixed(2) : "-",
-      `Rs.${giftWrapPrice.toFixed(2)}`
-    ]);
+      tableRows.push([
+          tableRows.length + 1, "Gift Packaging", "9985", 1,
+          `Rs.${gTaxable.toFixed(2)}`, `Rs.${gTaxable.toFixed(2)}`,
+          isSameState ? "1.5%" : "-", isSameState ? (gGST / 2).toFixed(2) : "-",
+          isSameState ? "1.5%" : "-", isSameState ? (gGST / 2).toFixed(2) : "-",
+          !isSameState ? "3%" : "-", !isSameState ? gGST.toFixed(2) : "-",
+          `Rs.${gAmount.toFixed(2)}`
+      ]);
   }
 
   // @ts-ignore
   autoTable(doc, {
-    startY: billingY + 35,
-    head: [[
-      "Sn", "Item", "HSN", "Qty", "Rate", "Taxable",
-      "CGST", "Amt", "SGST", "Amt", "IGST", "Amt", "Total"
-    ]],
-    body: tableRows,
-    theme: "grid",
-    headStyles: { fillColor: [15, 41, 37], textColor: 255, fontSize: 8 },
-    bodyStyles: { fontSize: 8 },
-    styles: { halign: 'center' },
-    columnStyles: {
-      1: { halign: 'left' }, // Item Name Left Align
-      12: { halign: 'right', fontStyle: 'bold' } // Total Right Align
-    },
+      startY: 90,
+      head: [["Sn", "Item", "HSN", "Qty", "Rate", "Taxable", "CGST", "Amt", "SGST", "Amt", "IGST", "Amt", "Total"]],
+      body: tableRows,
+      theme: "grid",
+      styles: { fontSize: 7, halign: 'center' },
+      columnStyles: { 1: { halign: 'left' } },
+      headStyles: { fillColor: [15, 41, 37], textColor: 255 }
   });
 
-  /* ========================================
-     5. SUMMARY TOTALS (ADMIN MATCHING)
-  ======================================== */
-  const discount = Number(order.discount || 0);
-  const netTaxable = totalTaxable - discount;
-  const finalGST = netTaxable * (TAX_RATE / 100);
-  const shipping = Number(order.shipping || 0);
-  const grandTotal = netTaxable + finalGST + shipping;
-
+  // --- SUMMARY SECTION (SYNCED LOGIC) ---
   // @ts-ignore
-  let currentY = doc.lastAutoTable.finalY + 10;
+  let finalY = doc.lastAutoTable.finalY + 10;
   const rightX = pageWidth - 14;
   const labelX = rightX - 70;
 
-  doc.setFontSize(9);
-  doc.setTextColor(80);
+  // Data Fetch
+  const discountTotal = Number(order.discount || 0);
+  const couponDisc = Number(order.couponDiscount || 0);
+  const pointsDisc = Number(order.pointsDiscount || 0);
+  const shippingCharge = Number(order.shipping || 0);
 
-  // 1. Sub Total (Taxable)
-  doc.text("Sub Total (Taxable):", labelX, currentY);
-  doc.text(`Rs.${totalTaxable.toFixed(2)}`, rightX, currentY, { align: "right" });
-  currentY += 6;
+  // Calculation
+  const netTaxableValue = Math.max(0, totalTaxable - discountTotal);
+  const finalGSTVal = netTaxableValue * 0.03;
+  const grandTotal = Math.round(netTaxableValue + finalGSTVal + shippingCharge);
 
-  // 2. Gift Info (Only if present)
-  if (giftWrapPrice > 0) {
-      doc.text("Gift Packaging (Incl. GST):", labelX, currentY);
-      doc.text(`Rs.${giftWrapPrice.toFixed(2)}`, rightX, currentY, { align: "right" });
-      currentY += 6;
-  }
-
-  // 3. Discount (Red)
-  if (discount > 0) {
-      doc.setTextColor(200, 30, 30);
-      doc.text("Less: Coupon Discount (Before Tax):", labelX, currentY);
-      doc.text(`- Rs.${discount.toFixed(2)}`, rightX, currentY, { align: "right" });
-      doc.setTextColor(80);
-      currentY += 6;
-  }
-
-  // 4. Net Taxable
-  doc.setTextColor(0); // Black for main values
-  doc.text("Net Taxable Value:", labelX, currentY);
-  doc.text(`Rs.${netTaxable.toFixed(2)}`, rightX, currentY, { align: "right" });
-  currentY += 6;
-
-  // 5. Total GST
-  doc.setTextColor(100);
-  doc.text(`Total GST (${TAX_RATE}%):`, labelX, currentY);
-  doc.text(`+ Rs.${finalGST.toFixed(2)}`, rightX, currentY, { align: "right" });
-  currentY += 6;
-
-  // 6. Shipping
-  doc.text("Shipping Charges:", labelX, currentY);
-  doc.text(shipping === 0 ? "Free" : `+ Rs.${shipping.toFixed(2)}`, rightX, currentY, { align: "right" });
-  currentY += 8;
-
-  // Divider
-  doc.setLineWidth(0.5);
-  doc.line(labelX, currentY - 2, rightX, currentY - 2);
-
-  // 7. GRAND TOTAL
-  doc.setFontSize(14);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(212, 140, 0); // Gold
-  doc.text("Grand Total:", labelX, currentY + 4);
-  doc.text(`Rs.${grandTotal.toFixed(2)}`, rightX, currentY + 4, { align: "right" });
-
-  /* ========================================
-     6. FOOTER
-  ======================================== */
-  const footerY = currentY + 15;
+  // Display
   doc.setFontSize(9);
   doc.setTextColor(0);
-  doc.setFont("helvetica", "normal");
-  doc.text(`Amount in Words: ${numberToWords(grandTotal)}`, 14, footerY);
 
-  doc.rect(14, footerY + 10, pageWidth - 28, 20);
+  doc.text("Sub Total (Taxable):", labelX, finalY);
+  doc.text(`Rs.${totalTaxable.toFixed(2)}`, rightX, finalY, { align: "right" });
+  finalY += 6;
+
+  // Logic: Agar alag-alag data hai to alag dikhao
+  if (couponDisc > 0 || pointsDisc > 0) {
+      if (couponDisc > 0) {
+          doc.setTextColor(200, 30, 30); // Red
+          doc.text("Less: Coupon Discount:", labelX, finalY);
+          doc.text(`- Rs.${couponDisc.toFixed(2)}`, rightX, finalY, { align: "right" });
+          doc.setTextColor(0);
+          finalY += 6;
+      }
+      if (pointsDisc > 0) {
+          doc.setTextColor(212, 175, 55); // Gold
+          doc.text("Less: Loyalty Points:", labelX, finalY);
+          doc.text(`- Rs.${pointsDisc.toFixed(2)}`, rightX, finalY, { align: "right" });
+          doc.setTextColor(0);
+          finalY += 6;
+      }
+  } else if (discountTotal > 0) {
+      // Fallback for old orders
+      doc.setTextColor(200, 30, 30);
+      doc.text("Less: Total Discount:", labelX, finalY);
+      doc.text(`- Rs.${discountTotal.toFixed(2)}`, rightX, finalY, { align: "right" });
+      doc.setTextColor(0);
+      finalY += 6;
+  }
+
+  doc.line(labelX, finalY, rightX, finalY);
+  finalY += 6;
+
+  doc.text("Net Taxable Value:", labelX, finalY);
+  doc.text(`Rs.${netTaxableValue.toFixed(2)}`, rightX, finalY, { align: "right" });
+  finalY += 6;
+
+  doc.setTextColor(100);
+  doc.text(`Add: GST (3%):`, labelX, finalY);
+  doc.text(`+ Rs.${finalGSTVal.toFixed(2)}`, rightX, finalY, { align: "right" });
+  finalY += 6;
+
+  doc.text("Add: Shipping Charges:", labelX, finalY);
+  doc.text(`+ Rs.${shippingCharge.toFixed(2)}`, rightX, finalY, { align: "right" });
+  finalY += 8;
+
+  doc.setFontSize(14);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(0);
+  doc.text("Grand Total:", labelX, finalY);
+  doc.text(`Rs.${grandTotal.toFixed(2)}`, rightX, finalY, { align: "right" });
+
+  // Footer
+  finalY += 15;
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Amount in Words: ${numberToWords(grandTotal)}`, 14, finalY);
+
+  doc.rect(14, finalY + 5, pageWidth - 28, 20);
   doc.setFontSize(8);
-  doc.text("Declaration:", 16, footerY + 15);
-  doc.text("We declare that this invoice shows the actual price of the goods described above.", 16, footerY + 20);
+  doc.text("Declaration:", 16, finalY + 10);
+  doc.text("We declare that this invoice shows the actual price of the goods described above.", 16, finalY + 15);
 
   doc.setFont("helvetica", "bold");
-  doc.text("For ZERIMI", pageWidth - 40, footerY + 25, { align: "center" });
+  doc.text(`For ${companyName}`, pageWidth - 40, finalY + 20, { align: "center" });
   doc.setFontSize(7);
   doc.setFont("helvetica", "normal");
-  doc.text("Authorized Signatory", pageWidth - 40, footerY + 28, { align: "center" });
+  doc.text("Authorized Signatory", pageWidth - 40, finalY + 23, { align: "center" });
 
   doc.save(`Invoice_${order.id}.pdf`);
 };
@@ -668,7 +670,19 @@ export default function CustomerDashboard() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('overview');
 const [profileImage, setProfileImage] = useState<string | null>(null);
+// ✅ NEW: DYNAMIC TIER CALCULATION (Live Update)
+  // Ye function check karega ki abhi ki Admin Settings ke hisaab se user kaun hai
+  const currentTier = useMemo(() => {
+      const points = currentUser?.points || 0;
+      const config = systemSettings?.tierConfig || { 
+          goldThreshold: 1000, platinumThreshold: 5000, solitaireThreshold: 10000 
+      };
 
+      if (points >= (config.solitaireThreshold || 10000)) return 'Solitaire';
+      if (points >= (config.platinumThreshold || 5000)) return 'Platinum';
+      if (points >= (config.goldThreshold || 1000)) return 'Gold';
+      return 'Silver';
+  }, [currentUser, systemSettings]);
   // --- Image Sync Fix: Login karte hi photo dikhane ke liye ---
   useEffect(() => {
       if (currentUser?.profileImage) {
@@ -727,10 +741,15 @@ const [isNotifOpen, setIsNotifOpen] = useState(false);
   const userEmail = currentUser.email.toLowerCase();
  // ✅ FIX: Notifications Sorted (Newest First) & Filtered
   // Hum array ko reverse kar rahe hain kyunki Firebase usually purana data pehle bhejta hai
-  const myNotifications = notifications
-      .filter((n: any) => n.userId.toLowerCase() === userEmail)
-      .slice() // Copy array to avoid mutating state directly
-      .reverse();
+ // ✅ FIX: Notifications ko Newest First Sort karein
+    const myNotifications = notifications
+        .filter((n: any) => n.userId === currentUser?.email)
+        .sort((a: any, b: any) => {
+            // New system (createdAt) vs Old system (date) fallback
+            const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            return timeB - timeA; // B - A (Desc: Newest First)
+        });
   const myOrders = orders.filter((o: Order) => o.customerEmail?.toLowerCase() === userEmail);
   const unreadCount = myNotifications.filter(n => !n.isRead).length;
 
@@ -782,11 +801,21 @@ const [isNotifOpen, setIsNotifOpen] = useState(false);
                 </div>
               </div>
            </div>
-           <h2 className="font-serif text-xl tracking-wide text-white">{currentUser.name}</h2>
-           <div className="flex items-center gap-2 mt-2">
-             <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
-             <p className="text-xs text-amber-400 uppercase tracking-widest">{currentUser.tier || 'Silver'} Member</p>
-           </div>
+           <h2 className="font-serif text-xl tracking-wide text-white mt-2">{currentUser.name}</h2>
+           
+           {/* 👑 DYNAMIC TIER BADGE */}
+          {/* Replace currentUser.tier with currentTier */}
+<div className={`absolute -bottom-2 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full flex items-center gap-2 border backdrop-blur-md whitespace-nowrap transition-all duration-500 ${getTierStyle(currentTier)}`}>
+    <Award className="w-3 h-3" />
+    <span className="text-[10px] font-bold uppercase tracking-widest">
+        {currentTier} Member
+    </span>
+</div>
+
+           {/* 💎 POINTS DISPLAY */}
+           <p className="text-[10px] text-white/40 mt-2 font-mono tracking-wider">
+               Balance: <span className="text-white font-bold">{currentUser?.points || 0}</span> Points
+           </p>
         </div>
 
         {/* Navigation */}
