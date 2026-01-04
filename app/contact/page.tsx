@@ -60,11 +60,11 @@ export default function ContactPage() {
             <div className="space-y-6">
               <div className="flex items-start gap-4">
                  <div className="w-10 h-10 bg-amber-50 rounded-full flex items-center justify-center text-amber-600 flex-shrink-0"><MapPin className="w-5 h-5" /></div>
-                 <div><h5 className="font-bold text-[#0a1f1c] text-sm uppercase">Visit Our Boutique</h5><p className="text-stone-500 text-sm mt-1">Luxury Lane, Fashion Street,<br/>Mumbai, India - 400001</p></div>
+                 <div><h5 className="font-bold text-[#0a1f1c] text-sm uppercase">Visit Our Boutique</h5><p className="text-stone-500 text-sm mt-1">Main Market,Delhi-Road near Tehsil<br/>Baraut, India - 250611</p></div>
               </div>
               <div className="flex items-start gap-4">
                  <div className="w-10 h-10 bg-amber-50 rounded-full flex items-center justify-center text-amber-600 flex-shrink-0"><Phone className="w-5 h-5" /></div>
-                 <div><h5 className="font-bold text-[#0a1f1c] text-sm uppercase">Call Us</h5><p className="text-stone-500 text-sm mt-1">+91 98765 43210</p></div>
+                 <div><h5 className="font-bold text-[#0a1f1c] text-sm uppercase">Call Us</h5><p className="text-stone-500 text-sm mt-1">+91 8077162909</p></div>
               </div>
               <div className="flex items-start gap-4">
                  <div className="w-10 h-10 bg-amber-50 rounded-full flex items-center justify-center text-amber-600 flex-shrink-0"><Mail className="w-5 h-5" /></div>

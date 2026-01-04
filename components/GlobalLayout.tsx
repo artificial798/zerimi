@@ -63,14 +63,7 @@ const subtotal = cart.reduce((sum: number, item: any) => sum + item.product.pric
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  useEffect(() => {
-    if (isAdminPage || isAuthPage) return;
-    const timer = setInterval(() => {
-      setShowToast(true);
-      setTimeout(() => setShowToast(false), 4000);
-    }, 25000);
-    return () => clearInterval(timer);
-  }, [isAdminPage, isAuthPage]);
+  
 
   const handleCheckout = () => { toggleCart(false); router.push('/checkout'); };
 
@@ -248,14 +241,6 @@ const subtotal = cart.reduce((sum: number, item: any) => sum + item.product.pric
         </div>
       </header>
 
-      <AnimatePresence>
-        {showToast && (
-          <motion.div initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 50 }} className="fixed bottom-6 left-6 z-40 bg-white/90 backdrop-blur border border-stone-200 p-4 rounded-lg shadow-2xl flex items-center gap-4 max-w-xs">
-            <div className="relative w-12 h-12 bg-stone-100 rounded overflow-hidden"><Image src="https://images.unsplash.com/photo-1611591437281-460bfbe1220a?w=100" alt="Product" fill className="object-cover" /></div>
-            <div><p className="text-xs text-stone-500 mb-1 flex items-center gap-1"><Eye className="w-3 h-3 text-green-500" /> 18 people viewing</p><p className="text-sm font-serif text-[#0a1f1c]">Someone just bought <span className="font-bold">Royal Emerald</span></p></div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       <main className={`flex-grow ${coupons.length > 0 ? 'pt-9' : 'pt-0'}`}>
         {children}
@@ -387,8 +372,8 @@ const subtotal = cart.reduce((sum: number, item: any) => sum + item.product.pric
           <div>
             <h4 className="text-white font-serif mb-6 tracking-widest text-sm">REACH US</h4>
             <ul className="space-y-4 text-sm tracking-wide text-stone-400">
-              <li className="flex items-start gap-3"><MapPin className="w-5 h-5 text-amber-600 flex-shrink-0" /><span>Luxury Lane, Fashion Street,<br />Mumbai, India - 400001</span></li>
-              <li className="flex items-center gap-3"><Phone className="w-5 h-5 text-amber-600 flex-shrink-0" /><span>+91 98765 43210</span></li>
+              <li className="flex items-start gap-3"><MapPin className="w-5 h-5 text-amber-600 flex-shrink-0" /><span>Main Market,Delhi-Road near Tehsil,<br />Baraut, India - 250611</span></li>
+              <li className="flex items-center gap-3"><Phone className="w-5 h-5 text-amber-600 flex-shrink-0" /><span>+91 8077162909</span></li>
               <li className="flex items-center gap-3"><Mail className="w-5 h-5 text-amber-600 flex-shrink-0" /><span>support@zerimi.com</span></li>
               <li className="pt-2"><Link href="/contact" className="text-amber-500 underline text-xs uppercase font-bold">Open Contact Page</Link></li>
             </ul>
