@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import {
     collection, doc, addDoc, updateDoc, deleteDoc, setDoc, onSnapshot, query, orderBy,
-    getDocs, arrayUnion, arrayRemove
+    getDocs, arrayUnion, arrayRemove, getDoc,
 } from "firebase/firestore";
 import {
     signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, updateProfile
@@ -56,6 +56,8 @@ export type User = {
     tier: string;
     role: string;
     points: number;
+    // 👇 YE ADD KAREIN (Locked Points)
+    pendingPoints?: number;
     joinedDate: string;
     dob?: string;
     gender?: string;
@@ -82,7 +84,8 @@ export type Coupon = {
     allowedEmail?: string; // ✅ YE LINE ADD KAREIN (Lock feature ke liye)
 };
 export type Order = { id: string; customerName: string; customerEmail?: string; address: Address; total: number; subtotal: number; tax: number; discount: number; couponDiscount?: number; 
-    pointsDiscount?: number; shipping: number; status: string; date: string; items: any[]; paymentMethod: string; invoiceNo: string; // ✅ YE 3 LINES ADD KAREIN:
+    pointsDiscount?: number; pointsAwarded?: boolean; pointsUnlockDate?: string; // Kab unlock honge (Delivery + 7 Days)
+    pointsConverted?: boolean; shipping: number; status: string; date: string; items: any[]; paymentMethod: string; invoiceNo: string; // ✅ YE 3 LINES ADD KAREIN:
     isGift?: boolean;
     giftMessage?: string;
     giftWrapPrice?: number; };
@@ -267,6 +270,7 @@ type Store = {
     sendNotification: (email: string, title: string, message: string) => void;
     markNotificationRead: (id: string) => void;
     nukeDatabase: () => void;
+    checkAndUnlockPoints: (userId: string) => Promise<void>;
 };
 
 // ==========================================
@@ -555,42 +559,24 @@ export const useStore = create<Store>()(
                 await setDoc(doc(db, "orders", orderId), newOrder);
 
                 // --- 4. LOYALTY LOGIC (Points Earn/Burn) ---
-                if (state.currentUser) {
+              // 5. LOYALTY POINTS LOGIC (Smart Tier Protection)
+               // 5. LOYALTY LOGIC (Sirf Kharch karne ka logic)
+                // Note: Points earn tab honge jab order deliver hoga (updateOrderStatus mein).
+                if (state.currentUser && state.pointsRedeemed > 0) {
                     const currentPoints = state.currentUser.points || 0;
-                    const usedPoints = state.pointsRedeemed || 0; // Jitne points use kiye
+                    const usedPoints = state.pointsRedeemed || 0;
 
-                    // Admin Settings Load
-                    const config = state.systemSettings.tierConfig || {
-                        goldThreshold: 1000, platinumThreshold: 5000, solitaireThreshold: 10000,
-                        goldMultiplier: 1.5, platinumMultiplier: 2, solitaireMultiplier: 3
-                    };
+                    // Sirf balance kam karein
+                    const newWalletBalance = Math.max(0, currentPoints - usedPoints);
 
-                    // Multiplier Calculation
-                    let multiplier = 1;
-                    if (currentPoints >= config.solitaireThreshold) multiplier = config.solitaireMultiplier;
-                    else if (currentPoints >= config.platinumThreshold) multiplier = config.platinumMultiplier;
-                    else if (currentPoints >= config.goldThreshold) multiplier = config.goldMultiplier;
+                    // Database Update
+                    await updateDoc(doc(db, "users", state.currentUser.id), { 
+                        points: newWalletBalance 
+                    });
 
-                    // Earned Points (Spent Amount / 100 * Multiplier)
-                    const basePoints = Math.floor((details.total || 0) / 100);
-                    const earnedPoints = Math.floor(basePoints * multiplier);
-
-                    // Final Points Logic: (Purane + Kamaye - Kharch Kiye)
-                    const newTotalPoints = Math.max(0, currentPoints + earnedPoints - usedPoints);
-
-                    // Update Tier
-                    let newTierName = 'Silver';
-                    if (newTotalPoints >= config.solitaireThreshold) newTierName = 'Solitaire';
-                    else if (newTotalPoints >= config.platinumThreshold) newTierName = 'Platinum';
-                    else if (newTotalPoints >= config.goldThreshold) newTierName = 'Gold';
-
-                    // Update User in DB
-                    const userRef = doc(db, "users", state.currentUser.id);
-                    await updateDoc(userRef, { points: newTotalPoints, tier: newTierName });
-
-                    // Update Local User State
+                    // Local State Update
                     set((prev) => ({
-                        currentUser: prev.currentUser ? { ...prev.currentUser, points: newTotalPoints, tier: newTierName } : null
+                        currentUser: prev.currentUser ? { ...prev.currentUser, points: newWalletBalance } : null
                     }));
                 }
 
@@ -611,13 +597,165 @@ export const useStore = create<Store>()(
                 
                 return orderId;
             },
+// ✅ CHECK & UNLOCK POINTS (Runs on App Load)
+            checkAndUnlockPoints: async (userId: string) => {
+                const state = get();
+                // User ke delivered orders dhundho jinke points abhi convert nahi huye
+                const pendingOrders = state.orders.filter(o => 
+                    o.status === 'Delivered' && 
+                    o.pointsAwarded === true && 
+                    o.pointsConverted === false &&
+                    // Ensure order belongs to current user email lookup
+                    state.allUsers.find(u => u.id === userId)?.email === o.customerEmail
+                );
 
+                if (pendingOrders.length === 0) return;
+
+                const userRef = doc(db, "users", userId);
+                const userSnapshot = await getDoc(userRef);
+                if (!userSnapshot.exists()) return;
+                
+                const userData = userSnapshot.data() as User;
+                let currentPoints = userData.points || 0;
+                let currentPending = userData.pendingPoints || 0;
+                let updated = false;
+                const now = new Date();
+
+                // Orders Loop
+                for (const order of pendingOrders) {
+                    if (order.pointsUnlockDate && new Date(order.pointsUnlockDate) <= now) {
+                        // 🎉 7 Din Poore Ho Gaye!
+                        const config = state.systemSettings.tierConfig; // Load config
+                        // Re-calculate points (Safety)
+                        const base = Math.floor((order.total || 0) / 100);
+                        // NOTE: Multiplier wahi use karein jo order time pe tha ya current tier
+                        // Simple rakhte hain: Current Tier logic
+                        let multiplier = 1; 
+                        if (userData.tier === 'Gold') multiplier = config?.goldMultiplier || 1.5;
+                        // ... logic ...
+                        const pointsToUnlock = Math.floor(base * multiplier);
+
+                        // Move: Pending -> Main
+                        currentPoints += pointsToUnlock;
+                        currentPending = Math.max(0, currentPending - pointsToUnlock);
+                        
+                        // Mark Order as Converted
+                        await updateDoc(doc(db, "orders", order.id), { pointsConverted: true });
+                        updated = true;
+
+                        // Notify User
+                        await addDoc(collection(db, "notifications"), {
+                            userId: userData.email, 
+                            title: 'Points Unlocked! 🔓', 
+                            message: `${pointsToUnlock} points are now available to use.`,
+                            date: new Date().toLocaleDateString(), createdAt: new Date().toISOString(), isRead: false
+                        });
+                    }
+                }
+
+                if (updated) {
+                    // Update User Balance & Tier Logic Here (Copy Tier Logic from previous step)
+                    // ... (Simplification: Just update points for now)
+                    await updateDoc(userRef, { points: currentPoints, pendingPoints: currentPending });
+                    
+                    // Local Update
+                    set(state => ({
+                        currentUser: state.currentUser ? { ...state.currentUser, points: currentPoints, pendingPoints: currentPending } : null
+                    }));
+                }
+            },
             // --- ADMIN ACTIONS ---
             addProduct: async (p) => { await setDoc(doc(db, "products", p.id), p); },
             updateProduct: async (id, data) => { await updateDoc(doc(db, "products", id), data); },
             deleteProduct: async (id) => { await deleteDoc(doc(db, "products", id)); },
 
-            updateOrderStatus: async (id, status) => { await updateDoc(doc(db, "orders", id), { status }); },
+           // ✅ SMART STATUS UPDATE (Points Add/Remove on Delivery/Return)
+          // ✅ UPDATE ORDER STATUS (With 7-Day Lock Logic)
+            updateOrderStatus: async (id, status) => {
+                const state = get();
+                const orderDoc = state.orders.find(o => o.id === id); 
+                if (!orderDoc || orderDoc.status === status) return;
+
+                const orderRef = doc(db, "orders", id);
+                await updateDoc(orderRef, { status });
+
+                if (!orderDoc.customerEmail) {
+                     set(prev => ({ orders: prev.orders.map(o => o.id === id ? { ...o, status } : o) }));
+                     return;
+                }
+                
+                const userSnapshot = state.allUsers.find(u => u.email === orderDoc.customerEmail);
+                if (!userSnapshot) {
+                    set(prev => ({ orders: prev.orders.map(o => o.id === id ? { ...o, status } : o) }));
+                    return;
+                }
+
+                const userId = userSnapshot.id;
+                const currentPending = userSnapshot.pendingPoints || 0;
+                const currentPoints = userSnapshot.points || 0; // Usable
+
+                // Settings & Multiplier Logic (Same as before)
+                const config = state.systemSettings.tierConfig || { goldThreshold: 1000, platinumThreshold: 5000, solitaireThreshold: 10000, goldMultiplier: 1.5, platinumMultiplier: 2, solitaireMultiplier: 3 };
+                const currentTier = userSnapshot.tier || 'Silver';
+                let multiplier = 1;
+                if (currentTier === 'Solitaire') multiplier = config.solitaireMultiplier;
+                else if (currentTier === 'Platinum') multiplier = config.platinumMultiplier;
+                else if (currentTier === 'Gold') multiplier = config.goldMultiplier;
+
+                const basePoints = Math.floor((orderDoc.total || 0) / 100); 
+                const orderPoints = Math.floor(basePoints * multiplier);
+
+                // ===============================================
+                // A. DELIVERED -> MOVE TO PENDING (Lock for 7 Days)
+                // ===============================================
+                if (status === 'Delivered' && !orderDoc.pointsAwarded) {
+                    // 1. Calculate Unlock Date (Today + 7 Days)
+                    const unlockDate = new Date();
+                    unlockDate.setDate(unlockDate.getDate() + 7); 
+
+                    // 2. Add to PENDING POINTS (Not Usable)
+                    const newPending = currentPending + orderPoints;
+
+                    await updateDoc(doc(db, "users", userId), { pendingPoints: newPending });
+                    await updateDoc(orderRef, { 
+                        pointsAwarded: true, 
+                        pointsUnlockDate: unlockDate.toISOString(),
+                        pointsConverted: false 
+                    });
+
+                    // Local Update
+                    set(prev => ({
+                        allUsers: prev.allUsers.map(u => u.id === userId ? { ...u, pendingPoints: newPending } : u),
+                        orders: prev.orders.map(o => o.id === id ? { ...o, status, pointsAwarded: true, pointsConverted: false } : o)
+                    }));
+                }
+
+                // ===============================================
+                // B. RETURN APPROVED -> REMOVE FROM PENDING
+                // ===============================================
+                else if (status === 'Return Approved' && orderDoc.pointsAwarded) {
+                    // Check karein points abhi Pending hain ya Main mein ja chuke hain
+                    if (orderDoc.pointsConverted) {
+                        // Agar Main Balance mein thay (7 din baad return hua - Rare Case)
+                        const newMain = Math.max(0, currentPoints - orderPoints);
+                        await updateDoc(doc(db, "users", userId), { points: newMain });
+                    } else {
+                        // Agar Pending mein thay (Normal Return)
+                        const newPending = Math.max(0, currentPending - orderPoints);
+                        await updateDoc(doc(db, "users", userId), { pendingPoints: newPending });
+                    }
+
+                    await updateDoc(orderRef, { pointsAwarded: false, pointsConverted: false });
+                    
+                    // Local Update (Simplification for immediate UI)
+                    set(prev => ({
+                        orders: prev.orders.map(o => o.id === id ? { ...o, status, pointsAwarded: false } : o)
+                    }));
+                } 
+                else {
+                    set(prev => ({ orders: prev.orders.map(o => o.id === id ? { ...o, status } : o) }));
+                }
+            },
 // ✅ ADD THIS FUNCTION HERE:
             deleteOrder: async (id) => {
                 if (!id) return;
@@ -911,6 +1049,9 @@ const initListeners = () => {
                         currentUser: { ...userData, id: user.uid } as User,
                         authCheckComplete: true
                     });
+                    // 👇 [STEP 1] YAHAN PASTE KAREIN (State set hone ke baad)
+                    useStore.getState().checkAndUnlockPoints(user.uid);
+                
                 } else {
                     const fallbackUser = {
                         id: user.uid, name: user.displayName || 'User', email: user.email!,

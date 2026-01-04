@@ -803,14 +803,13 @@ const [isNotifOpen, setIsNotifOpen] = useState(false);
            </div>
            <h2 className="font-serif text-xl tracking-wide text-white mt-2">{currentUser.name}</h2>
            
-           {/* 👑 DYNAMIC TIER BADGE */}
-          {/* Replace currentUser.tier with currentTier */}
-<div className={`absolute -bottom-2 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full flex items-center gap-2 border backdrop-blur-md whitespace-nowrap transition-all duration-500 ${getTierStyle(currentTier)}`}>
-    <Award className="w-3 h-3" />
-    <span className="text-[10px] font-bold uppercase tracking-widest">
-        {currentTier} Member
-    </span>
-</div>
+          {/* 👑 DYNAMIC TIER BADGE (FIXED: Uses DB Tier) */}
+           <div className={`absolute -bottom-2 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full flex items-center gap-2 border backdrop-blur-md whitespace-nowrap transition-all duration-500 ${getTierStyle(currentUser?.tier || 'Silver')}`}>
+                <Award className="w-3 h-3" />
+                <span className="text-[10px] font-bold uppercase tracking-widest">
+                    {currentUser?.tier || 'Silver'} Member
+                </span>
+           </div>
 
            {/* 💎 POINTS DISPLAY */}
            <p className="text-[10px] text-white/40 mt-2 font-mono tracking-wider">
@@ -931,7 +930,28 @@ function OverviewTab({ user, orders, setActiveTab }: any) {
              <h2 className="font-serif text-3xl md:text-4xl text-white mb-2">Welcome Back, {user.name.split(' ')[0]}</h2>
              <div className="grid grid-cols-2 gap-4 mt-8">
                 <div className="bg-white/5 p-5 rounded-2xl border border-white/5 shadow-sm hover:border-amber-500/30 transition"><p className="text-[10px] text-white/40 uppercase tracking-widest mb-1">Collection Value</p><h3 className="text-2xl font-serif text-white">₹{totalValue.toLocaleString()}</h3></div>
-                <div className="bg-white/5 p-5 rounded-2xl border border-white/5 shadow-sm hover:border-amber-500/30 transition"><p className="text-[10px] text-white/40 uppercase tracking-widest mb-1">Loyalty Points</p><h3 className="text-2xl font-serif text-amber-500">{user.points?.toLocaleString() || 0}</h3></div>
+               {/* ✅ UPDATED LOYALTY CARD (Shows Pending Points) */}
+                <div className="bg-white/5 p-5 rounded-2xl border border-white/5 shadow-sm hover:border-amber-500/30 transition relative overflow-hidden group">
+                    <p className="text-[10px] text-white/40 uppercase tracking-widest mb-1">Loyalty Balance</p>
+                    
+                    {/* Main Balance */}
+                    <h3 className="text-2xl font-serif text-amber-500">{user.points?.toLocaleString() || 0}</h3>
+                    
+                    {/* Pending Points Section */}
+                    {(user.pendingPoints || 0) > 0 && (
+                        <div className="mt-3 pt-2 border-t border-white/10">
+                            <div className="flex items-center gap-2">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                                <span className="text-xs font-bold text-amber-200/80">
+                                    +{user.pendingPoints} Pending
+                                </span>
+                            </div>
+                            <p className="text-[9px] text-white/30 mt-1 leading-tight">
+                                Unlocks in 7 days after delivery if not returned.
+                            </p>
+                        </div>
+                    )}
+                </div>
              </div>
           </div>
        </div>
