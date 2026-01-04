@@ -1,5 +1,5 @@
 "use client";
-import { motion } from "framer-motion";
+import { motion, Variants } from "framer-motion";
 import { useEffect, useState } from "react";
 
 export default function Preloader({ onFinish }: { onFinish: () => void }) {
@@ -7,45 +7,61 @@ export default function Preloader({ onFinish }: { onFinish: () => void }) {
   const [shouldRender, setShouldRender] = useState(true);
 
   useEffect(() => {
-    // Smart Check
     const hasVisited = sessionStorage.getItem("zerimi_visited");
 
     if (hasVisited) {
       setShouldRender(false);
-      onFinish(); 
+      onFinish();
     } else {
       sessionStorage.setItem("zerimi_visited", "true");
+      // थोड़ा जल्दी खत्म करेंगे ताकि यूजर बोर न हो
       const exitTimer = setTimeout(() => {
         onFinish();
-      }, 2500);
+      }, 2000); 
       return () => clearTimeout(exitTimer);
     }
   }, []);
 
   if (!shouldRender) return null;
 
-  // --- Fixed Variants (Type Errors Removed) ---
-  const containerVariants = {
+  // --- Ultra Smooth Easing (Bezier Curve) ---
+  // यह curve एनीमेशन को बहुत ही नेचुरल और प्रीमियम फील देता है
+  const smoothEase = [0.43, 0.13, 0.23, 0.96]; 
+
+  const containerVariants: Variants = {
     hidden: { opacity: 0 },
     show: {
       opacity: 1,
-      transition: { staggerChildren: 0.1, delayChildren: 0.1 },
+      transition: { 
+        staggerChildren: 0.08, // थोड़ा तेज किया ताकि स्नैपी लगे
+        delayChildren: 0.1 
+      },
     },
     exit: {
-      y: "-100%", 
-      // 👇 FIX: 'as any' lagaya taaki TS error na de
-      transition: { duration: 0.6, ease: [0.76, 0, 0.24, 1] as any }, 
+      opacity: 0,
+      scale: 1.1, // जाते समय थोड़ा बड़ा होगा (Cinematic fade out)
+      filter: "blur(10px)",
+      transition: { 
+        duration: 0.8, 
+        ease: "easeInOut" as any 
+      },
     },
   };
 
-  const letterVariants = {
-    hidden: { y: 20, opacity: 0, filter: "blur(5px)" },
+  const letterVariants: Variants = {
+    hidden: { 
+      y: 40, // नीचे से ऊपर आएगा
+      opacity: 0, 
+      rotateX: -90 // 3D Flip effect (Optional: हटा सकते हैं अगर भारी लगे)
+    },
     show: {
       y: 0,
       opacity: 1,
-      filter: "blur(0px)",
-      // 👇 FIX: 'as any' lagaya
-      transition: { duration: 0.8, ease: "easeOut" as any },
+      rotateX: 0,
+      transition: { 
+        duration: 0.8, 
+        ease: smoothEase as any 
+      },
     },
   };
 
@@ -55,37 +71,43 @@ export default function Preloader({ onFinish }: { onFinish: () => void }) {
       initial="hidden"
       animate="show"
       exit="exit"
-      className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#051614] text-white"
+      className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#051614] text-white overflow-hidden"
     >
-      <div className="absolute w-[300px] h-[300px] bg-amber-500/10 rounded-full blur-[80px] pointer-events-none"></div>
+      {/* Background Glow - Static (No Animation to save GPU) */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] bg-amber-600/20 rounded-full blur-[100px] pointer-events-none opacity-60"></div>
 
-      <div className="flex overflow-hidden relative z-10">
+      {/* Brand Name */}
+      <div className="flex relative z-10 perspective-1000"> 
         {brandName.map((letter, index) => (
           <motion.span
             key={index}
             variants={letterVariants}
-            className="text-5xl md:text-7xl font-serif font-bold text-transparent bg-clip-text bg-gradient-to-b from-amber-200 to-amber-600 px-1"
+            // `will-change-transform` browser ko ready rakhta hai
+            className="text-5xl md:text-8xl font-serif font-bold text-transparent bg-clip-text bg-gradient-to-b from-amber-100 to-amber-600 px-1 will-change-transform"
           >
             {letter}
           </motion.span>
         ))}
       </div>
 
+      {/* Tagline */}
       <motion.p
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 1, duration: 0.8 }}
-        className="mt-4 text-[10px] md:text-xs text-amber-500/60 uppercase tracking-[0.4em] font-light"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.8, duration: 0.8, ease: "easeOut" }}
+        className="mt-6 text-[10px] md:text-sm text-amber-500/80 uppercase tracking-[0.5em] font-light"
       >
         Timeless Elegance
       </motion.p>
 
+      {/* Progress Line - GPU Optimized (ScaleX instead of Width) */}
       <div className="absolute bottom-0 left-0 w-full h-[2px] bg-white/5">
         <motion.div
-          className="h-full bg-amber-500 box-shadow-[0_0_15px_#f59e0b]"
-          initial={{ width: "0%" }}
-          animate={{ width: "100%" }}
-          transition={{ duration: 2.5, ease: "linear" }}
+          className="h-full bg-amber-500 box-shadow-[0_0_20px_#f59e0b]"
+          initial={{ scaleX: 0 }}
+          animate={{ scaleX: 1 }}
+          transition={{ duration: 2.0, ease: "easeInOut" }}
+          style={{ transformOrigin: "left" }} // Left se right fill hoga
         />
       </div>
     </motion.div>
