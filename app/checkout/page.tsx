@@ -105,22 +105,57 @@ export default function CheckoutPage() {
     const [paymentMethod, setPaymentMethod] = useState('cod'); // Default COD set kiya hai safe side ke liye
 
     // --- CALCULATIONS ---
-    const subtotal = cart.reduce((sum: number, item: any) => sum + item.product.price * item.qty, 0);
-    const taxRate = Number(systemSettings?.taxRate) || 3; 
-    const gstBreakdown = calculateInclusiveGST(subtotal, taxRate);
+// --- 🟢 NEW CALCULATION LOGIC (Matches Admin Invoice) ---
+    
+    // 1. Settings & Rates
+    const taxRate = Number(systemSettings?.taxRate) || 3; // Default 3%
+    const divisor = 1 + (taxRate / 100); // 1.03
+    
+    // 2. Calculate Inclusive Subtotal (MRP Sum displayed to User)
+    const cartInclusiveTotal = cart.reduce(
+        (sum: number, item: any) => sum + item.product.price * item.qty,
+        0
+    );
 
+    // 3. Gift Cost (Inclusive)
+    const giftModeCost = Number(systemSettings?.giftModeCost) || 50;
+    const currentGiftInclusive = isGift ? giftModeCost : 0;
+
+    // 4. Calculate Base (Taxable) Values [REVERSE CALCULATION]
+    // Admin Logic: taxable = inc / 1.03
+    const cartBasePrice = cartInclusiveTotal / divisor;
+    const giftBasePrice = currentGiftInclusive / divisor;
+
+    const totalBasePrice = cartBasePrice + giftBasePrice;
+
+    // 5. Discount Logic
+    // Admin Logic: netTaxable = totalTaxable - discount
+    // Note: Discount Base Price me se minus hoga
+    const netTaxable = Math.max(0, totalBasePrice - discountAmount);
+
+    // 6. Tax Calculation (On Net Base)
+    // Admin Logic: finalGST = netTaxable * 0.03
+    const totalGST = netTaxable * (taxRate / 100);
+
+    // 7. Shipping
     const shippingThreshold = Number(systemSettings?.shippingThreshold) || 5000;
     const baseShipping = Number(systemSettings?.shippingCost) || 150;
-    const isFreeShipping = subtotal >= shippingThreshold;
-    const shipping = isFreeShipping ? 0 : baseShipping;
+    const shipping = cartInclusiveTotal >= shippingThreshold ? 0 : baseShipping;
 
-    // Gift Cost
-    const giftModeCost = Number(systemSettings?.giftModeCost) || 50; 
-    const currentGiftCost = isGift ? giftModeCost : 0;
+    // 8. Final Total (Payable)
+    // Admin Logic: grandTotal = netTaxable + finalGST + shipping
+    const total = netTaxable + totalGST + shipping;
 
-    // Total
-    const total = subtotal + shipping - discountAmount + currentGiftCost;
-
+    // 9. Breakdown for UI
+    const gstBreakdown = {
+        basePrice: netTaxable,
+        cgst: totalGST / 2,
+        sgst: totalGST / 2,
+        totalInclusive: cartInclusiveTotal + currentGiftInclusive
+    };
+const subtotal = cartInclusiveTotal;
+    const currentGiftCost = currentGiftInclusive;
+    const taxableBeforeDiscount = subtotal + currentGiftCost;
     const showToast = (msg: string, type: 'success' | 'error') => {
         setToast({ msg, type });
         setTimeout(() => setToast(null), 4000);
@@ -311,7 +346,12 @@ export default function CheckoutPage() {
                     giftMessage: giftMessage || "", 
                     giftWrapPrice: currentGiftCost,
                     date: new Date().toLocaleDateString('en-IN'),
-                    total, subtotal, shipping, discount: discountAmount, tax: gstBreakdown.totalTax,
+                   total,
+subtotal: taxableBeforeDiscount,
+shipping,
+discount: discountAmount, // BEFORE TAX
+tax: totalGST,
+
                     items: cart.map((item: any) => ({
                         name: item.product.name, 
                         qty: item.qty, 
@@ -391,7 +431,8 @@ export default function CheckoutPage() {
                     status: 'Pending',
                     paymentMethod: 'COD',
                     date: new Date().toLocaleDateString('en-IN'),
-                    total, subtotal, shipping, discount: discountAmount, tax: gstBreakdown.totalTax,
+                    total, subtotal, shipping, discount: discountAmount, tax: totalGST,
+
                     items: cart.map((item: any) => ({
                         name: item.product.name, 
                         qty: item.qty, 
@@ -915,51 +956,56 @@ export default function CheckoutPage() {
                         </div>
 
                         {/* TOTALS */}
+                       {/* TOTALS (ALIGNED WITH INVOICE) */}
                         <div className="space-y-3 text-sm text-stone-500 pt-6 border-t border-stone-100">
+                            
                             <div className="flex justify-between">
-                                <span>Subtotal</span>
-                                <span className="font-medium text-[#0a1f1c]">₹{subtotal.toLocaleString()}</span>
+                                <span>MRP Total (Inclusive of Tax)</span>
+                                <span className="font-medium text-[#0a1f1c]">₹{cartInclusiveTotal.toLocaleString()}</span>
                             </div>
-                           {/* --- GST BREAKDOWN (Informational Only) --- */}
-                            <div className="pt-2 pb-2 space-y-1 border-b border-stone-100 mb-2">
+
+                            {isGift && (
+                                <div className="flex justify-between text-amber-600 bg-amber-50 px-2 py-1 rounded mt-1">
+                                    <span className="flex items-center gap-1 text-xs font-bold"><Gift className="w-3 h-3" /> Secret Gift Mode (Incl. GST)</span>
+                                    <span className="font-bold text-xs">+ ₹{currentGiftInclusive}</span>
+                                </div>
+                            )}
+
+                            {/* --- BREAKDOWN FOR CLARITY --- */}
+                            <div className="pt-2 pb-2 space-y-1 border-b border-stone-100 mb-2 bg-stone-50/50 p-2 rounded">
                                 <div className="flex justify-between text-[11px] text-stone-400">
                                     <span>Taxable Value (Base Price)</span>
+                                    <span>₹{totalBasePrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                </div>
+                                
+                                {discountAmount > 0 && (
+                                    <div className="flex justify-between text-[11px] text-green-600 font-bold">
+                                        <span>Less: Discount(Before Tax)</span>
+                                        <span>- ₹{discountAmount.toLocaleString()}</span>
+                                    </div>
+                                )}
+
+                                <div className="flex justify-between text-[11px] text-stone-400">
+                                    <span>Net Taxable Value</span>
                                     <span>₹{gstBreakdown.basePrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                 </div>
+
                                 <div className="flex justify-between text-[11px] text-stone-400">
-                                    <span>CGST ({(taxRate / 2).toFixed(1)}%)</span>
-                                    <span>₹{gstBreakdown.cgst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                </div>
-                                <div className="flex justify-between text-[11px] text-stone-400">
-                                    <span>SGST ({(taxRate / 2).toFixed(1)}%)</span>
-                                    <span>₹{gstBreakdown.sgst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                    <span>GST ({taxRate}%)</span>
+                                    <span>₹{totalGST.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                 </div>
                             </div>
+
                             <div className="flex justify-between">
-                                <span>Shipping</span>
+                                <span>Shipping Charges</span>
                                 <span className="font-medium text-[#0a1f1c]">{shipping === 0 ? <span className="text-green-600 font-bold">Free</span> : `₹${shipping}`}</span>
                             </div>
 
-                            {/* ✅ GIFT COST ROW */}
-                            {isGift && (
-                                <div className="flex justify-between text-amber-600 bg-amber-50 px-2 py-1 rounded mt-1">
-                                    <span className="flex items-center gap-1 text-xs font-bold"><Gift className="w-3 h-3" /> Secret Gift Mode</span>
-                                    <span className="font-bold text-xs">+ ₹{giftModeCost}</span>
-                                </div>
-                            )}
-
-                            {discountAmount > 0 && (
-                                <div className="flex justify-between text-green-600 font-bold">
-                                    <span>Discount</span>
-                                    <span>- ₹{discountAmount.toLocaleString()}</span>
-                                </div>
-                            )}
-
                             <div className="flex justify-between items-end pt-4 border-t border-dashed border-stone-200 mt-4">
-                                <span className="text-lg text-[#0a1f1c] font-serif">Total</span>
+                                <span className="text-lg text-[#0a1f1c] font-serif">Grand Total</span>
                                 <div className="text-right">
-                                    <span className="text-[10px] text-stone-400 block mb-1 uppercase tracking-widest">Including Taxes</span>
-                                    <span className="text-2xl font-serif text-amber-600">₹{total.toLocaleString()}</span>
+                                    <span className="text-[10px] text-stone-400 block mb-1 uppercase tracking-widest">Inclusive of All Taxes</span>
+                                    <span className="text-2xl font-serif text-amber-600">₹{Math.round(total).toLocaleString()}</span>
                                 </div>
                             </div>
                         </div>

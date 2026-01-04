@@ -8,10 +8,10 @@ import {
     Truck, AlertTriangle, Lock, Ticket, Tag, Layers, PlusCircle, MinusCircle,
     BarChart3, Activity, CheckSquare, UserPlus, FileUp, Printer, History, Send, Video, Key,
     AlertOctagon, Star, Sparkles, Image as ImageIcon, Save,
-    Type, Link as LinkIcon, MoveRight, Check, XCircle, Eye, MapPin, Phone, Mail, 
+    Type, Link as LinkIcon, MoveRight, Check, XCircle, Eye, MapPin, Phone, Mail,
     User, MessageSquare, Menu, ShoppingBag, Ban, Briefcase, Headphones, Search,
     // 👇 Ye Naye Icons Add Karein
-    Download, FileJson, RefreshCw, ShieldAlert, Bike, Gift 
+    Download, FileJson, RefreshCw, ShieldAlert, Bike, Gift
 } from 'lucide-react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
@@ -22,7 +22,13 @@ import { auth, db } from '@/lib/firebase';
 import Link from 'next/link';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-
+const STATES = [
+  "Andhra Pradesh","Arunachal Pradesh","Assam","Bihar","Chhattisgarh","Goa",
+  "Gujarat","Haryana","Himachal Pradesh","Jharkhand","Karnataka","Kerala",
+  "Madhya Pradesh","Maharashtra","Manipur","Meghalaya","Mizoram","Nagaland",
+  "Odisha","Punjab","Rajasthan","Sikkim","Tamil Nadu","Telangana","Tripura",
+  "Uttar Pradesh","Uttarakhand","West Bengal","Delhi"
+];
 // --- PREMIUM ALERT COMPONENT (Add this below imports) ---
 const Toast = ({ message, type, onClose }: { message: string, type: 'error' | 'success' | 'info', onClose: () => void }) => {
     useEffect(() => {
@@ -184,9 +190,43 @@ export default function AdminPage() {
     }, []);
 
     // --- ACTIONS ---
-    const handleStatusUpdate = (id: string, status: string) => {
+   const handleStatusUpdate = (id: string, status: string) => {
+        // 1. Database Update
         updateOrderStatus(id, status);
+
+        // 2. Admin System Log
         addSystemNotification('Order Updated', `Order #${id} status changed to ${status}`, 'order');
+
+        // 👇 3. NEW: SEND NOTIFICATION TO CUSTOMER (Connects to Dashboard)
+        const order = orders.find((o: any) => o.id === id); // Order details nikalo
+        
+        if (order && order.customerEmail) {
+            let title = "Order Update";
+            let msg = `Your order #${id} status is now: ${status}.`;
+
+            // Custom Messages for Premium Feel
+            if (status === 'Shipped') {
+                title = "Order Shipped 🚚";
+                msg = "Great news! Your package has been dispatched and is on its way.";
+            } else if (status === 'Out for Delivery') {
+                title = "Out for Delivery 🚀";
+                msg = "Your order is out for delivery today! Please be ready to receive it.";
+            } else if (status === 'Delivered') {
+                title = "Order Delivered ✅";
+                msg = "Your order has been delivered successfully. Thank you for choosing ZERIMI.";
+            } else if (status === 'Return Approved') {
+                title = "Return Approved 🔄";
+                msg = "Your return request has been approved. Pickup will be scheduled shortly.";
+            } else if (status === 'Return Rejected') {
+                title = "Return Update ⚠️";
+                msg = "Your return request could not be processed at this time.";
+            }
+
+            // Firebase Notification Send (Customer Dashboard will catch this)
+            sendNotification(order.customerEmail, title, msg);
+        }
+
+        // 4. Admin Toast
         showToast(`Order #${id} marked as ${status}`, 'success');
     };
 
@@ -403,8 +443,8 @@ export default function AdminPage() {
                         <h2 className="font-serif text-2xl tracking-widest text-white hidden lg:block">ZERIMI</h2>
                         <div className="flex items-center justify-center lg:justify-start gap-2 mt-1">
                             <span className={`w-2 h-2 rounded-full animate-pulse ${userRole === 'admin' ? 'bg-red-500' :
-                                    userRole === 'manager' ? 'bg-amber-500' :
-                                        'bg-blue-500'
+                                userRole === 'manager' ? 'bg-amber-500' :
+                                    'bg-blue-500'
                                 }`}></span>
 
                             {/* 👇 YE LABEL LOGIC FIX KIYA HAI */}
@@ -704,177 +744,217 @@ const numberToWords = (num: number): string => {
 /* ----------------------------------------------------
    ✅ PROFESSIONAL INVOICE GENERATOR (Correct Math)
 ---------------------------------------------------- */
-const generateAdminInvoice = (order: any, settings: any) => {
-    if (!order) return;
+// src/app/admin/page.tsx ke andar is function ko replace karein
 
-    const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.width;
+// ---------- DATE FORMATTER (DD/MM/YYYY) ----------
+const formatDate = (input: any) => {
+  const d = new Date(input);
+  if (isNaN(d.getTime())) return input || "";
+  return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
+};
 
-    // 1. EXTRACT DATA & CALCULATE BASE PRICE
-    // Order.subtotal mein Tax included hota hai, isliye hum Base Value nikalenge
-    const inclusiveSubtotal = Number(order.subtotal || 0);
-    const taxAmount = Number(order.tax || 0);
-    const baseAmount = inclusiveSubtotal - taxAmount; // Actual price without tax
+export const generateAdminInvoice = (order: any, settings: any) => {
+  if (!order) return;
 
-    const shipping = Number(order.shipping || 0);
-    const discount = Number(order.discount || 0);
-    const giftWrapPrice = Number(order.giftWrapPrice || 0);
-    const grandTotal = Number(order.total || 0);
+  // ---------- COMPANY STATE ----------
+  const companyAddress = settings?.invoice?.address || "";
+  let warehouseState = "Uttar Pradesh";
+  const foundState = STATES.find(s =>
+    companyAddress.toLowerCase().includes(s.toLowerCase())
+  );
+  if (foundState) warehouseState = foundState;
 
-    // 2. HEADER
-    doc.setFontSize(24);
-    doc.setTextColor(212, 175, 55); // Gold
-    doc.setFont("helvetica", "bold");
-    doc.text("ZERIMI", 14, 20);
+  // ---------- CUSTOMER ADDRESS ----------
+  let customerState = "";
+  let fullAddress = "";
 
-    doc.setFontSize(10);
-    doc.setTextColor(100);
-    doc.setFont("helvetica", "normal");
-    doc.text("Luxury Jewelry & Accessories", 14, 26);
-    doc.text(settings?.invoice?.address || "Mumbai, Maharashtra, India", 14, 31);
-    doc.text(`GSTIN: ${settings?.invoice?.gstin || "27ABCDE1234F1Z5"}`, 14, 36);
-    doc.text("Email: support@zerimi.com", 14, 41);
+  if (typeof order.address === "object") {
+    customerState = order.address.state || "";
+    fullAddress = `${order.address.street || ""}, ${order.address.city || ""}, ${order.address.state || ""} - ${order.address.pincode || ""}`;
+    if (order.address.phone) fullAddress += `\nPhone: ${order.address.phone}`;
+  } else {
+    fullAddress = order.address || "Address not provided";
+    customerState = order.address || "";
+  }
 
-    doc.setFontSize(16);
+  const isSameState = customerState
+    .toLowerCase()
+    .includes(warehouseState.toLowerCase());
+
+  // ---------- PDF INIT ----------
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.width;
+
+  // ---------- HEADER ----------
+  doc.setFont("helvetica","bold");
+  doc.setFontSize(22);
+  doc.setTextColor(212,175,55);
+  doc.text(settings?.invoice?.companyName || "ZERIMI", 14, 20);
+
+  doc.setFont("helvetica","normal");
+  doc.setFontSize(10);
+  doc.setTextColor(80);
+  doc.text("Luxury Jewelry & Accessories", 14, 26);
+  doc.text(companyAddress || "Uttar Pradesh, India", 14, 31);
+  doc.text(
+    `GSTIN: ${settings?.invoice?.gstin || "GSTIN Not Applicable (Unregistered)"}`,
+    14,
+    36
+  );
+  doc.text(settings?.invoice?.email || "support@zerimi.com", 14, 41);
+
+  doc.setFontSize(16);
+  doc.setTextColor(0);
+  doc.text("TAX INVOICE", pageWidth - 14, 20, { align: "right" });
+
+  doc.setFontSize(10);
+  doc.text(`Invoice #: ${order.invoiceNo || order.id.slice(-6)}`, pageWidth - 14, 30, { align: "right" });
+  doc.text(`Date: ${formatDate(order.date)}`, pageWidth - 14, 35, { align: "right" });
+  doc.text(`Order ID: #${order.id}`, pageWidth - 14, 40, { align: "right" });
+
+  doc.line(14, 46, pageWidth - 14, 46);
+
+  // ---------- BILL TO ----------
+  doc.setFont("helvetica","bold");
+  doc.text("Bill To:", 14, 54);
+  doc.setFont("helvetica","normal");
+  doc.text(order.name || "Valued Customer", 14, 60);
+  doc.text(doc.splitTextToSize(fullAddress, 80), 14, 65);
+
+  // ---------- ITEM TABLE ----------
+  const TAX_RATE = 3;
+  let totalTaxable = 0;
+  let totalGST = 0;
+  let giftTaxable = 0;
+  let giftGST = 0;
+
+  const tableRows: any[] = [];
+
+  order.items.forEach((item: any, index: number) => {
+    const qty = Number(item.qty || 1);
+    const inc = Number(item.price) * qty;
+    const taxable = inc / (1 + TAX_RATE / 100);
+    const tax = inc - taxable;
+
+    totalTaxable += taxable;
+    totalGST += tax;
+
+    tableRows.push([
+      index + 1,
+      item.name,
+      item.hsn || "7117",
+      qty,
+      `Rs.${(taxable/qty).toFixed(2)}`,
+      `Rs.${taxable.toFixed(2)}`,
+      isSameState ? "1.5%" : "-",
+      isSameState ? (tax/2).toFixed(2) : "-",
+      isSameState ? "1.5%" : "-",
+      isSameState ? (tax/2).toFixed(2) : "-",
+      !isSameState ? "3%" : "-",
+      !isSameState ? tax.toFixed(2) : "-",
+      `Rs.${inc.toFixed(2)}`
+    ]);
+  });
+
+  // ---------- GIFT PACKAGING (ITEM + SUMMARY BOTH) ----------
+  if (order.giftWrapPrice && order.giftWrapPrice > 0) {
+    const inc = Number(order.giftWrapPrice);
+    giftTaxable = inc / 1.03;
+    giftGST = inc - giftTaxable;
+
+    totalTaxable += giftTaxable;
+    totalGST += giftGST;
+
+    tableRows.push([
+      tableRows.length + 1,
+      "Gift Packaging (Add-on)",
+      "9985",
+      1,
+      `Rs.${giftTaxable.toFixed(2)}`,
+      `Rs.${giftTaxable.toFixed(2)}`,
+      isSameState ? "1.5%" : "-",
+      isSameState ? (giftGST/2).toFixed(2) : "-",
+      isSameState ? "1.5%" : "-",
+      isSameState ? (giftGST/2).toFixed(2) : "-",
+      !isSameState ? "3%" : "-",
+      !isSameState ? giftGST.toFixed(2) : "-",
+      `Rs.${inc.toFixed(2)}`
+    ]);
+  }
+
+  autoTable(doc, {
+    startY: 95,
+    head: [[
+      "Sn","Item","HSN","Qty","Rate","Taxable",
+      "CGST%","Amt","SGST%","Amt","IGST%","Amt","Total"
+    ]],
+    body: tableRows,
+    theme: "grid",
+    styles: { fontSize: 7 }
+  });
+
+  // ---------- SUMMARY (NO MISSING LINE) ----------
+  const discount = Number(order.discount || 0);
+  const netTaxable = totalTaxable - discount;
+  const finalGST = netTaxable * (TAX_RATE / 100);
+  const grandTotal = netTaxable + finalGST + Number(order.shipping || 0);
+
+  let y = (doc as any).lastAutoTable.finalY + 10;
+  const rightX = pageWidth - 14;
+  const labelX = rightX - 80;
+
+  doc.text("Sub Total (Taxable):", labelX, y);
+  doc.text(`Rs.${totalTaxable.toFixed(2)}`, rightX, y, { align:"right" });
+
+  if (giftTaxable > 0) {
+    y += 7;
+    doc.text("Gift Packaging (Incl. GST):", labelX, y);
+    doc.text(`Rs.${(giftTaxable + giftGST).toFixed(2)}`, rightX, y, { align:"right" });
+  }
+
+  if (discount > 0) {
+    y += 7;
+    doc.setTextColor(200,30,30);
+    doc.text("Less: Coupon Discount (Before Tax):", labelX, y);
+    doc.text(`Rs.${discount.toFixed(2)}`, rightX, y, { align:"right" });
     doc.setTextColor(0);
-    doc.text("TAX INVOICE", pageWidth - 14, 20, { align: "right" });
+  }
 
-    doc.setFontSize(10);
-    doc.text(`Invoice #: ${order.invoiceNo || "INV-" + order.id}`, pageWidth - 14, 30, { align: "right" });
-    doc.text(`Date: ${order.date}`, pageWidth - 14, 35, { align: "right" });
-    doc.text(`Order ID: #${order.id}`, pageWidth - 14, 40, { align: "right" });
+  y += 7;
+  doc.text("Net Taxable Value:", labelX, y);
+  doc.text(`Rs.${netTaxable.toFixed(2)}`, rightX, y, { align:"right" });
 
-    doc.line(14, 48, pageWidth - 14, 48);
+  y += 7;
+  doc.setTextColor(120);
+  doc.text("Total GST (3%):", labelX, y);
+  doc.text(`Rs.${finalGST.toFixed(2)}`, rightX, y, { align:"right" });
+  doc.setTextColor(0);
+const shippingCharge = Number(order.shipping || 0);
 
-    // 3. BILL TO
-    const billingY = 55;
-    doc.setFont("helvetica", "bold");
-    doc.text("Bill To:", 14, billingY);
-    doc.setFont("helvetica", "normal");
+if (shippingCharge > 0) {
+  y += 7;
+  doc.setTextColor(80);
+  doc.text("Shipping Charges:", labelX, y);
+  doc.text(`Rs.${shippingCharge.toFixed(2)}`, rightX, y, { align: "right" });
+  doc.setTextColor(0);
+}
 
-    const custName = order.name || order.customerName || "Valued Customer";
-    doc.text(custName, 14, billingY + 5);
+  y += 9;
+  doc.setFont("helvetica","bold");
+  doc.text("Grand Total:", labelX, y);
+  doc.text(`Rs.${grandTotal.toFixed(2)}`, rightX, y, { align:"right" });
 
-    let addressStr = "";
-    if (typeof order.address === "string") {
-        addressStr = order.address;
-    } else if (order.address) {
-        addressStr = `${order.address.street || ""}, ${order.address.city || ""} - ${order.address.pincode || ""}`;
-    }
-    if (order.address?.phone) {
-        addressStr += `\nPhone: ${order.address.phone}`;
-    }
-    doc.text(doc.splitTextToSize(addressStr, 80), 14, billingY + 10);
+  // ---------- DECLARATION ----------
+  y += 14;
+  doc.setFontSize(9);
+  doc.setFont("helvetica","normal");
+  doc.text(
+    "Declaration:\nWe declare that this invoice shows the actual price of the goods and services described\nand that all particulars are true and correct.\n\nFor ZERIMI\nAuthorized Signatory\n(This is a computer-generated invoice)",
+    14,
+    y
+  );
 
-    // 4. ITEMS TABLE
-    const tableRows = order.items.map((item: any, index: number) => {
-        const unitPrice = Number(item.price);
-        const qty = Number(item.qty);
-        const totalVal = unitPrice * qty;
-        return [
-            index + 1,
-            item.name,
-            qty,
-            `Rs.${unitPrice.toLocaleString()}`,
-            `Rs.${totalVal.toLocaleString()}`
-        ];
-    });
-
-    // @ts-ignore
-    autoTable(doc, {
-        startY: billingY + 35,
-        head: [["Sn", "Item Description", "Qty", "Unit Price", "Total Value"]],
-        body: tableRows,
-        theme: "grid",
-        headStyles: { fillColor: [15, 41, 37], textColor: 255, fontSize: 9 },
-        bodyStyles: { fontSize: 9 },
-        columnStyles: { 3: { halign: "right" }, 4: { halign: "right" } },
-    });
-
-    // 5. PROFESSIONAL TOTALS CALCULATION
-    // @ts-ignore
-    let currentY = doc.lastAutoTable.finalY + 10;
-    const rightX = pageWidth - 14;
-    const labelX = rightX - 75; 
-
-    doc.setFontSize(10);
-    doc.setTextColor(80); // Thoda Grey color breakdown ke liye
-
-    // A. BASE AMOUNT (Tax Hatake)
-    doc.text("Taxable Value (Excl. Tax):", labelX, currentY);
-    doc.text(`Rs.${baseAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, rightX, currentY, { align: "right" });
-    currentY += 6;
-
-    // B. TAX ADDITION
-    doc.text(`Total GST (${settings?.store?.taxRate || 3}%):`, labelX, currentY);
-    doc.text(`+ Rs.${taxAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, rightX, currentY, { align: "right" });
-    currentY += 2;
-
-    // --- Line Divider ---
-    doc.setLineWidth(0.1);
-    doc.line(labelX, currentY + 2, rightX, currentY + 2);
-    currentY += 7;
-
-    // C. SUBTOTAL (Inclusive of Tax)
-    doc.setTextColor(0); // Black Color
-    doc.setFont("helvetica", "bold");
-    doc.text("Net Item Total:", labelX, currentY);
-    doc.text(`Rs.${inclusiveSubtotal.toLocaleString()}`, rightX, currentY, { align: "right" });
-    doc.setFont("helvetica", "normal");
-    currentY += 6;
-
-    // D. EXTRA CHARGES
-    // Shipping
-    doc.text("Shipping Charges:", labelX, currentY);
-    doc.text(shipping === 0 ? "Free" : `+ Rs.${shipping.toFixed(2)}`, rightX, currentY, { align: "right" });
-    currentY += 6;
-
-    // Secret Gift
-    if (giftWrapPrice > 0) {
-        doc.setTextColor(217, 119, 6); // Amber
-        doc.text("Secret Gift Packaging:", labelX, currentY);
-        doc.text(`+ Rs.${giftWrapPrice.toLocaleString()}`, rightX, currentY, { align: "right" });
-        doc.setTextColor(0);
-        currentY += 6;
-    }
-
-    // E. DISCOUNTS
-    if (discount > 0) {
-        doc.setTextColor(22, 163, 74); // Green
-        doc.text("Coupon Discount:", labelX, currentY);
-        doc.text(`- Rs.${discount.toLocaleString()}`, rightX, currentY, { align: "right" });
-        doc.setTextColor(0);
-        currentY += 6;
-    }
-
-    // --- Final Line Divider ---
-    currentY += 2;
-    doc.setLineWidth(0.5);
-    doc.line(labelX, currentY, rightX, currentY);
-    currentY += 8;
-
-    // F. GRAND TOTAL
-    doc.setFontSize(14);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(212, 140, 0); // Gold
-    doc.text("Grand Total:", labelX, currentY);
-    doc.text(`Rs.${grandTotal.toLocaleString()}`, rightX, currentY, { align: "right" });
-
-    // 6. FOOTER
-    doc.setFontSize(9);
-    doc.setTextColor(80);
-    doc.setFont("helvetica", "normal");
-    doc.text(`Amount in Words: ${numberToWords(grandTotal)}`, 14, currentY);
-
-    doc.rect(14, currentY + 10, pageWidth - 28, 20);
-    doc.setFontSize(8);
-    doc.text("Declaration:", 16, currentY + 15);
-    doc.text("We declare that this invoice shows the actual price of the goods described above and that all particulars are true and correct.", 16, currentY + 20);
-
-    doc.setFont("helvetica", "bold");
-    doc.text("For ZERIMI", pageWidth - 40, currentY + 25, { align: "center" });
-
-    doc.save(`Invoice_${order.id}.pdf`);
+  doc.save(`Invoice_${order.id}.pdf`);
 };
 // --- ORDER MANAGER (Updates Trigger Notification) ---
 // --- ORDER MANAGER (Fixed Return Logic) ---
@@ -991,12 +1071,12 @@ function OrderManager({ orders, updateOrderStatus, settings, deleteOrder }: any)
                         {filteredOrders?.map((o: any) => (
                             <tr key={o.id} className={`hover:bg-white/5 transition duration-200 group ${selectedOrders.includes(o.id) ? 'bg-amber-900/10' : ''}`}>
                                 <td className="p-5"><input type="checkbox" checked={selectedOrders.includes(o.id)} onChange={() => toggleSelect(o.id)} className="accent-amber-600 w-4 h-4 cursor-pointer" /></td>
-                              {/* ✅ FIXED: FULL ID DISPLAY */}
+                                {/* ✅ FIXED: FULL ID DISPLAY */}
                                 <td className="p-5">
                                     <span className="font-mono text-xs text-white block mb-1">#{o.id}</span>
                                     {o.invoiceNo && <span className="text-[10px] text-white/30 block">Inv: {o.invoiceNo}</span>}
                                     <span className="text-[10px] text-white/30 block">{o.date}</span>
-                                    
+
                                     {/* Gift Badge */}
                                     {o.isGift && (
                                         <span className="mt-2 inline-flex items-center gap-1 px-2 py-1 rounded bg-amber-500/20 text-amber-500 text-[9px] font-bold uppercase border border-amber-500/30 animate-pulse">
@@ -1057,26 +1137,25 @@ function OrderManager({ orders, updateOrderStatus, settings, deleteOrder }: any)
                                 <p className="text-xs text-white/40 mt-1 flex items-center gap-2"><Activity className="w-3 h-3" /> Placed on {viewingOrder.date}</p>
                             </div>
                             <div className="flex gap-2">
-                               {/* ✅ SMART INVOICE BUTTON (Gift Mode Alert) */}
-<button 
-    onClick={() => generateAdminInvoice(viewingOrder, settings)} 
-    className={`px-4 py-2 rounded-lg text-xs uppercase font-bold flex items-center gap-2 transition border ${
-        viewingOrder.isGift 
-        ? 'bg-amber-500/10 text-amber-500 border-amber-500/50 hover:bg-amber-500 hover:text-white' // ⚠️ GIFT HAI: Amber Color
-        : 'bg-white/5 text-white border-white/5 hover:bg-white/10' // NORMAL: Grey Color
-    }`}
-    title={viewingOrder.isGift ? "Do not put inside box" : "Print Invoice"}
->
-    <Printer className="w-4 h-4" /> 
-    {viewingOrder.isGift ? "Invoice (Sender Only)" : "Print Invoice"}
-</button>
+                                {/* ✅ SMART INVOICE BUTTON (Gift Mode Alert) */}
+                                <button
+                                    onClick={() => generateAdminInvoice(viewingOrder, settings)}
+                                    className={`px-4 py-2 rounded-lg text-xs uppercase font-bold flex items-center gap-2 transition border ${viewingOrder.isGift
+                                            ? 'bg-amber-500/10 text-amber-500 border-amber-500/50 hover:bg-amber-500 hover:text-white' // ⚠️ GIFT HAI: Amber Color
+                                            : 'bg-white/5 text-white border-white/5 hover:bg-white/10' // NORMAL: Grey Color
+                                        }`}
+                                    title={viewingOrder.isGift ? "Do not put inside box" : "Print Invoice"}
+                                >
+                                    <Printer className="w-4 h-4" />
+                                    {viewingOrder.isGift ? "Invoice (Sender Only)" : "Print Invoice"}
+                                </button>
 
-{/* ⚠️ Extra Warning Tag (Agar Gift hai to Button ke neeche dikhega) */}
-{viewingOrder.isGift && (
-    <span className="text-[9px] text-red-400 font-bold uppercase tracking-widest absolute top-16 right-20 bg-[#0f2925] px-2 py-1 border border-red-500/30 rounded z-50 shadow-lg">
-        🚫 Do Not Pack Bill Inside
-    </span>
-)}
+                                {/* ⚠️ Extra Warning Tag (Agar Gift hai to Button ke neeche dikhega) */}
+                                {viewingOrder.isGift && (
+                                    <span className="text-[9px] text-red-400 font-bold uppercase tracking-widest absolute top-16 right-20 bg-[#0f2925] px-2 py-1 border border-red-500/30 rounded z-50 shadow-lg">
+                                        🚫 Do Not Pack Bill Inside
+                                    </span>
+                                )}
                                 <button onClick={() => setViewingOrder(null)} className="hover:bg-red-500/20 p-2 rounded-lg text-white/50 hover:text-red-500 transition">
                                     <X className="w-6 h-6" />
                                 </button>
@@ -1088,57 +1167,57 @@ function OrderManager({ orders, updateOrderStatus, settings, deleteOrder }: any)
 
                             {/* Left: Timeline & Items */}
                             <div className="lg:col-span-2 space-y-8">
-{/* 🔥 SECRET GIFT ALERT BOX (Message & Warning) */}
-{viewingOrder.isGift && (
-    <div className="bg-[#0a1f1c] border-2 border-amber-500 p-6 rounded-xl shadow-[0_0_20px_rgba(245,158,11,0.2)] mb-6 relative overflow-hidden group">
-        
-        {/* Glowing Background */}
-        <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
-            <Gift className="w-32 h-32 text-amber-500"/>
-        </div>
+                                {/* 🔥 SECRET GIFT ALERT BOX (Message & Warning) */}
+                                {viewingOrder.isGift && (
+                                    <div className="bg-[#0a1f1c] border-2 border-amber-500 p-6 rounded-xl shadow-[0_0_20px_rgba(245,158,11,0.2)] mb-6 relative overflow-hidden group">
 
-        <div className="flex flex-col md:flex-row gap-6 relative z-10">
-            {/* Warning Icon */}
-            <div className="shrink-0">
-                <div className="p-4 bg-amber-500 text-black rounded-full shadow-lg inline-block">
-                    <Gift className="w-8 h-8" />
-                </div>
-            </div>
+                                        {/* Glowing Background */}
+                                        <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
+                                            <Gift className="w-32 h-32 text-amber-500" />
+                                        </div>
 
-            {/* Content */}
-            <div className="flex-1">
-                <h4 className="text-amber-500 font-bold text-xl uppercase tracking-widest flex items-center gap-2">
-                    Secret Gift Mode Active
-                    <span className="text-[10px] bg-red-500 text-white px-2 py-0.5 rounded ml-2 animate-pulse">
-                        NO INVOICE
-                    </span>
-                </h4>
-                
-                <ul className="text-white/80 text-sm mt-3 space-y-1 list-disc pl-4">
-                    <li>🚫 <strong>DO NOT</strong> put the Invoice inside the box.</li>
-                    <li>📦 Use <strong>Luxury Unbranded Packaging</strong>.</li>
-                    <li>🏷️ Sender Name on Label: <strong>"ZERIMI Fulfillment"</strong>.</li>
-                </ul>
+                                        <div className="flex flex-col md:flex-row gap-6 relative z-10">
+                                            {/* Warning Icon */}
+                                            <div className="shrink-0">
+                                                <div className="p-4 bg-amber-500 text-black rounded-full shadow-lg inline-block">
+                                                    <Gift className="w-8 h-8" />
+                                                </div>
+                                            </div>
 
-                {/* ✅ CUSTOMER MESSAGE CARD */}
-                {viewingOrder.giftMessage ? (
-                    <div className="mt-6 bg-white text-black p-4 rounded-lg shadow-lg border-l-4 border-amber-500 rotate-1 transform hover:rotate-0 transition duration-300 max-w-md">
-                        <p className="text-[10px] text-gray-400 uppercase font-bold mb-2 tracking-widest">
-                            Print this on Message Card:
-                        </p>
-                        <p className="font-serif italic text-lg leading-relaxed text-center">
-                            "{viewingOrder.giftMessage}"
-                        </p>
-                    </div>
-                ) : (
-                    <div className="mt-4 text-white/40 text-xs italic">
-                        (No message provided by customer)
-                    </div>
-                )}
-            </div>
-        </div>
-    </div>
-)}
+                                            {/* Content */}
+                                            <div className="flex-1">
+                                                <h4 className="text-amber-500 font-bold text-xl uppercase tracking-widest flex items-center gap-2">
+                                                    Secret Gift Mode Active
+                                                    <span className="text-[10px] bg-red-500 text-white px-2 py-0.5 rounded ml-2 animate-pulse">
+                                                        NO INVOICE
+                                                    </span>
+                                                </h4>
+
+                                                <ul className="text-white/80 text-sm mt-3 space-y-1 list-disc pl-4">
+                                                    <li>🚫 <strong>DO NOT</strong> put the Invoice inside the box.</li>
+                                                    <li>📦 Use <strong>Luxury Unbranded Packaging</strong>.</li>
+                                                    <li>🏷️ Sender Name on Label: <strong>"ZERIMI Fulfillment"</strong>.</li>
+                                                </ul>
+
+                                                {/* ✅ CUSTOMER MESSAGE CARD */}
+                                                {viewingOrder.giftMessage ? (
+                                                    <div className="mt-6 bg-white text-black p-4 rounded-lg shadow-lg border-l-4 border-amber-500 rotate-1 transform hover:rotate-0 transition duration-300 max-w-md">
+                                                        <p className="text-[10px] text-gray-400 uppercase font-bold mb-2 tracking-widest">
+                                                            Print this on Message Card:
+                                                        </p>
+                                                        <p className="font-serif italic text-lg leading-relaxed text-center">
+                                                            "{viewingOrder.giftMessage}"
+                                                        </p>
+                                                    </div>
+                                                ) : (
+                                                    <div className="mt-4 text-white/40 text-xs italic">
+                                                        (No message provided by customer)
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                                 {/* VISUAL TIMELINE */}
                                 <div className="bg-black/20 p-6 rounded-xl border border-white/5">
                                     <h4 className="text-[10px] text-white/40 uppercase tracking-widest font-bold mb-6">Order Progress</h4>
@@ -1234,25 +1313,25 @@ function OrderManager({ orders, updateOrderStatus, settings, deleteOrder }: any)
                                             <p className="text-xs text-white/50">Email</p>
                                             <p className="text-sm text-white font-medium break-all">{viewingOrder.customerEmail}</p>
                                         </div>
-                                       <div>
-        <p className="text-xs text-white/50">Shipping Address</p>
-        <p className="text-sm text-white/80 leading-relaxed mt-1">
-            {typeof viewingOrder.address === 'object'
-                ? `${viewingOrder.address.street}, ${viewingOrder.address.city} - ${viewingOrder.address.pincode}`
-                : viewingOrder.address || "No address provided"}
-        </p>
-    </div>
+                                        <div>
+                                            <p className="text-xs text-white/50">Shipping Address</p>
+                                            <p className="text-sm text-white/80 leading-relaxed mt-1">
+                                                {typeof viewingOrder.address === 'object'
+                                                    ? `${viewingOrder.address.street}, ${viewingOrder.address.city} - ${viewingOrder.address.pincode}`
+                                                    : viewingOrder.address || "No address provided"}
+                                            </p>
+                                        </div>
 
-    {/* ✅ YE PHONE NUMBER BLOCK ADD KAREIN: */}
-    <div>
-        <p className="text-xs text-white/50">Phone Number</p>
-        <p className="text-sm text-white font-medium flex items-center gap-2">
-            <Phone className="w-3 h-3 text-amber-500" />
-            {typeof viewingOrder.address === 'object' ? viewingOrder.address.phone : 'N/A'}
-        </p>
-    </div>
+                                        {/* ✅ YE PHONE NUMBER BLOCK ADD KAREIN: */}
+                                        <div>
+                                            <p className="text-xs text-white/50">Phone Number</p>
+                                            <p className="text-sm text-white font-medium flex items-center gap-2">
+                                                <Phone className="w-3 h-3 text-amber-500" />
+                                                {typeof viewingOrder.address === 'object' ? viewingOrder.address.phone : 'N/A'}
+                                            </p>
+                                        </div>
 
-</div> {/* End of space-y-3 */}
+                                    </div> {/* End of space-y-3 */}
                                 </div>
 
                                 {/* Actions Card (SHIPROCKET CODE INTACT) */}
@@ -1262,49 +1341,49 @@ function OrderManager({ orders, updateOrderStatus, settings, deleteOrder }: any)
                                     <div className="space-y-3">
                                         {/* 🚚 SHIPROCKET BUTTON */}
                                         {/* 🚚 SHIPROCKET BUTTON (Updated Code) */}
-{viewingOrder.status === 'Processing' && (
-    <button
-        onClick={async () => {
-            // Confirmation taaki galti se click na ho jaye
-            if(!confirm("Are you sure you want to create a label on Shiprocket?")) return;
+                                        {viewingOrder.status === 'Processing' && (
+                                            <button
+                                                onClick={async () => {
+                                                    // Confirmation taaki galti se click na ho jaye
+                                                    if (!confirm("Are you sure you want to create a label on Shiprocket?")) return;
 
-            try {
-                // Button text change karne ke liye temporary alert
-                const btn = document.getElementById('ship-btn');
-                if(btn) btn.innerText = "Generating...";
+                                                    try {
+                                                        // Button text change karne ke liye temporary alert
+                                                        const btn = document.getElementById('ship-btn');
+                                                        if (btn) btn.innerText = "Generating...";
 
-                // ✅ CORRECT URL (Jo humne backend file banayi thi)
-                const res = await fetch("/api/shiprocket/create-order", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(viewingOrder) // Pura order data bhej rahe hain
-                });
+                                                        // ✅ CORRECT URL (Jo humne backend file banayi thi)
+                                                        const res = await fetch("/api/shiprocket/create-order", {
+                                                            method: "POST",
+                                                            headers: { "Content-Type": "application/json" },
+                                                            body: JSON.stringify(viewingOrder) // Pura order data bhej rahe hain
+                                                        });
 
-                const data = await res.json();
+                                                        const data = await res.json();
 
-                if (!data.success) {
-                    // Agar error aaye to exact reason dikhayein
-                    alert("❌ Failed: " + (data.error?.message || JSON.stringify(data.error)));
-                    return;
-                }
+                                                        if (!data.success) {
+                                                            // Agar error aaye to exact reason dikhayein
+                                                            alert("❌ Failed: " + (data.error?.message || JSON.stringify(data.error)));
+                                                            return;
+                                                        }
 
-                // Success hone par AWB number dikhayein
-                alert("✅ Shipment Created! AWB: " + (data.data.awb_code || "Generated"));
-                
-                // Optional: Page refresh karein status update ke liye
-                // window.location.reload();
+                                                        // Success hone par AWB number dikhayein
+                                                        alert("✅ Shipment Created! AWB: " + (data.data.awb_code || "Generated"));
 
-            } catch (err: any) {
-                console.error(err);
-                alert("❌ System Error: " + err.message);
-            }
-        }}
-        id="ship-btn"
-        className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs uppercase tracking-wide transition flex items-center justify-center gap-2 shadow-lg"
-    >
-        🚚 Create Shipment (Shiprocket)
-    </button>
-)}
+                                                        // Optional: Page refresh karein status update ke liye
+                                                        // window.location.reload();
+
+                                                    } catch (err: any) {
+                                                        console.error(err);
+                                                        alert("❌ System Error: " + err.message);
+                                                    }
+                                                }}
+                                                id="ship-btn"
+                                                className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs uppercase tracking-wide transition flex items-center justify-center gap-2 shadow-lg"
+                                            >
+                                                🚚 Create Shipment (Shiprocket)
+                                            </button>
+                                        )}
 
                                         {/* Status Logic */}
                                         {viewingOrder.status === 'Pending' && (
@@ -1453,6 +1532,9 @@ function ProductManager({ products, addProduct, updateProduct, deleteProduct }: 
             hoverImage: formData.hoverImage || formData.image,
             images: allImages.length > 0 ? allImages : [formData.image || ''],
             stock: Number(formData.stock),
+            // 👇 YE 2 LINES ADD KAREIN (ZAROORI HAI)
+            sku: formData.sku || `ZER-${Math.floor(Math.random() * 10000)}`, // Agar khali choda to auto-generate
+            hsn: formData.hsn || "7117", // Default Jewelry Code
             colors: formData.colors?.map(c => c.trim()).filter(Boolean) || [],
             tags: formData.tags || [],
             // 👇 YE 3 LINES NAYI HAIN
@@ -1595,6 +1677,28 @@ function ProductManager({ products, addProduct, updateProduct, deleteProduct }: 
                                         </div>
                                     </div>
                                     <div className="space-y-1"><label className="text-[10px] text-white/40 uppercase font-bold">Stock</label><input type="number" className="w-full p-4 bg-black/20 border border-white/10 rounded-xl text-white outline-none focus:border-amber-500/50" value={formData.stock || ''} onChange={e => setFormData({ ...formData, stock: Number(e.target.value) })} /></div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4 mt-4">
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] text-white/40 uppercase font-bold">SKU (Stock ID)</label>
+                                        <input
+                                            type="text"
+                                            className="w-full p-4 bg-black/20 border border-white/10 rounded-xl text-white outline-none focus:border-amber-500/50 uppercase font-mono"
+                                            placeholder="RING-GOLD-001"
+                                            value={formData.sku || ''}
+                                            onChange={e => setFormData({ ...formData, sku: e.target.value })}
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] text-white/40 uppercase font-bold">HSN Code</label>
+                                        <input
+                                            type="text"
+                                            className="w-full p-4 bg-black/20 border border-white/10 rounded-xl text-white outline-none focus:border-amber-500/50 font-mono"
+                                            placeholder="7117 (Jewelry) / 3303 (Perfume)"
+                                            value={formData.hsn || ''}
+                                            onChange={e => setFormData({ ...formData, hsn: e.target.value })}
+                                        />
+                                    </div>
                                 </div>
                                 <div className="space-y-1"><label className="text-[10px] text-white/40 uppercase font-bold">Category</label><select className="w-full p-4 bg-[#0a1f1c] border border-white/10 rounded-xl text-white outline-none focus:border-amber-500/50 appearance-none" value={formData.category || ''} onChange={e => setFormData({ ...formData, category: e.target.value })}><option value="" className="text-stone-500">Select Category</option>{categoriesList.map(cat => (<option key={cat.name} value={cat.name} className={`${cat.color}`}>{cat.name}</option>))}</select></div>
                                 <div className="space-y-1"><label className="text-[10px] text-white/40 uppercase font-bold">Description</label><textarea className="w-full p-4 bg-black/20 border border-white/10 rounded-xl text-white h-24 resize-none outline-none focus:border-amber-500/50" value={formData.description || ''} onChange={e => setFormData({ ...formData, description: e.target.value })} /></div>
@@ -2017,18 +2121,18 @@ function ConfigManager({ showToast, updateSystemConfig }: any) {
                     </div>
                 </div>
             </div>
-{/* ✅ SECRET GIFT COST INPUT */}
-<div>
-    <label className="text-[10px] text-amber-500 uppercase font-bold mb-1 block">Secret Gift Cost (₹)</label>
-    <input 
-        type="number" 
-        // Ab TypeScript error nahi dega
-        value={config.store.giftModeCost || 0} 
-        onChange={(e) => handleChange('store', 'giftModeCost', Number(e.target.value))} 
-        className="w-full p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-400 outline-none focus:border-amber-500 font-mono" 
-        placeholder="50"
-    />
-</div>
+            {/* ✅ SECRET GIFT COST INPUT */}
+            <div>
+                <label className="text-[10px] text-amber-500 uppercase font-bold mb-1 block">Secret Gift Cost (₹)</label>
+                <input
+                    type="number"
+                    // Ab TypeScript error nahi dega
+                    value={config.store.giftModeCost || 0}
+                    onChange={(e) => handleChange('store', 'giftModeCost', Number(e.target.value))}
+                    className="w-full p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-400 outline-none focus:border-amber-500 font-mono"
+                    placeholder="50"
+                />
+            </div>
 
 
 
@@ -2126,7 +2230,7 @@ function TextManager({ siteText, updateSiteText, showToast }: any) {
                 <div><h3 className="text-xl font-serif text-white">Text & Banners</h3><p className="text-xs text-white/40">Edit content across the site</p></div>
                 <button onClick={handleSave} disabled={uploading} className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-bold uppercase tracking-widest text-xs flex items-center gap-2 transition"><Save className="w-4 h-4" /> {uploading ? 'Uploading...' : 'Save Changes'}</button>
             </div>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* STANDARD TEXT FIELDS (Hero, Promo etc) */}
                 {Object.entries({
@@ -2147,14 +2251,14 @@ function TextManager({ siteText, updateSiteText, showToast }: any) {
 
                 {/* ✅ NEW: SECRET GIFT CONFIGURATION (GOLD BORDER) */}
                 <div className="md:col-span-2 border-t border-amber-500/30 pt-6 mt-4">
-                    <h4 className="text-amber-500 font-serif mb-4 flex items-center gap-2"><Lock className="w-4 h-4"/> Secret Gift Section</h4>
-                    
+                    <h4 className="text-amber-500 font-serif mb-4 flex items-center gap-2"><Lock className="w-4 h-4" /> Secret Gift Section</h4>
+
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         {/* Left: Image Uploader */}
                         <div>
                             <label className="text-[10px] text-white/40 uppercase font-bold mb-2 block">Side Banner Image</label>
-                            <div 
-                                onClick={() => !uploading && fileInputRef.current?.click()} 
+                            <div
+                                onClick={() => !uploading && fileInputRef.current?.click()}
                                 className="aspect-[4/5] bg-black/20 rounded-xl border-2 border-dashed border-white/10 flex flex-col items-center justify-center cursor-pointer hover:border-amber-500/50 transition group overflow-hidden relative"
                             >
                                 {formData.secretGiftImage ? (
@@ -2166,7 +2270,7 @@ function TextManager({ siteText, updateSiteText, showToast }: any) {
                                     </>
                                 ) : (
                                     <div className="text-center p-4">
-                                        <UploadCloud className="w-8 h-8 text-white/20 mx-auto mb-2 group-hover:text-amber-500 transition"/>
+                                        <UploadCloud className="w-8 h-8 text-white/20 mx-auto mb-2 group-hover:text-amber-500 transition" />
                                         <span className="text-[10px] text-white/40 uppercase">Upload Banner</span>
                                     </div>
                                 )}
@@ -2174,7 +2278,7 @@ function TextManager({ siteText, updateSiteText, showToast }: any) {
                             </div>
                             {/* Remove Image Button */}
                             {formData.secretGiftImage && (
-                                <button onClick={() => setFormData({...formData, secretGiftImage: ""})} className="mt-2 text-[10px] text-red-400 hover:text-red-300 w-full text-center">Remove Image</button>
+                                <button onClick={() => setFormData({ ...formData, secretGiftImage: "" })} className="mt-2 text-[10px] text-red-400 hover:text-red-300 w-full text-center">Remove Image</button>
                             )}
                         </div>
 

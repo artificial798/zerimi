@@ -27,6 +27,8 @@ export type Product = {
     tags?: string[];
     colors?: string[];   // E.g., ["#000000", "#FF0000"] used for swatches
     // 👇 YE 3 NAYI LINES ZAROORI HAIN DATA SAVE KARNE KE LIYE
+    sku?: string;
+  hsn?: string;
     material?: string;
     warranty?: string;
     care?: string;
@@ -55,9 +57,20 @@ export type User = {
     role: string;
     points: number;
     joinedDate: string;
+    dob?: string;
+    gender?: string;
+    alternatePhone?: string;
 };
 
-export type Notification = { id: string; userId: string; title: string; message: string; date: string; isRead: boolean; };
+export type Notification = { 
+    id: string; 
+    userId: string; 
+    title: string; 
+    message: string; 
+    date: string; 
+    isRead: boolean; 
+    createdAt?: string; // ✅ YE LINE ADD KAREIN
+};
 export type Coupon = {
     id: string;
     code: string;
@@ -475,7 +488,7 @@ export const useStore = create<Store>()(
         giftWrapPrice: giftWrapPrice || 0,
 
         status: 'Pending',
-        date: new Date().toLocaleDateString('en-IN'), // Display Date
+        date: new Date().toISOString(), // Display Date
         
         items: items || state.cart.map(item => ({
             name: item.product.name, 
@@ -615,9 +628,16 @@ export const useStore = create<Store>()(
             markMessageRead: async (id) => { await updateDoc(doc(db, "messages", id), { isRead: true }); },
             deleteMessage: async (id) => { await deleteDoc(doc(db, "messages", id)); },
 
-            sendNotification: async (email, title, message) => {
-                await addDoc(collection(db, "notifications"), { userId: email, title, message, date: new Date().toLocaleDateString(), isRead: false });
-            },
+           sendNotification: async (email, title, message) => {
+    await addDoc(collection(db, "notifications"), { 
+        userId: email, 
+        title, 
+        message, 
+        date: new Date().toLocaleDateString(), 
+        createdAt: new Date().toISOString(), // ✅ YE LINE ZAROORI HAI SORTING KE LIYE
+        isRead: false 
+    });
+},
             markNotificationRead: async (id) => { await updateDoc(doc(db, "notifications", id), { isRead: true }); },
 
           nukeDatabase: async () => {
@@ -788,7 +808,10 @@ const initListeners = () => {
 
     // Secondary Collections
     onSnapshot(collection(db, "warranties"), (snap) => useStore.setState({ warranties: snap.docs.map(d => d.data() as Warranty) }));
-    onSnapshot(collection(db, "notifications"), (snap) => useStore.setState({ notifications: snap.docs.map(d => d.data() as Notification) }));
+  // ✅ FIX: OrderBy 'desc' (Newest First) aur ID Mapping
+onSnapshot(query(collection(db, "notifications"), orderBy("createdAt", "desc")), (snap) => useStore.setState({ 
+    notifications: snap.docs.map(d => ({ ...d.data(), id: d.id }) as Notification) 
+}));
     onSnapshot(collection(db, "coupons"), (snap) => useStore.setState({ coupons: snap.docs.map(d => d.data() as Coupon) }));
     onSnapshot(collection(db, "blogs"), (snap) => useStore.setState({ blogs: snap.docs.map(d => d.data() as BlogPost) }));
 };
