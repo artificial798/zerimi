@@ -1,30 +1,69 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* ✅ FEMALE-CENTRIC PALETTE */
+  --background: #ffffff; 
+  --foreground: #1c1917; /* Soft Black */
+  
+  /* Rose Accents (Variables for reuse) */
+  --color-rose-gold: #e11d48; 
+  --color-soft-pink: #fff1f2;
+  
+  --font-serif: var(--font-serif);
+  --font-sans: var(--font-sans);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+/* --- Premium Global Reset --- */
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  scroll-behavior: smooth;
+  overflow-x: hidden; /* Horizontal scroll rokne ke liye */
 }
-/* --- MARQUEE ANIMATION (Coupon Scroll) --- */
+
+/* --- Luxury Heading Styles (Playfair Display) --- */
+h1, h2, h3, h4, .luxury-text {
+  font-family: var(--font-serif);
+  font-weight: 500; /* Thoda bold but elegant */
+  letter-spacing: -0.01em; /* Tight spacing looks modern */
+}
+
+/* --- Letter Spacing for Captions --- */
+.premium-caption {
+  letter-spacing: 0.25em; /* Thoda kam kiya taaki readable rahe */
+  text-transform: uppercase;
+  font-weight: 500;
+  font-size: 0.65rem;
+  color: #78716c; /* Warm Grey */
+}
+
+/* --- ✅ FEMALE CENTRIC SELECTION (Magic Touch) --- */
+::selection {
+  background-color: #fecdd3; /* Rose-200 (Soft Pink) */
+  color: #881337; /* Rose-900 (Deep Red) */
+}
+
+/* --- ✅ LUXURY SCROLLBAR (Chrome/Edge/Safari) --- */
+::-webkit-scrollbar {
+  width: 6px; /* Sleek and thin */
+}
+
+::-webkit-scrollbar-track {
+  background: #fafaf9; /* Stone-50 */
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #e7e5e4; /* Stone-200 */
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #fda4af; /* Hover par Rose Pink */
+}
+
+/* --- MARQUEE ANIMATION --- */
 @keyframes marquee {
   0% { transform: translateX(0); }
   100% { transform: translateX(-50%); }
@@ -33,9 +72,13 @@ body {
 .animate-marquee {
   display: flex;
   width: max-content;
-  animation: marquee 30s linear infinite; /* Speed adjust karne ke liye 30s ko change karein */
+  animation: marquee 40s linear infinite;
 }
 
-.animate-marquee:hover {
-  animation-play-state: paused; /* Mouse le jaane par ruk jayega */
+/* --- Hover Subtle Zoom (Soft & Slow) --- */
+.premium-zoom {
+  transition: transform 1.2s cubic-bezier(0.22, 1, 0.36, 1); /* Smoother bezier */
+}
+.premium-zoom:hover {
+  transform: scale(1.06); /* Thoda subtle zoom, jyada aggressive nahi */
 }

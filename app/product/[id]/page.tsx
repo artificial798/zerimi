@@ -170,13 +170,14 @@ const similarProducts = (() => {
 
       <div className="max-w-7xl mx-auto px-4 md:px-6">
         
-        {/* --- MAIN PRODUCT SECTION --- */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-16 mb-20 relative">
-         
-          {/* LEFT: IMAGE GALLERY (STICKY) */}
-          <div className="lg:col-span-7 h-fit lg:sticky lg:top-28">
-             <ProductGallery images={galleryImages} />
-          </div>
+       {/* --- MAIN PRODUCT SECTION (Grid Balanced) --- */}
+<div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-20 mb-8 relative">
+ 
+  {/* LEFT: IMAGE GALLERY (STICKY & SIZED) */}
+  {/* 'lg:col-span-6' kar diya (pehle 7 tha). 'max-w-2xl' se width control hogi. */}
+  <div className="lg:col-span-6 h-fit lg:sticky lg:top-28 max-w-2xl mx-auto w-full">
+     <ProductGallery images={galleryImages} />
+  </div>
 
           {/* RIGHT: DETAILS */}
           <div className="lg:col-span-5 flex flex-col h-full justify-center">
@@ -211,17 +212,38 @@ const similarProducts = (() => {
                 </div>
              )}
 
-             {/* Price */}
-             <div className="flex items-end gap-3 mb-8 pb-6 border-b border-stone-100">
-                <span className="text-3xl font-serif text-[#0a1f1c]">₹{product.price.toLocaleString()}</span>
-                {hasDiscount && (
-                    <div className="flex flex-col mb-1">
-                        <span className="text-sm text-stone-400 line-through">₹{originalPrice.toLocaleString()}</span>
-                        <span className="text-[10px] font-bold text-red-600">SAVE {Math.round(((originalPrice - product.price) / originalPrice) * 100)}%</span>
-                    </div>
-                )}
-             </div>
+           {/* Price Section (Updated: No Free Shipping Promise) */}
+             <div className="mb-6 border-b border-stone-100 pb-5">
+                <div className="flex items-end gap-3 mb-2">
+                   <span className="text-3xl md:text-4xl font-serif text-[#0a1f1c]">
+                       ₹{product.price.toLocaleString()}
+                   </span>
+                   {hasDiscount && (
+                       <div className="flex flex-col mb-1 leading-none">
+                           <span className="text-sm text-stone-400 line-through decoration-stone-300">
+                               ₹{originalPrice.toLocaleString()}
+                           </span>
+                           <span className="text-[10px] font-bold text-rose-600 tracking-widest mt-0.5">
+                               SAVE {Math.round(((originalPrice - product.price) / originalPrice) * 100)}%
+                           </span>
+                       </div>
+                   )}
+                </div>
 
+                {/* ✅ GAP FILLER: Safe & Luxury Trust Line */}
+                <div className="flex flex-wrap items-center gap-2 text-[10px] font-medium tracking-wide text-stone-500 uppercase">
+                    <span>Inclusive of all taxes</span>
+                    <span className="text-stone-300">•</span>
+                    
+                    {/* Yahan humne Safe Option dala hai */}
+                    <span>Pan India Delivery</span>
+                    
+                    <span className="text-stone-300">•</span>
+                    <span className="text-amber-700 font-bold">
+                        EMI starts ₹{Math.round(product.price / 3)}/mo
+                    </span>
+                </div>
+             </div>
              {/* ✅ 1. SIZE SELECTOR (With Guide Link) */}
              {productSizes.length > 0 && (
                  <div className="mb-6">
@@ -369,13 +391,13 @@ const similarProducts = (() => {
         </div>
 
         {/* --- ✅ INTEGRATED REVIEWS SECTION (Using ProductReviews.tsx) --- */}
-        <div className="mb-20">
-            <ProductReviews productId={product.id} />
-        </div>
+       <div className="mb-8">
+    <ProductReviews productId={product.id} />
+</div>
 
         {/* --- SIMILAR PRODUCTS --- */}
         {similarProducts.length > 0 && (
-           <div className="border-t border-stone-200 pt-16 mb-20">
+           <div className="border-t border-stone-200 pt-8 mb-20">
               <h2 className="font-serif text-3xl text-center mb-10 text-[#0a1f1c]">You May Also Like</h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                  {similarProducts.map((p: any) => <ProductCard key={p.id} product={p} />)}

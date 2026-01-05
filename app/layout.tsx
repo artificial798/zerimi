@@ -1,24 +1,26 @@
 "use client";
 
-import { Bodoni_Moda, Lato } from "next/font/google";
+import { Playfair_Display, Jost } from "next/font/google"; // ✅ New Luxury Fonts
 import "./globals.css";
 import GlobalLayout from "@/components/GlobalLayout";
 import { Toaster } from "react-hot-toast";
 import { useState, useEffect } from "react";
-import { AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion"; 
 import Preloader from "@/components/Preloader";
 
-const luxuryFont = Bodoni_Moda({
+// ✅ 1. FEMALE CENTRIC SERIF FONT (Headings)
+const luxuryFont = Playfair_Display({
   subsets: ["latin"],
   variable: "--font-serif",
   weight: ["400", "500", "600", "700"],
   display: "swap",
 });
 
-const bodyFont = Lato({
+// ✅ 2. CLEAN SANS FONT (Body Text)
+const bodyFont = Jost({
   subsets: ["latin"],
   variable: "--font-sans",
-  weight: ["300", "400", "700"],
+  weight: ["300", "400", "500", "600"], // 500/600 added for bold accents
   display: "swap",
 });
 
@@ -30,51 +32,66 @@ export default function RootLayout({
   const [isLoading, setIsLoading] = useState(true);
   const [isFirstVisit, setIsFirstVisit] = useState(true);
 
-  // ✅ CHECK: Refresh hai ya First Visit?
   useEffect(() => {
     if (sessionStorage.getItem("zerimi_visited")) {
-      setIsFirstVisit(false); // Agar visited hai, toh Instant show karenge
-      // Note: isLoading ko false hum Preloader ke callback se karenge
+      setIsFirstVisit(false);
     }
   }, []);
 
   const handleAnimationFinish = () => {
     setIsLoading(false);
+    sessionStorage.setItem("zerimi_visited", "true");
   };
 
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={`${luxuryFont.variable} ${bodyFont.variable} font-sans bg-[#fcfbf9]`}>
-        
-        {/* Preloader Component */}
+    <html lang="en" suppressHydrationWarning className="scroll-smooth">
+      <body 
+        // ✅ CHANGED: Selection color to Rose-200 and Text Rose-900
+        className={`${luxuryFont.variable} ${bodyFont.variable} font-sans bg-[#ffffff] text-[#1c1917] antialiased selection:bg-rose-200 selection:text-rose-900`}
+      >
         <AnimatePresence mode="wait">
           {isLoading && <Preloader onFinish={handleAnimationFinish} />}
         </AnimatePresence>
 
-        {/* ✅ CONTENT VISIBILITY LOGIC */}
-        <div 
-          className={
-            isLoading 
-              ? "opacity-0 h-0 overflow-hidden" // Loading ke waqt hide
-              : isFirstVisit 
-                  ? "opacity-100 transition-opacity duration-1000" // First Time: Smooth Fade In
-                  : "opacity-100" // Refresh: INSTANT SHOW (No Animation)
-          }
+        <motion.div 
+          initial={isFirstVisit ? { opacity: 0 } : { opacity: 1 }}
+          animate={!isLoading ? { opacity: 1 } : { opacity: 0 }}
+          transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
+          className={isLoading ? "h-0 overflow-hidden" : "min-h-screen"}
         >
+          {/* ✅ UPDATED: Toaster to Rose Gold Theme */}
           <Toaster
-            position="top-center"
+            position="bottom-right"
             reverseOrder={false}
             toastOptions={{
-              duration: 3000,
-              style: { background: '#333', color: '#fff' },
+              duration: 4000,
+              style: { 
+                background: 'rgba(255, 255, 255, 0.9)', // Glass effect
+                backdropFilter: 'blur(10px)',
+                color: '#be123c', // Deep Rose text
+                border: '1px solid #fecdd3', // Soft Pink Border
+                borderRadius: '9999px', // Fully Rounded (Pill shape) is more feminine
+                fontSize: '13px',
+                fontFamily: 'var(--font-sans)',
+                fontWeight: '500',
+                boxShadow: '0 4px 20px rgba(244, 63, 94, 0.15)' // Pink Glow
+              },
+              success: {
+                iconTheme: {
+                  primary: '#e11d48', // Rose icon
+                  secondary: '#fff',
+                },
+              },
             }}
           />
 
           <GlobalLayout>
-            {children}
+            <main className="relative overflow-x-hidden">
+              {children}
+            </main>
           </GlobalLayout>
-        </div>
 
+        </motion.div>
       </body>
     </html>
   );
