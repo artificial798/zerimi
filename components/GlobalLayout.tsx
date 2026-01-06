@@ -8,7 +8,7 @@ import { ShoppingBag, X, Trash2, Menu, Search, User, Instagram, Facebook, Twitte
 import { useStore } from '@/lib/store';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
-
+import PopupModal from '@/components/PopupModal';
 export default function GlobalLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -90,7 +90,8 @@ const subtotal = cart.reduce((sum: number, item: any) => sum + item.product.pric
 
   return (
     <div className="min-h-screen bg-stone-50 font-sans text-stone-900 flex flex-col">
-
+{/* 👇 YAHAN ADD KAREIN (Sabse pehle taaki ye sabke upar dikhe) */}
+      <PopupModal />
       {/* COUPON STRIP */}
 {/* COUPON STRIP */}
    {/* --- PREMIUM SCROLLING COUPON STRIP --- */}

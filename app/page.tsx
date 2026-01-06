@@ -6,7 +6,7 @@ import { useStore } from '@/lib/store';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRight, Star, Truck, ShieldCheck, RefreshCw, Lock, Gift, EyeOff } from 'lucide-react';
 import ProductCard from '@/components/ProductCard';
-import PopupModal from '@/components/PopupModal';
+
 
 // ✅ FIX: Fallback Image
 const FALLBACK_IMAGE = "https://via.placeholder.com/1920x1080?text=ZERIMI+JEWELRY";
@@ -69,7 +69,7 @@ export default function Home() {
     <div className="bg-white overflow-x-hidden">
       
       {/* ✅ YAHAN PASTE KAREIN: Popup sabse upar rahega */}
-      <PopupModal />
+     
 
   {/* =========================================
           1. HERO SECTION (PREMIUM & COMPACT TEXT)
