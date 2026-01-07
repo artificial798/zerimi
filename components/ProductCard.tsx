@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Heart, Eye, ShoppingBag, Star, Loader2, ShieldCheck, Truck } from 'lucide-react';
+import { Heart, Eye, ShoppingBag, Star, Loader2, ShieldCheck, Truck, Plus } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import { toast } from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
@@ -14,14 +14,45 @@ export default function ProductCard({ product }: { product: any }) {
   const [isHovered, setIsHovered] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   
-  const handleAddToCart = async (e: any) => {
-    e.preventDefault();
-    setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-    addToCart(product);
-    toast.success("Added to Bag");
-    setIsLoading(false);
-  };
+// components/ProductCard.tsx
+
+const handleAddToCart = (e: any) => {
+    e.preventDefault(); // Link click hone se rokein
+    e.stopPropagation();
+
+    // 1. Check karein ki kya Product me Variants hain?
+    const hasVariants = (product.colors && product.colors.length > 0) || 
+                        (product.sizes && product.sizes.length > 0);
+
+    if (hasVariants) {
+        // 🛑 ROKO: Agar variants hain, to direct add mat karne do.
+        // Option A: User ko Product Page par bhej do
+        window.location.href = `/product/${product.id}`;
+        
+        // Option B (Agar apke paas QuickView Modal hai):
+        // openQuickView(product);
+        
+        // Option C (Toast Message):
+        // toast.error("Please select a color/size first!");
+    } else {
+        // ✅ JAANE DO: Agar simple product hai, to add kar lo
+        addToCart(product, 1);
+        toast.success("Added to Cart!");
+    }
+};
+
+// Button Code Example:
+<button 
+    onClick={handleAddToCart}
+    className="bg-white p-2 rounded-full shadow-lg hover:bg-amber-500 hover:text-white transition"
+>
+    {/* Agar variants hain to 'Eye' icon dikhao (View), nahi to 'Plus' (Add) */}
+    {((product.colors?.length > 0) || (product.sizes?.length > 0)) ? (
+        <Eye size={20} /> 
+    ) : (
+        <Plus size={20} />
+    )}
+</button>
 
   useEffect(() => {
     let interval: any;

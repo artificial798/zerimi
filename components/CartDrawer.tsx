@@ -168,8 +168,8 @@ export default function CartDrawer() {
                             </button>
                         </div>
                     ) : (
-                        cart.map((item: any) => (
-                            <div key={`${item.product.id}-${item.selectedSize}`} className="group relative flex gap-4 bg-white p-3 rounded-xl border border-stone-100 shadow-sm hover:shadow-md transition-all duration-300">
+                        cart.map((item: any, index: number) => (
+                            <div key={`${item.product.id}-${item.selectedSize}-${item.selectedColor}-${index}`} className="group relative flex gap-4 bg-white p-3 rounded-xl border border-stone-100 shadow-sm hover:shadow-md transition-all duration-300">
 
                                 {/* Product Image */}
                                 <div className="relative w-24 h-28 bg-stone-50 rounded-lg overflow-hidden border border-stone-50">

@@ -390,42 +390,50 @@ export const useStore = create<Store>()(
             // --- CART & WISHLIST ---
             // ✅ NAYA CODE (Stock Check ke saath)
            // ✅ FIXED: addToCart Logic (Checks ID + Size + Color)
-            addToCart: (product, qty = 1, size, color) => {
-                if (!product.stock || product.stock < qty) {
-                    alert(`Sorry, "${product.name}" is currently Out of Stock!`);
-                    return;
-                }
+        // ✅ FIXED: addToCart Logic (Handles Unique ID for Color/Size & Stock Check)
+          // ✅ CORRECTED addToCart (Fixes 'reading price' error)
+addToCart: (product, qty = 1, size, color) => {
+    // 1. Stock Validation
+    if (product.stock !== undefined && product.stock < qty) {
+        alert(`Sorry, "${product.name}" is currently Out of Stock!`);
+        return;
+    }
 
-                set((state) => {
-                    // Check if SAME item (ID + Size + Color) exists
-                    const existingItemIndex = state.cart.findIndex(
-                        (item) => 
-                            item.product.id === product.id && 
-                            item.selectedSize === size && 
-                            item.selectedColor === color
-                    );
+    set((state) => {
+        const cart = [...state.cart];
 
-                    let newCart = [...state.cart];
+        // 2. Check if EXACT item (same ID + Size + Color) exists
+        const existingItemIndex = cart.findIndex(
+            (item) => 
+                item.product.id === product.id && 
+                item.selectedSize === size && 
+                item.selectedColor === color
+        );
 
-                    if (existingItemIndex > -1) {
-                        if (newCart[existingItemIndex].qty + qty > (product.stock || 0)) {
-                            alert("Cannot add more. You reached the stock limit.");
-                            return state;
-                        }
-                        newCart[existingItemIndex].qty += qty;
-                    } else {
-                        newCart.push({ 
-                            product, 
-                            qty, 
-                            selectedSize: size, 
-                            selectedColor: color // ✅ Added Color
-                        });
-                    }
+        if (existingItemIndex > -1) {
+            // Agar pehle se hai, to bas Quantity badhao
+            const newQty = cart[existingItemIndex].qty + qty;
+            
+            // Stock Check
+            if (product.stock !== undefined && newQty > product.stock) {
+                alert(`Cannot add more. Only ${product.stock} left in stock.`);
+                return state;
+            }
+            
+            cart[existingItemIndex].qty = newQty;
+        } else {
+            // 3. Naya Item Add karo (Sahi Structure ke sath)
+            cart.push({
+                product: product, // ✅ IMPORTANT: Isko aise hi rehne dein (Nested)
+                qty: qty,
+                selectedSize: size,
+                selectedColor: color
+            });
+        }
 
-                    return { cart: newCart, isCartOpen: true };
-                });
-            },
-
+        return { cart, isCartOpen: true };
+    });
+},
             removeFromCart: (id) => set((state) => ({
                 cart: state.cart.filter((item) => item.product.id !== id)
             })),

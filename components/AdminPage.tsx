@@ -134,8 +134,11 @@ export default function AdminPage() {
         updateUserRole,
         banner, updateBanner,
         categories, updateCategories,
-        featured, updateFeatured,
-        promo, updatePromo,
+        featuredSection: featured, updateFeatured,
+
+        // ✅ Store mein naam 'promoSection' hai, hume 'promo' chahiye
+        promoSection: promo, updatePromo,
+    
         blogs, addBlog, deleteBlog, deleteOrder
     } = store;
     // 👇 STEP 1: YE LINE ADD KAREIN
@@ -2372,7 +2375,11 @@ function TextManager({ siteText, updateSiteText, showToast }: any) {
     const [uploading, setUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    useEffect(() => { if (siteText) setFormData(siteText); }, [siteText]);
+    useEffect(() => {
+        if (siteText) {
+            setFormData(siteText);
+        }
+    }, [siteText]);
 
     // ✅ IMAGE UPLOAD HANDLER
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2380,7 +2387,7 @@ function TextManager({ siteText, updateSiteText, showToast }: any) {
         if (file) {
             setUploading(true);
             try {
-                const url = await uploadToCloudinary(file); // Helper function use kar rahe hain
+                const url = await uploadToCloudinary(file);
                 if (url) {
                     setFormData((prev: any) => ({ ...prev, secretGiftImage: url }));
                     showToast("Banner uploaded successfully", "success");
@@ -2398,32 +2405,90 @@ function TextManager({ siteText, updateSiteText, showToast }: any) {
         showToast("Site text & banner updated successfully", "success");
     };
 
+    // 🟢 STEP 1: EXACT DEFAULT TEXT FROM YOUR HOMEPAGE CODE
+    // (Ye wahi text hai jo aapki page.tsx me "||" ke baad likha hai)
+    const defaultContent: any = {
+        heroTitle: "Timeless Elegance",
+        heroSubtitle: "The ZERIMI Privilege",
+        heroBtnText: "Shop Now",
+        newArrivalsTitle: "New Arrivals",
+        newArrivalsSub: "Curated specifically for the modern you.",
+        featuredTitle: "Diamonds & Engagement Rings",
+        featuredSub: "Experience brilliance.",
+        promoTitle: "Special Offer",
+        promoText: "Limited time deals on our finest jewelry.",
+        promoBtn: "Discover More",
+        blogTitle: "From Our Journal",
+        
+        // Secret Gift Section Defaults
+        secretGiftBadge: "New Feature",
+        secretGiftTitle: "The Art of Secret Gifting",
+        secretGiftSub: "Surprise your loved ones with luxury. We deliver the gift, hide the price tag...",
+        secretGiftQuote: "I wanted to see you smile, without knowing who put it there."
+    };
+
+    // Fields List Mapping
+    const textFields = {
+        heroTitle: "Hero Title", 
+        heroSubtitle: "Hero Subtitle", 
+        heroBtnText: "Hero Button",
+        newArrivalsTitle: "New Arrivals Title", 
+        newArrivalsSub: "New Arrivals Sub",
+        featuredTitle: "Featured Title", 
+        featuredSub: "Featured Sub",
+        promoTitle: "Promo Title", 
+        promoText: "Promo Text", 
+        promoBtn: "Promo Button",
+        blogTitle: "Blog Title"
+    };
+
     return (
         <div className="space-y-6 animate-fade-in">
             <div className="flex justify-between items-center pb-4 border-b border-white/10">
-                <div><h3 className="text-xl font-serif text-white">Text & Banners</h3><p className="text-xs text-white/40">Edit content across the site</p></div>
-                <button onClick={handleSave} disabled={uploading} className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-bold uppercase tracking-widest text-xs flex items-center gap-2 transition"><Save className="w-4 h-4" /> {uploading ? 'Uploading...' : 'Save Changes'}</button>
+                <div>
+                    <h3 className="text-xl font-serif text-white">Text & Banners</h3>
+                    <p className="text-xs text-white/40">Edit content across the site</p>
+                </div>
+                <button onClick={handleSave} disabled={uploading} className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-bold uppercase tracking-widest text-xs flex items-center gap-2 transition">
+                    <Save className="w-4 h-4" /> {uploading ? 'Uploading...' : 'Save Changes'}
+                </button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* STANDARD TEXT FIELDS (Hero, Promo etc) */}
-                {Object.entries({
-                    heroTitle: "Hero Title", heroSubtitle: "Hero Subtitle", heroBtnText: "Hero Button",
-                    newArrivalsTitle: "New Arrivals Title", newArrivalsSub: "New Arrivals Sub",
-                    featuredTitle: "Featured Title", featuredSub: "Featured Sub",
-                    promoTitle: "Promo Title", promoText: "Promo Text", promoBtn: "Promo Button",
-                    blogTitle: "Blog Title"
-                }).map(([key, label]) => (
-                    <div key={key} className="space-y-2">
-                        <label className="text-[10px] text-white/40 uppercase font-bold">{label}</label>
-                        {key.includes('Text') || key.includes('Sub') ?
-                            <textarea value={formData[key] || ''} onChange={(e) => setFormData({ ...formData, [key]: e.target.value })} className="w-full p-3 bg-black/20 border border-white/10 rounded-lg text-white text-sm focus:border-amber-500/50 outline-none h-20 resize-none" /> :
-                            <input value={formData[key] || ''} onChange={(e) => setFormData({ ...formData, [key]: e.target.value })} className="w-full p-3 bg-black/20 border border-white/10 rounded-lg text-white text-sm focus:border-amber-500/50 outline-none" />
-                        }
+                
+                {/* STANDARD TEXT FIELDS LOOP */}
+                {Object.entries(textFields).map(([key, label]) => (
+                    <div key={key} className="space-y-2 group">
+                        <div className="flex justify-between items-end">
+                            <label className="text-[10px] text-white/40 uppercase font-bold">{label}</label>
+                            
+                            {/* Live Value Indicator */}
+                            <span className="text-[9px] text-amber-500/80 font-mono bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 max-w-[150px] truncate" title={siteText?.[key] || "Not Set"}>
+                                Live: {siteText?.[key] || "Default"}
+                            </span>
+                        </div>
+
+                        {key.includes('Text') || key.includes('Sub') ? (
+                            <textarea 
+                                value={formData[key] || ''} 
+                                onChange={(e) => setFormData({ ...formData, [key]: e.target.value })} 
+                                className="w-full p-3 bg-black/20 border border-white/10 rounded-lg text-white text-sm focus:border-amber-500/50 outline-none h-20 resize-none placeholder:text-white/20"
+                                // 🟢 Placeholder me Default Text
+                                placeholder={`e.g. ${defaultContent[key]}`}
+                            />
+                        ) : (
+                            <input 
+                                value={formData[key] || ''} 
+                                onChange={(e) => setFormData({ ...formData, [key]: e.target.value })} 
+                                className="w-full p-3 bg-black/20 border border-white/10 rounded-lg text-white text-sm focus:border-amber-500/50 outline-none placeholder:text-white/20"
+                                // 🟢 Placeholder me Default Text
+                                placeholder={`e.g. ${defaultContent[key]}`}
+                            />
+                        )}
                     </div>
                 ))}
 
-                {/* ✅ NEW: SECRET GIFT CONFIGURATION (GOLD BORDER) */}
+                {/* SECRET GIFT CONFIGURATION */}
                 <div className="md:col-span-2 border-t border-amber-500/30 pt-6 mt-4">
                     <h4 className="text-amber-500 font-serif mb-4 flex items-center gap-2"><Lock className="w-4 h-4" /> Secret Gift Section</h4>
 
@@ -2450,25 +2515,47 @@ function TextManager({ siteText, updateSiteText, showToast }: any) {
                                 )}
                                 <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
                             </div>
-                            {/* Remove Image Button */}
                             {formData.secretGiftImage && (
                                 <button onClick={() => setFormData({ ...formData, secretGiftImage: "" })} className="mt-2 text-[10px] text-red-400 hover:text-red-300 w-full text-center">Remove Image</button>
                             )}
                         </div>
 
-                        {/* Right: Text Inputs */}
+                        {/* Right: Text Inputs with Specific Defaults */}
                         <div className="md:col-span-2 grid grid-cols-1 gap-4">
-                            <div><label className="text-[10px] text-white/40 uppercase font-bold">Badge Text</label><input value={formData.secretGiftBadge || ''} onChange={(e) => setFormData({ ...formData, secretGiftBadge: e.target.value })} className="w-full p-3 bg-black/20 border border-white/10 rounded-lg text-white text-sm focus:border-amber-500/50 outline-none" placeholder="e.g. New Feature" /></div>
-                            <div><label className="text-[10px] text-white/40 uppercase font-bold">Main Title</label><input value={formData.secretGiftTitle || ''} onChange={(e) => setFormData({ ...formData, secretGiftTitle: e.target.value })} className="w-full p-3 bg-black/20 border border-white/10 rounded-lg text-white text-sm focus:border-amber-500/50 outline-none" placeholder="e.g. The Art of Secret Gifting" /></div>
-                            <div><label className="text-[10px] text-white/40 uppercase font-bold">Description</label><textarea value={formData.secretGiftSub || ''} onChange={(e) => setFormData({ ...formData, secretGiftSub: e.target.value })} className="w-full p-3 bg-black/20 border border-white/10 rounded-lg text-white text-sm focus:border-amber-500/50 outline-none h-20 resize-none" /></div>
-                            <div><label className="text-[10px] text-white/40 uppercase font-bold">Card Quote (Shown on Image)</label><textarea value={formData.secretGiftQuote || ''} onChange={(e) => setFormData({ ...formData, secretGiftQuote: e.target.value })} className="w-full p-3 bg-black/20 border border-white/10 rounded-lg text-white text-sm focus:border-amber-500/50 outline-none h-16 resize-none" /></div>
+                            {[
+                                { k: 'secretGiftBadge', l: 'Badge Text', p: defaultContent.secretGiftBadge },
+                                { k: 'secretGiftTitle', l: 'Main Title', p: defaultContent.secretGiftTitle },
+                                { k: 'secretGiftSub', l: 'Description', p: defaultContent.secretGiftSub },
+                                { k: 'secretGiftQuote', l: 'Card Quote', p: defaultContent.secretGiftQuote }
+                            ].map(({ k, l, p }) => (
+                                <div key={k}>
+                                    <div className="flex justify-between items-end mb-1">
+                                        <label className="text-[10px] text-white/40 uppercase font-bold">{l}</label>
+                                        <span className="text-[9px] text-amber-500/80 font-mono">Live: {siteText?.[k] || "Empty"}</span>
+                                    </div>
+                                    {l === 'Description' || l === 'Card Quote' ? 
+                                        <textarea 
+                                            value={formData[k] || ''} 
+                                            onChange={(e) => setFormData({ ...formData, [k]: e.target.value })} 
+                                            className="w-full p-3 bg-black/20 border border-white/10 rounded-lg text-white text-sm focus:border-amber-500/50 outline-none h-16 resize-none placeholder:text-white/20" 
+                                            placeholder={`e.g. ${p}`} 
+                                        /> :
+                                        <input 
+                                            value={formData[k] || ''} 
+                                            onChange={(e) => setFormData({ ...formData, [k]: e.target.value })} 
+                                            className="w-full p-3 bg-black/20 border border-white/10 rounded-lg text-white text-sm focus:border-amber-500/50 outline-none placeholder:text-white/20" 
+                                            placeholder={`e.g. ${p}`} 
+                                        />
+                                    }
+                                </div>
+                            ))}
                         </div>
                     </div>
                 </div>
 
             </div>
         </div>
-    )
+    );
 }
 
 // 2. HERO MANAGER (With Toast & Safety)
@@ -2566,7 +2653,10 @@ function FeaturedManager({ featured, updateFeatured, showToast }: any) {
     const [uploading, setUploading] = useState(false);
     const ref = useRef<HTMLInputElement>(null);
 
-    useEffect(() => { if (featured) setData(featured); }, [featured]);
+    // ✅ Fix: Sync state with database
+    useEffect(() => { 
+        if (featured) setData(featured); 
+    }, [featured]);
 
     const handleUpload = async (e: any) => {
         const file = e.target.files?.[0];
@@ -2574,8 +2664,10 @@ function FeaturedManager({ featured, updateFeatured, showToast }: any) {
             setUploading(true);
             try {
                 const url = await uploadToCloudinary(file);
-                if (url) setData({ ...data, image: url });
-                showToast("Image uploaded", "success");
+                if (url) {
+                    setData((prev: any) => ({ ...prev, image: url }));
+                    showToast("Image uploaded successfully", "success");
+                }
             } catch (e) { showToast("Upload failed", "error"); }
             finally { setUploading(false); }
         }
@@ -2585,38 +2677,99 @@ function FeaturedManager({ featured, updateFeatured, showToast }: any) {
 
     return (
         <div className="space-y-6 animate-fade-in max-w-2xl mx-auto">
-            <div onClick={() => !uploading && ref.current?.click()} className="h-64 bg-black/30 rounded-xl border-2 border-dashed border-white/10 cursor-pointer flex items-center justify-center relative group hover:border-amber-500/50 transition overflow-hidden">
-                {/* FIX: Only show IMG if data.image exists */}
-                {uploading ? (
-                    <div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
-                ) : data.image ? (
-                    <img src={data.image} className="w-full h-full object-contain group-hover:opacity-50 transition" />
-                ) : (
-                    <div className="text-center">
-                        <UploadCloud className="w-8 h-8 text-white/20 mx-auto mb-2" />
-                        <span className="text-xs font-bold text-white/40 uppercase">Click to Upload Featured Image</span>
-                    </div>
-                )}
+            
+            {/* Image Uploader */}
+            <div className="space-y-2">
+                <div className="flex justify-between items-end">
+                    <label className="text-[10px] text-white/40 uppercase font-bold">Featured Image</label>
+                    {data.image && <span className="text-[9px] text-green-400 bg-green-400/10 px-2 py-0.5 rounded border border-green-400/20">Image Active</span>}
+                </div>
+                
+                <div onClick={() => !uploading && ref.current?.click()} className="h-64 bg-black/30 rounded-xl border-2 border-dashed border-white/10 cursor-pointer flex items-center justify-center relative group hover:border-amber-500/50 transition overflow-hidden">
+                    {uploading ? (
+                        <div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
+                    ) : data.image ? (
+                        <>
+                            <img src={data.image} className="w-full h-full object-contain group-hover:opacity-50 transition" />
+                            <div className="absolute inset-0 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                                <UploadCloud className="w-8 h-8 text-white mb-2" />
+                                <span className="text-xs font-bold text-white uppercase">Change Image</span>
+                            </div>
+                        </>
+                    ) : (
+                        <div className="text-center">
+                            <UploadCloud className="w-8 h-8 text-white/20 mx-auto mb-2" />
+                            <span className="text-xs font-bold text-white/40 uppercase">Click to Upload Image</span>
+                        </div>
+                    )}
+                    <input type="file" ref={ref} className="hidden" onChange={handleUpload} />
+                </div>
+            </div>
 
-                {!uploading && data.image && <div className="absolute inset-0 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100"><UploadCloud className="w-8 h-8 text-white mb-2" /><span className="text-xs font-bold text-white uppercase">Change Image</span></div>}
-                <input type="file" ref={ref} className="hidden" onChange={handleUpload} />
-            </div>
+            {/* Text Inputs with Live Indicators */}
             <div className="space-y-4">
-                <div className="space-y-1"><label className="text-[10px] text-white/40 uppercase font-bold">Section Title</label><input value={data.title || ''} onChange={(e) => setData({ ...data, title: e.target.value })} className="w-full p-3 bg-black/20 border border-white/10 rounded-lg text-white text-sm outline-none focus:border-amber-500/50" /></div>
-                <div className="space-y-1"><label className="text-[10px] text-white/40 uppercase font-bold">Subtitle</label><input value={data.subtitle || ''} onChange={(e) => setData({ ...data, subtitle: e.target.value })} className="w-full p-3 bg-black/20 border border-white/10 rounded-lg text-white text-sm outline-none focus:border-amber-500/50" /></div>
+                <div>
+                    <div className="flex justify-between items-end mb-1">
+                        <label className="text-[10px] text-white/40 uppercase font-bold">Inside Box Title</label>
+                        <span className="text-[9px] text-amber-500/80 font-mono bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 max-w-[150px] truncate">
+                            Live: {featured?.title || "Signature Collection"}
+                        </span>
+                    </div>
+                    <input 
+                        value={data.title || ''} 
+                        onChange={(e) => setData({ ...data, title: e.target.value })} 
+                        className="w-full p-3 bg-black/20 border border-white/10 rounded-lg text-white text-sm outline-none focus:border-amber-500/50" 
+                        placeholder="e.g. Signature Collection"
+                    />
+                </div>
+
+                <div>
+                    <div className="flex justify-between items-end mb-1">
+                        <label className="text-[10px] text-white/40 uppercase font-bold">Inside Box Subtitle</label>
+                        <span className="text-[9px] text-amber-500/80 font-mono bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 max-w-[150px] truncate">
+                            Live: {featured?.subtitle || "Exclusive designs"}
+                        </span>
+                    </div>
+                    <input 
+                        value={data.subtitle || ''} 
+                        onChange={(e) => setData({ ...data, subtitle: e.target.value })} 
+                        className="w-full p-3 bg-black/20 border border-white/10 rounded-lg text-white text-sm outline-none focus:border-amber-500/50" 
+                        placeholder="e.g. Exclusive designs"
+                    />
+                </div>
             </div>
-            <button disabled={uploading} onClick={handleSave} className="w-full bg-amber-600 py-3 rounded-lg text-white font-bold uppercase text-xs hover:bg-amber-700 transition">Save Changes</button>
+
+            <button disabled={uploading} onClick={handleSave} className="w-full bg-amber-600 py-3 rounded-lg text-white font-bold uppercase text-xs hover:bg-amber-700 transition shadow-lg shadow-amber-900/20">
+                Save Featured Section
+            </button>
         </div>
     );
 }
 
 // 4. PROMO MANAGER (Cloudinary Fix)
 // 4. PROMO MANAGER (Fixed: Empty SRC Error)
-function PromoManager({ promo, updatePromo, showToast }: any) {
-    const [data, setData] = useState(promo || { image: "" });
+function PromoManager({ promo, updatePromo, siteText, updateSiteText, showToast }: any) {
+    // Image State
+    const [promoData, setPromoData] = useState(promo || { image: "" });
+    // Text State (from siteText)
+    const [textData, setTextData] = useState({
+        promoTitle: siteText?.promoTitle || "",
+        promoText: siteText?.promoText || "",
+        promoBtn: siteText?.promoBtn || ""
+    });
+
     const [uploading, setUploading] = useState(false);
     const ref = useRef<HTMLInputElement>(null);
-    useEffect(() => { if (promo) setData(promo); }, [promo]);
+
+    // Sync Data
+    useEffect(() => { 
+        if (promo) setPromoData(promo);
+        if (siteText) setTextData({
+            promoTitle: siteText.promoTitle,
+            promoText: siteText.promoText,
+            promoBtn: siteText.promoBtn
+        });
+    }, [promo, siteText]);
 
     const handleUpload = async (e: any) => {
         const file = e.target.files?.[0];
@@ -2624,32 +2777,105 @@ function PromoManager({ promo, updatePromo, showToast }: any) {
             setUploading(true);
             try {
                 const url = await uploadToCloudinary(file);
-                if (url) setData({ ...data, image: url });
+                if (url) {
+                    setPromoData((prev: any) => ({ ...prev, image: url }));
+                    showToast("Image uploaded successfully", "success");
+                }
             } catch (e) { showToast("Upload failed", "error"); }
             finally { setUploading(false); }
         }
     };
-    const handleSave = () => { updatePromo(data); showToast("Promo section updated", "success"); };
+
+    const handleSave = () => {
+        // Save Image
+        updatePromo(promoData);
+        // Save Text (Merge with existing siteText)
+        updateSiteText({ ...siteText, ...textData });
+        
+        showToast("Promo section updated successfully", "success");
+    };
 
     return (
         <div className="space-y-6 animate-fade-in max-w-2xl mx-auto">
-            <div onClick={() => !uploading && ref.current?.click()} className="h-48 bg-black/30 rounded-xl border-2 border-dashed border-white/10 cursor-pointer flex items-center justify-center relative group hover:border-amber-500/50 transition overflow-hidden">
-                {/* FIX: Only show IMG if data.image exists */}
-                {uploading ? (
-                    <div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
-                ) : data.image ? (
-                    <img src={data.image} className="w-full h-full object-cover group-hover:opacity-50 transition" />
-                ) : (
-                    <div className="text-center">
-                        <UploadCloud className="w-8 h-8 text-white/20 mx-auto mb-2" />
-                        <span className="text-xs font-bold text-white/40 uppercase">Click to Upload Promo Banner</span>
-                    </div>
-                )}
+            
+            {/* Promo Image */}
+            <div className="space-y-2">
+                <div className="flex justify-between items-end">
+                    <label className="text-[10px] text-white/40 uppercase font-bold">Promo Model Image</label>
+                    {promoData.image && <span className="text-[9px] text-green-400 bg-green-400/10 px-2 py-0.5 rounded border border-green-400/20">Image Active</span>}
+                </div>
 
-                {!uploading && data.image && <div className="absolute inset-0 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100"><UploadCloud className="w-8 h-8 text-white mb-2" /><span className="text-xs font-bold text-white uppercase">Change Image</span></div>}
-                <input type="file" ref={ref} className="hidden" onChange={handleUpload} />
+                <div onClick={() => !uploading && ref.current?.click()} className="h-48 bg-black/30 rounded-xl border-2 border-dashed border-white/10 cursor-pointer flex items-center justify-center relative group hover:border-amber-500/50 transition overflow-hidden">
+                    {uploading ? (
+                        <div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
+                    ) : promoData.image ? (
+                        <>
+                            <img src={promoData.image} className="w-full h-full object-cover group-hover:opacity-50 transition" />
+                            <div className="absolute inset-0 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                                <UploadCloud className="w-8 h-8 text-white mb-2" />
+                                <span className="text-xs font-bold text-white uppercase">Change Image</span>
+                            </div>
+                        </>
+                    ) : (
+                        <div className="text-center">
+                            <UploadCloud className="w-8 h-8 text-white/20 mx-auto mb-2" />
+                            <span className="text-xs font-bold text-white/40 uppercase">Click to Upload Banner</span>
+                        </div>
+                    )}
+                    <input type="file" ref={ref} className="hidden" onChange={handleUpload} />
+                </div>
             </div>
-            <button disabled={uploading} onClick={handleSave} className="w-full bg-amber-600 py-3 rounded-lg text-white font-bold uppercase text-xs hover:bg-amber-700 transition">Save Promo</button>
+
+            {/* Promo Text Fields (Added Here for Convenience) */}
+            <div className="space-y-4 pt-4 border-t border-white/10">
+                <h4 className="text-white font-serif text-sm flex items-center gap-2"><Ticket className="w-4 h-4 text-amber-500"/> Promo Content</h4>
+                
+                {/* Title */}
+                <div>
+                    <div className="flex justify-between items-end mb-1">
+                        <label className="text-[10px] text-white/40 uppercase font-bold">Heading</label>
+                        <span className="text-[9px] text-amber-500/80 font-mono">Live: {siteText?.promoTitle || "Special Offer"}</span>
+                    </div>
+                    <input 
+                        value={textData.promoTitle || ''} 
+                        onChange={(e) => setTextData({ ...textData, promoTitle: e.target.value })} 
+                        className="w-full p-3 bg-black/20 border border-white/10 rounded-lg text-white text-sm outline-none focus:border-amber-500/50" 
+                        placeholder="e.g. Special Offer"
+                    />
+                </div>
+
+                {/* Description */}
+                <div>
+                    <div className="flex justify-between items-end mb-1">
+                        <label className="text-[10px] text-white/40 uppercase font-bold">Description</label>
+                        <span className="text-[9px] text-amber-500/80 font-mono">Live: {siteText?.promoText || "Limited time..."}</span>
+                    </div>
+                    <textarea 
+                        value={textData.promoText || ''} 
+                        onChange={(e) => setTextData({ ...textData, promoText: e.target.value })} 
+                        className="w-full p-3 bg-black/20 border border-white/10 rounded-lg text-white text-sm outline-none focus:border-amber-500/50 h-20 resize-none" 
+                        placeholder="e.g. Limited time deals on our finest jewelry."
+                    />
+                </div>
+
+                {/* Button */}
+                <div>
+                    <div className="flex justify-between items-end mb-1">
+                        <label className="text-[10px] text-white/40 uppercase font-bold">Button Text</label>
+                        <span className="text-[9px] text-amber-500/80 font-mono">Live: {siteText?.promoBtn || "Discover More"}</span>
+                    </div>
+                    <input 
+                        value={textData.promoBtn || ''} 
+                        onChange={(e) => setTextData({ ...textData, promoBtn: e.target.value })} 
+                        className="w-full p-3 bg-black/20 border border-white/10 rounded-lg text-white text-sm outline-none focus:border-amber-500/50" 
+                        placeholder="e.g. Discover More"
+                    />
+                </div>
+            </div>
+
+            <button disabled={uploading} onClick={handleSave} className="w-full bg-amber-600 py-3 rounded-lg text-white font-bold uppercase text-xs hover:bg-amber-700 transition shadow-lg shadow-amber-900/20">
+                Save Promo Section
+            </button>
         </div>
     );
 }

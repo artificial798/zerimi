@@ -1,27 +1,20 @@
 "use client";
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Gift } from 'lucide-react';
+import { X, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useStore } from '@/lib/store'; // ✅ Store connect kiya
+import { useStore } from '@/lib/store';
 
 export default function PopupModal() {
   const [isOpen, setIsOpen] = useState(false);
-  const { siteText } = useStore() as any; // ✅ Admin Data fetch kiya
+  const { siteText } = useStore() as any;
 
   useEffect(() => {
-    // 1. Agar Admin ne Popup OFF kar rakha hai, to mat dikhao
-    // (Agar siteText abhi load nahi hua hai to wait karega)
     if (siteText && siteText.isPopupActive === false) return;
-
-    // 2. Check karein user pehle dekh chuka hai ya nahi
     const hasSeenPopup = sessionStorage.getItem('zerimi_popup_seen');
-    
     if (!hasSeenPopup) {
-      const timer = setTimeout(() => {
-        setIsOpen(true);
-      }, 5000); // 5 Second delay
+      const timer = setTimeout(() => setIsOpen(true), 4000);
       return () => clearTimeout(timer);
     }
   }, [siteText]);
@@ -31,15 +24,12 @@ export default function PopupModal() {
     sessionStorage.setItem('zerimi_popup_seen', 'true');
   };
 
-  // Agar Data load nahi hua ya Admin ne OFF kiya hai, to return null
   if (siteText?.isPopupActive === false) return null;
 
-  // ✅ Fallback Values (Agar Admin mein data nahi dala to ye dikhega)
-  // IMPORTANT: Yahan wo data aayega jo aapne Admin me dala hai
-  const popupImage = siteText?.popupImage || "https://images.unsplash.com/photo-1573408301185-9146fe634ad0?q=80&w=1000&auto=format&fit=crop";
-  const title = siteText?.popupTitle || "10% OFF";
-  const subText = siteText?.popupSub || "Join the ZERIMI Privilege List and get a special discount.";
-  const code = siteText?.popupCode || "WELCOME10";
+  const popupImage = siteText?.popupImage;
+  const title = siteText?.popupTitle;
+  const subText = siteText?.popupSub;
+  const code = siteText?.popupCode;
 
   return (
     <AnimatePresence>
@@ -48,67 +38,101 @@ export default function PopupModal() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-[9999] flex items-center justify-center px-4 sm:px-0"
         >
+          {/* Dark Backdrop with Blur */}
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={handleClose} />
+
           <motion.div 
-            initial={{ scale: 0.9, y: 20 }}
-            animate={{ scale: 1, y: 0 }}
-            exit={{ scale: 0.9, y: 20 }}
-            className="bg-white w-full max-w-3xl grid grid-cols-1 md:grid-cols-2 shadow-2xl overflow-hidden relative rounded-xl"
+            initial={{ scale: 0.9, y: 30, opacity: 0 }}
+            animate={{ scale: 1, y: 0, opacity: 1 }}
+            exit={{ scale: 0.9, y: 30, opacity: 0 }}
+            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+            className="relative w-full max-w-4xl bg-[#050f0d] overflow-hidden shadow-2xl rounded-sm border border-[#d4af37]/30 flex flex-col md:flex-row max-h-[85vh] md:max-h-[600px]"
           >
-            {/* Close Button */}
+            {/* Close Button (Floating) */}
             <button 
               onClick={handleClose} 
-              className="absolute top-3 right-3 z-20 bg-white/80 p-1 rounded-full text-stone-800 hover:bg-black hover:text-white transition"
+              className="absolute top-4 right-4 z-30 text-white/50 hover:text-white transition-colors bg-black/20 p-2 rounded-full backdrop-blur-md border border-white/10"
             >
               <X size={20} />
             </button>
 
-            {/* Left Side: Dynamic Image */}
-            <div className="relative h-48 md:h-full w-full bg-stone-100">
-               <Image 
-                 src={popupImage}
-                 alt="Exclusive Offer"
-                 fill
-                 className="object-cover"
-               />
+            {/* Left Side: Image (Mobile: Top Banner with Gradient Fade) */}
+            <div className="relative w-full h-[40vh] md:h-auto md:w-1/2 shrink-0">
+               {popupImage ? (
+                 <>
+                   <Image 
+                     src={popupImage}
+                     alt="Exclusive"
+                     fill
+                     className="object-cover"
+                   />
+                   {/* Gradient Overlay for Text Readability on Mobile & Style on Desktop */}
+                   <div className="absolute inset-0 bg-gradient-to-t from-[#050f0d] via-transparent to-transparent md:bg-gradient-to-r md:from-transparent md:to-[#050f0d]/90" />
+                 </>
+               ) : (
+                 <div className="w-full h-full bg-[#0a1f1c] flex items-center justify-center relative overflow-hidden">
+                    <div className="absolute w-64 h-64 bg-[#d4af37]/10 rounded-full blur-[100px]" />
+                    <h2 className="font-serif text-4xl text-[#d4af37] z-10 tracking-[0.3em]">ZERIMI</h2>
+                 </div>
+               )}
             </div>
 
-            {/* Right Side: Dynamic Content */}
-            <div className="p-8 md:p-12 flex flex-col justify-center text-center items-center bg-[#fffcf5]">
-              <div className="mb-4 text-amber-600">
-                <Gift size={32} />
+            {/* Right Side: Content */}
+            <div className="relative w-full md:w-1/2 flex flex-col justify-center items-center text-center p-8 md:p-12 text-[#fffcf5]">
+              
+              {/* Background Glow Effect */}
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-[#d4af37]/5 rounded-full blur-[80px] pointer-events-none" />
+
+              {/* Top Tag */}
+              <div className="flex items-center gap-2 mb-6">
+                <div className="h-[1px] w-8 bg-[#d4af37]/50"></div>
+                <span className="text-[10px] font-bold tracking-[0.3em] text-[#d4af37] uppercase">
+                  Royal Privilege
+                </span>
+                <div className="h-[1px] w-8 bg-[#d4af37]/50"></div>
               </div>
-              <p className="text-xs font-bold tracking-[0.2em] text-stone-500 uppercase mb-2">Exclusive Offer</p>
               
-              {/* ✅ Dynamic Title from Admin */}
-              <h2 className="text-3xl font-serif text-[#0a1f1c] mb-3">{title}</h2>
+              {/* Title */}
+              <h2 className="text-3xl md:text-5xl font-serif text-white mb-4 leading-tight drop-shadow-lg">
+                {title || <span className="italic font-light">Welcome</span>}
+              </h2>
               
-              {/* ✅ Dynamic Subtext */}
-              <p className="text-stone-600 text-sm mb-6 leading-relaxed">
-                {subText}
+              {/* Subtext */}
+              <p className="text-stone-300 text-xs md:text-sm mb-8 leading-6 tracking-wide font-light max-w-xs mx-auto">
+                {subText || "Indulge in the finest craftsmanship. Join our exclusive circle for early access and rewards."}
               </p>
               
-              {/* ✅ Dynamic Coupon Code */}
+              {/* Coupon Code Section */}
               {code && (
-                  <div className="bg-white border border-dashed border-amber-400 px-6 py-2 mb-6 font-mono text-lg font-bold text-[#0a1f1c] tracking-widest cursor-text select-all">
-                    {code}
+                  <div className="relative group cursor-pointer mb-8 w-full max-w-[280px]">
+                    {/* Fancy Border Box */}
+                    <div className="absolute inset-0 border border-[#d4af37]/30 transform translate-x-1 translate-y-1 transition-transform group-hover:translate-x-0 group-hover:translate-y-0" />
+                    <div className="relative bg-[#0a1f1c] border border-[#d4af37] py-3 px-6 flex items-center justify-center gap-3 shadow-lg">
+                      <Sparkles size={16} className="text-[#d4af37]" />
+                      <span className="font-mono text-xl tracking-[0.15em] text-[#fffcf5]">
+                        {code}
+                      </span>
+                    </div>
                   </div>
               )}
 
-              <div className="flex flex-col w-full gap-3">
+              {/* Action Buttons */}
+              <div className="flex flex-col w-full gap-3 max-w-[280px]">
                 <Link 
                   href="/category/all" 
                   onClick={handleClose}
-                  className="w-full bg-[#0a1f1c] text-white py-3 text-xs uppercase font-bold tracking-widest hover:bg-amber-700 transition"
+                  className="bg-[#d4af37] text-[#050f0d] py-3.5 text-xs uppercase font-bold tracking-[0.2em] hover:bg-white transition duration-500 shadow-[0_0_20px_rgba(212,175,55,0.2)] text-center"
                 >
-                  Shop Now
+                  Claim Offer
                 </Link>
+                
                 <button 
                   onClick={handleClose}
-                  className="text-xs text-stone-400 hover:text-[#0a1f1c] underline"
+                  className="text-[10px] text-stone-500 hover:text-[#d4af37] transition-colors uppercase tracking-widest mt-2"
                 >
-                  No thanks, I prefer full price
+                  No, I'll pay full price
                 </button>
               </div>
             </div>

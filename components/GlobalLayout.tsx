@@ -45,7 +45,8 @@ const [showEmptyWishlistToast, setShowEmptyWishlistToast] = useState(false);
 
   // Calc Totals
   // sum ko 'number' aur item ko 'any' bata dein
-const subtotal = cart.reduce((sum: number, item: any) => sum + item.product.price * item.qty, 0);
+// ✅ FIX: Optional Chaining (?.) lagayein taaki crash na ho
+const subtotal = cart.reduce((sum: number, item: any) => sum + (item.product?.price || 0) * item.qty, 0);
   const shippingThreshold = 5000;
   const progress = Math.min((subtotal / shippingThreshold) * 100, 100);
 
