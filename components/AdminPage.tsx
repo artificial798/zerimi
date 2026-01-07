@@ -93,6 +93,7 @@ interface AdminProductForm extends Partial<Product> {
     warranty?: string;
     care?: string;
     colors?: string[];
+    sizes?: string[];
 }
 
 // --- NEW: Notification Interface ---
@@ -1517,7 +1518,8 @@ function ProductManager({ products, addProduct, updateProduct, deleteProduct }: 
         galleryImages: [],
         tags: [],
         stock: 10,
-        colors: []
+        colors: [],
+        sizes: []
     });
 
     // Refs
@@ -1599,6 +1601,7 @@ function ProductManager({ products, addProduct, updateProduct, deleteProduct }: 
             sku: formData.sku || `ZER-${Math.floor(Math.random() * 10000)}`, // Agar khali choda to auto-generate
             hsn: formData.hsn || "7117", // Default Jewelry Code
             colors: formData.colors?.map(c => c.trim()).filter(Boolean) || [],
+            sizes: formData.sizes?.map(s => s.trim()).filter(Boolean) || [],
             tags: formData.tags || [],
             // 👇 YE 3 LINES NAYI HAIN
             material: formData.material || 'Premium Quality Material',
@@ -1839,7 +1842,19 @@ function ProductManager({ products, addProduct, updateProduct, deleteProduct }: 
                                         </div>
                                         <p className="text-[9px] text-white/30 mt-1">Example: #FF0000,#000000 (Comma se alag karein)</p>
                                     </div>
-
+{/* 3. SIZES INPUT (New Section) */}
+                                    <div>
+                                        <label className="text-[10px] text-white/40 uppercase font-bold block mb-2">Sizes (Comma Separated)</label>
+                                        <input
+                                            type="text"
+                                            placeholder="S, M, L, XL or 6, 7, 8, 9"
+                                            // ✅ Data ko comma se todkar array banayega
+                                            value={formData.sizes?.join(', ') || ''}
+                                            onChange={(e) => setFormData({ ...formData, sizes: e.target.value.split(',').map(s => s.trim()) })}
+                                            className="w-full p-3 bg-black/20 border border-white/10 rounded-lg text-white text-sm outline-none focus:border-amber-500/50"
+                                        />
+                                        <p className="text-[9px] text-white/30 mt-1">Example: 6, 7, 8 (Ring) or 16, 18, 20 (Chain)</p>
+                                    </div>
                                 </div>
                                 <div className="pt-4"><button disabled={uploading} onClick={handleSave} className="w-full bg-amber-600 text-white py-4 rounded-xl uppercase tracking-widest text-xs font-bold hover:bg-amber-700 transition flex items-center justify-center gap-2">{uploading ? 'Uploading Images...' : <><Save className="w-4 h-4" /> Save Product</>}</button></div>
                             </div>

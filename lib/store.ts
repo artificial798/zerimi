@@ -26,6 +26,7 @@ export type Product = {
     stock?: number;
     tags?: string[];
     colors?: string[];   // E.g., ["#000000", "#FF0000"] used for swatches
+    sizes?: string[];
     // 👇 YE 3 NAYI LINES ZAROORI HAIN DATA SAVE KARNE KE LIYE
     sku?: string;
   hsn?: string;
