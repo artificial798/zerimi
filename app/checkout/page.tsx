@@ -12,6 +12,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
+const INDIAN_STATES = [
+  "Andaman and Nicobar Islands", "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chandigarh",
+  "Chhattisgarh", "Dadra and Nagar Haveli", "Daman and Diu", "Delhi", "Goa", "Gujarat", "Haryana",
+  "Himachal Pradesh", "Jammu and Kashmir", "Jharkhand", "Karnataka", "Kerala", "Ladakh", "Lakshadweep",
+  "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Puducherry",
+  "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu", "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal"
+];
 // --- RAZORPAY LOADER ---
 const initializeRazorpay = () => {
     return new Promise((resolve) => {
@@ -73,6 +80,7 @@ export default function CheckoutPage() {
         systemSettings,
         removeFromCart,
         addToCart,
+        updateQuantity,
        // 👇 NEW: LOYALTY & COUPON FROM STORE
         pointsDiscount,
         pointsRedeemed,
@@ -270,14 +278,18 @@ const subtotal = cartInclusiveTotal;
         }
     }, [cart, router, step]);
 
-    const handleQuantityChange = (item: any, change: number) => {
+  const handleQuantityChange = (item: any, change: number) => {
+        // Agar quantity 1 hai aur user kam kar raha hai, toh remove confirm karo
         if (item.qty === 1 && change === -1) {
             if (confirm("Remove this item from cart?")) {
                 removeFromCart(item.product.id);
             }
             return;
         }
-        addToCart(item.product, change);
+        
+        // ❌ OLD: addToCart(item.product, change); -> Ye Drawer khol deta tha
+        // ✅ NEW: Silent Update -> Sirf number badlega
+        updateQuantity(item.product.id, change);
     };
 
     // --- COUPON HANDLERS ---
@@ -310,7 +322,38 @@ const subtotal = cartInclusiveTotal;
     };
 
 
+const handlePincodeChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const code = e.target.value.replace(/[^0-9]/g, '').slice(0, 6);
+        
+        setFormData(prev => ({ ...prev, pincode: code }));
 
+        if (code.length === 6) {
+            setLoading(true);
+            try {
+                const res = await fetch(`https://api.postalpincode.in/pincode/${code}`);
+                const data = await res.json();
+
+                if (data[0].Status === "Success") {
+                    const details = data[0].PostOffice[0];
+                    setFormData(prev => ({
+                        ...prev,
+                        city: details.District, 
+                        state: details.State, 
+                        pincode: code
+                    }));
+                    setToast({ msg: "Location Detected! 📍", type: 'success' });
+                    setTimeout(() => setToast(null), 3000);
+                } else {
+                    setToast({ msg: "Invalid Pincode", type: 'error' });
+                    setTimeout(() => setToast(null), 3000);
+                }
+            } catch (err) {
+                console.error("Pincode Error:", err);
+            } finally {
+                setLoading(false);
+            }
+        }
+    };
   // --- ✅ CORRECT HANDLE PLACE ORDER FUNCTION ---
     const handlePlaceOrder = async () => {
         const finalEmail = formData.email?.trim().toLowerCase() || currentUser?.email?.trim().toLowerCase();
@@ -616,7 +659,7 @@ const baseOrderDetails = {
             <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-12 gap-12">
 
                 {/* LEFT COLUMN: FORMS */}
-                <div className="lg:col-span-7 space-y-8">
+                <div className="lg:col-span-7 space-y-8 order-2 lg:order-1">
                     <div className="flex items-center gap-3 text-xs uppercase tracking-widest text-stone-400 mb-2">
                         <Link href="/cart" className="hover:text-amber-600 transition">Cart</Link>
                         <ChevronLeft className="w-3 h-3 rotate-180" />
@@ -687,10 +730,45 @@ const baseOrderDetails = {
                                         <MapPin className="absolute left-4 top-4 w-5 h-5 text-stone-300" />
                                         <input placeholder="Address (House No, Street, Area)" className="w-full p-4 pl-12 bg-stone-50 border-none rounded-xl outline-none focus:ring-2 focus:ring-amber-500/20 transition placeholder:text-stone-400" value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} />
                                     </div>
-                                    <div className="grid grid-cols-3 gap-4">
-                                        <input placeholder="City" className="p-4 bg-stone-50 border-none rounded-xl outline-none focus:ring-2 focus:ring-amber-500/20 transition placeholder:text-stone-400" value={formData.city} onChange={(e) => setFormData({ ...formData, city: e.target.value })} />
-                                        <input placeholder="State" className="p-4 bg-stone-50 border-none rounded-xl outline-none focus:ring-2 focus:ring-amber-500/20 transition placeholder:text-stone-400" value={formData.state} onChange={(e) => setFormData({ ...formData, state: e.target.value })} />
-                                        <input placeholder="PIN Code" className="p-4 bg-stone-50 border-none rounded-xl outline-none focus:ring-2 focus:ring-amber-500/20 transition placeholder:text-stone-400" value={formData.pincode} onChange={(e) => setFormData({ ...formData, pincode: e.target.value })} />
+                                   {/* ✅ STEP 4: YE PURA BLOCK REPLACE KAREIN */}
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        
+                                        {/* Pincode Input */}
+                                        <div className="relative">
+                                            <input 
+                                                placeholder="PIN Code (e.g. 110001)" 
+                                                className="w-full p-4 bg-stone-50 border-none rounded-xl outline-none focus:ring-2 focus:ring-amber-500/20 transition font-mono font-bold placeholder:text-stone-400" 
+                                                value={formData.pincode} 
+                                                onChange={handlePincodeChange} // Function connect kiya
+                                                maxLength={6}
+                                            />
+                                            {loading && <span className="absolute right-3 top-4 text-xs animate-spin">⏳</span>}
+                                        </div>
+
+                                        {/* City Input */}
+                                        <input 
+                                            placeholder="City / District" 
+                                            className="p-4 bg-stone-50 border-none rounded-xl outline-none focus:ring-2 focus:ring-amber-500/20 transition placeholder:text-stone-400" 
+                                            value={formData.city} 
+                                            onChange={(e) => setFormData({ ...formData, city: e.target.value })} 
+                                        />
+
+                                        {/* State Dropdown */}
+                                        <div className="relative">
+                                            <select 
+                                                className={`w-full p-4 bg-stone-50 border-none rounded-xl outline-none focus:ring-2 focus:ring-amber-500/20 transition appearance-none cursor-pointer ${formData.state ? 'text-[#0a1f1c] font-bold' : 'text-stone-400'}`}
+                                                value={formData.state} 
+                                                onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                                            >
+                                                <option value="" disabled>Select State</option>
+                                                {INDIAN_STATES.map(st => (
+                                                    <option key={st} value={st}>{st}</option>
+                                                ))}
+                                            </select>
+                                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
+                                                <ChevronLeft className="w-4 h-4 -rotate-90" />
+                                            </div>
+                                        </div>
                                     </div>
                                     <div>
                                         <label className="text-[10px] font-bold text-stone-400 uppercase mb-1 block">
@@ -872,7 +950,7 @@ const baseOrderDetails = {
                 </div>
 
                 {/* RIGHT COLUMN: SUMMARY (FIXED LAYOUT) */}
-                <div className="lg:col-span-5 space-y-6 h-fit sticky top-28">
+               <div className="lg:col-span-5 space-y-6 h-fit lg:sticky lg:top-28 order-1 lg:order-2">
                     <div className="bg-white p-6 rounded-2xl border border-stone-200/60 shadow-sm">
                         <h3 className="font-serif text-lg text-[#0a1f1c] mb-6 border-b border-stone-100 pb-4">Order Summary</h3>
 {/* 👑 LOYALTY POINTS CARD */}

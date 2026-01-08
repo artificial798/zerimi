@@ -11,7 +11,7 @@ import {
     Type, Link as LinkIcon, MoveRight, Check, XCircle, Eye, MapPin, Phone, Mail,
     User, MessageSquare, Menu, ShoppingBag, Ban, Briefcase, Headphones, Search,
     // 👇 Ye Naye Icons Add Karein
-    Download, FileJson, RefreshCw, ShieldAlert, Bike, Gift
+    Download, FileJson, RefreshCw, ShieldAlert, Bike, Gift, CheckCircle, FileText
 } from 'lucide-react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
@@ -760,10 +760,13 @@ const formatDate = (input: any) => {
 // =========================================================
 // ✅ FINAL & CLEAN INVOICE GENERATOR (Copy-Paste This)
 // =========================================================
+// =========================================================
+// ✅ INDUSTRY STANDARD INVOICE GENERATOR (Dynamic Title)
+// =========================================================
 export const generateAdminInvoice = (order: any, settings: any) => {
   if (!order) return;
 
-  // 1. Helper: Date Formatter
+  // 1. Helper Functions
   const formatDate = (dateStr: string) => {
       try {
           const d = new Date(dateStr);
@@ -771,7 +774,6 @@ export const generateAdminInvoice = (order: any, settings: any) => {
       } catch (e) { return dateStr; }
   };
 
-  // 2. Helper: Number to Words
   const numberToWords = (num: number): string => {
       const a = ['', 'One ', 'Two ', 'Three ', 'Four ', 'Five ', 'Six ', 'Seven ', 'Eight ', 'Nine ', 'Ten ', 'Eleven ', 'Twelve ', 'Thirteen ', 'Fourteen ', 'Fifteen ', 'Sixteen ', 'Seventeen ', 'Eighteen ', 'Nineteen '];
       const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
@@ -781,16 +783,23 @@ export const generateAdminInvoice = (order: any, settings: any) => {
       return `Rupees ${n.toLocaleString('en-IN')} Only`;
   };
 
-  // 3. Initialize PDF
+  // 2. Document Setup
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.width;
-  const TAX_RATE = 3; // 3% GST
+
+  // 3. Logic: Title Kya Hoga?
+  // Rule: Pending/Cancelled hai to 'Proforma', baaki sab me 'Tax Invoice'
+  let invoiceTitle = "TAX INVOICE";
+  if (order.status === 'Pending' || order.status === 'Cancelled') {
+      invoiceTitle = "PROFORMA INVOICE";
+  }
 
   // 4. Company & Customer Details
   const companyName = settings?.invoice?.companyName || "ZERIMI";
   const companyAddress = settings?.invoice?.address || "Baraut, Uttar Pradesh, India";
   const companyGstin = settings?.invoice?.gstin || "";
-  
+  const companyState = settings?.invoice?.state || "Uttar Pradesh"; // Admin Config se state
+
   // Customer Address Logic
   let fullAddress = order.address || "";
   let customerState = "";
@@ -798,10 +807,11 @@ export const generateAdminInvoice = (order: any, settings: any) => {
       fullAddress = `${order.address.street || ''}, ${order.address.city || ''}, ${order.address.state || ''} - ${order.address.pincode || ''}\nPhone: ${order.address.phone || ''}`;
       customerState = order.address.state || "";
   }
-  
-  // IGST vs SGST Logic (Simple Check: Agar "Uttar Pradesh" match kare to SGST/CGST)
-  // Note: Aap chahein to "Uttar Pradesh" ko settings se dynamic bhi kar sakte hain
-  const isSameState = companyAddress.toLowerCase().includes(customerState.toLowerCase()) || customerState.toLowerCase().includes("uttar pradesh");
+
+  // 5. GST State Match Logic (IGST vs SGST)
+  // Normalize strings (remove spaces, lowercase) for better matching
+  const cleanStr = (str: string) => str?.toLowerCase().replace(/[^a-z0-9]/g, '') || "";
+  const isSameState = cleanStr(companyState) === cleanStr(customerState);
 
   // ---------------------------------------------------------
   // 🎨 HEADER SECTION
@@ -819,12 +829,13 @@ export const generateAdminInvoice = (order: any, settings: any) => {
   doc.text(`GSTIN: ${companyGstin}`, 14, 42);
   doc.text(`Email: support@zerimi.com`, 14, 47);
 
-  // Invoice Info (Right Side)
+  // Dynamic Title (Right Side)
   doc.setFontSize(16);
   doc.setTextColor(0);
-  doc.text("TAX INVOICE", pageWidth - 14, 20, { align: "right" });
+  doc.text(invoiceTitle, pageWidth - 14, 20, { align: "right" }); // ✅ YAHAN CHANGE HUA HAI
+  
   doc.setFontSize(10);
-  doc.text(`Invoice #: ${order.invoiceNo || 'INV-001'}`, pageWidth - 14, 30, { align: "right" });
+  doc.text(`Invoice #: ${order.invoiceNo || 'N/A'}`, pageWidth - 14, 30, { align: "right" });
   doc.text(`Date: ${formatDate(order.date)}`, pageWidth - 14, 35, { align: "right" });
   doc.text(`Order ID: #${order.id}`, pageWidth - 14, 40, { align: "right" });
 
@@ -838,21 +849,24 @@ export const generateAdminInvoice = (order: any, settings: any) => {
   doc.text(doc.splitTextToSize(fullAddress, 100), 14, 71);
 
   // ---------------------------------------------------------
-  // 📦 TABLE CALCULATIONS
+  // 📦 TABLE CALCULATIONS (Correct Tax Logic)
   // ---------------------------------------------------------
   let totalTaxable = 0;
   let totalGST = 0;
   
   const tableRows: any[] = [];
 
-  // Items Loop
+  // Loop Items
   order.items.forEach((item: any, index: number) => {
       const qty = Number(item.qty || 1);
       const rate = Number(item.price);
       const amount = rate * qty;
       
-      // Reverse Calculation: Price is Inclusive of 3% Tax
-      const taxableValue = amount / (1 + (TAX_RATE / 100)); 
+      // ✅ GST Logic: Item ka apna rate use karo, nahi to default 3%
+      const itemTaxRate = item.gstRate || 3; 
+      
+      // Reverse Calculation (Price is Inclusive)
+      const taxableValue = amount / (1 + (itemTaxRate / 100)); 
       const gstValue = amount - taxableValue;
 
       totalTaxable += taxableValue;
@@ -861,24 +875,26 @@ export const generateAdminInvoice = (order: any, settings: any) => {
       tableRows.push([
           index + 1,
           item.name,
-          "7117", // HSN
+          item.hsn || "7117", // HSN
           qty,
           `Rs.${(taxableValue / qty).toFixed(2)}`,
           `Rs.${taxableValue.toFixed(2)}`,
-          isSameState ? "1.5%" : "-",
+          // IGST vs SGST Columns
+          isSameState ? `${itemTaxRate / 2}%` : "-",
           isSameState ? (gstValue / 2).toFixed(2) : "-",
-          isSameState ? "1.5%" : "-",
+          isSameState ? `${itemTaxRate / 2}%` : "-",
           isSameState ? (gstValue / 2).toFixed(2) : "-",
-          !isSameState ? "3%" : "-",
+          !isSameState ? `${itemTaxRate}%` : "-",
           !isSameState ? gstValue.toFixed(2) : "-",
           `Rs.${amount.toFixed(2)}`
       ]);
   });
 
-  // Gift Wrap Logic
-  if (order.giftWrapPrice > 0) {
+  // Gift Wrap Logic (Service Tax 18%)
+  if (order.isGift && order.giftWrapPrice > 0) {
       const gAmount = Number(order.giftWrapPrice);
-      const gTaxable = gAmount / 1.03;
+      const gTaxRate = 18; // Service is always 18%
+      const gTaxable = gAmount / 1.18;
       const gGST = gAmount - gTaxable;
       
       totalTaxable += gTaxable;
@@ -886,16 +902,16 @@ export const generateAdminInvoice = (order: any, settings: any) => {
 
       tableRows.push([
           tableRows.length + 1,
-          "Gift Packaging",
-          "9985",
+          "Gift Packaging (Service)",
+          "9985", // SAC Code
           1,
           `Rs.${gTaxable.toFixed(2)}`,
           `Rs.${gTaxable.toFixed(2)}`,
-          isSameState ? "1.5%" : "-",
+          isSameState ? "9%" : "-",
           isSameState ? (gGST / 2).toFixed(2) : "-",
-          isSameState ? "1.5%" : "-",
+          isSameState ? "9%" : "-",
           isSameState ? (gGST / 2).toFixed(2) : "-",
-          !isSameState ? "3%" : "-",
+          !isSameState ? "18%" : "-",
           !isSameState ? gGST.toFixed(2) : "-",
           `Rs.${gAmount.toFixed(2)}`
       ]);
@@ -909,99 +925,74 @@ export const generateAdminInvoice = (order: any, settings: any) => {
       body: tableRows,
       theme: "grid",
       styles: { fontSize: 7, halign: 'center' },
-      columnStyles: { 1: { halign: 'left' } }, // Align Item Name Left
-      headStyles: { fillColor: [15, 41, 37], textColor: 255 } // Dark Green Header
+      columnStyles: { 1: { halign: 'left' } },
+      headStyles: { fillColor: [15, 41, 37], textColor: 255 } 
   });
 
   // ---------------------------------------------------------
-  // 💰 SUMMARY SECTION (THE FIX)
+  // 💰 SUMMARY SECTION
   // ---------------------------------------------------------
   // @ts-ignore
   let finalY = doc.lastAutoTable.finalY + 10;
   const rightX = pageWidth - 14;
   const labelX = rightX - 70;
 
-  // 1. DATA EXTRACTION (Safety Checks)
   const discountTotal = Number(order.discount || 0);
   const couponDisc = Number(order.couponDiscount || 0);
   const pointsDisc = Number(order.pointsDiscount || 0);
   const shippingCharge = Number(order.shipping || 0);
 
-  // 2. MATH
-  // Net Taxable = Total Taxable - Total Discount
+  // Net Taxable Logic
   const netTaxableValue = Math.max(0, totalTaxable - discountTotal);
+  // Re-calculate GST roughly on Net Value (Proportionate)
+  // Note: Accurate accounting ke liye line-item discount hona chahiye, par ye simplified hai
+  const finalGSTVal = totalGST * (netTaxableValue / (totalTaxable || 1)); 
   
-  // Re-calculate GST on Net Value (Tax kam hoga kyunki discount mila hai)
-  const finalGSTVal = netTaxableValue * (TAX_RATE / 100);
-  
-  // Grand Total
   const grandTotal = Math.round(netTaxableValue + finalGSTVal + shippingCharge);
 
-  // 3. DISPLAY
   doc.setFontSize(9);
   doc.setTextColor(0);
 
-  // Subtotal
+  // Values Print
   doc.text("Sub Total (Taxable):", labelX, finalY);
   doc.text(`Rs.${totalTaxable.toFixed(2)}`, rightX, finalY, { align: "right" });
   finalY += 6;
 
-  // --- COUPON DISCOUNT ---
   if (couponDisc > 0) {
-      doc.setTextColor(200, 30, 30); // Red
+      doc.setTextColor(200, 30, 30);
       doc.text("Less: Coupon Discount:", labelX, finalY);
       doc.text(`- Rs.${couponDisc.toFixed(2)}`, rightX, finalY, { align: "right" });
-      doc.setTextColor(0);
       finalY += 6;
   }
-
-  // --- POINTS DISCOUNT ---
   if (pointsDisc > 0) {
-      doc.setTextColor(212, 175, 55); // Gold
+      doc.setTextColor(212, 175, 55);
       doc.text("Less: Loyalty Points:", labelX, finalY);
       doc.text(`- Rs.${pointsDisc.toFixed(2)}`, rightX, finalY, { align: "right" });
-      doc.setTextColor(0);
       finalY += 6;
   }
 
-  // --- FALLBACK (Agar alag-alag nahi hai, par total hai) ---
-  if (couponDisc === 0 && pointsDisc === 0 && discountTotal > 0) {
-      doc.setTextColor(200, 30, 30);
-      doc.text("Less: Total Discount:", labelX, finalY);
-      doc.text(`- Rs.${discountTotal.toFixed(2)}`, rightX, finalY, { align: "right" });
-      doc.setTextColor(0);
-      finalY += 6;
-  }
-
-  doc.line(labelX, finalY, rightX, finalY); // Divider
+  doc.setTextColor(0);
+  doc.line(labelX, finalY, rightX, finalY);
   finalY += 6;
 
-  // Net Taxable
   doc.text("Net Taxable Value:", labelX, finalY);
   doc.text(`Rs.${netTaxableValue.toFixed(2)}`, rightX, finalY, { align: "right" });
   finalY += 6;
 
-  // GST
-  doc.setTextColor(100);
-  doc.text(`Add: GST (${TAX_RATE}%):`, labelX, finalY);
+  doc.text("Add: Total GST:", labelX, finalY);
   doc.text(`+ Rs.${finalGSTVal.toFixed(2)}`, rightX, finalY, { align: "right" });
   finalY += 6;
 
-  // Shipping
   doc.text("Add: Shipping Charges:", labelX, finalY);
   doc.text(`+ Rs.${shippingCharge.toFixed(2)}`, rightX, finalY, { align: "right" });
   finalY += 8;
 
-  // GRAND TOTAL
   doc.setFontSize(14);
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(0);
   doc.text("Grand Total:", labelX, finalY);
   doc.text(`Rs.${grandTotal.toFixed(2)}`, rightX, finalY, { align: "right" });
 
-  // ---------------------------------------------------------
-  // 📝 FOOTER
-  // ---------------------------------------------------------
+  // Footer & Disclaimer
   finalY += 15;
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
@@ -1010,7 +1001,8 @@ export const generateAdminInvoice = (order: any, settings: any) => {
   doc.rect(14, finalY + 5, pageWidth - 28, 20);
   doc.setFontSize(8);
   doc.text("Declaration:", 16, finalY + 10);
-  doc.text("We declare that this invoice shows the actual price of the goods described above.", 16, finalY + 15);
+  doc.text("1. Goods once sold will be exchanged/returned only as per policy.", 16, finalY + 15);
+  doc.text("2. All disputes are subject to Baraut jurisdiction only.", 16, finalY + 19);
 
   doc.setFont("helvetica", "bold");
   doc.text(`For ${companyName}`, pageWidth - 40, finalY + 20, { align: "center" });
@@ -1018,7 +1010,134 @@ export const generateAdminInvoice = (order: any, settings: any) => {
   doc.setFont("helvetica", "normal");
   doc.text("Authorized Signatory", pageWidth - 40, finalY + 23, { align: "center" });
 
-  doc.save(`Invoice_${order.id}.pdf`);
+  // File Name Logic
+  const fileNameStatus = invoiceTitle === "TAX INVOICE" ? "Invoice" : "Proforma";
+  doc.save(`${fileNameStatus}_${order.id}.pdf`);
+};
+
+// --- PROFESSIONAL CREDIT NOTE GENERATOR (GST Compliant) ---
+export const generateCreditNote = (order: any, settings: any) => {
+  if (!order) return;
+
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.width;
+
+  // Company Details
+  const companyName = settings?.invoice?.companyName || "ZERIMI";
+  const companyAddress = settings?.invoice?.address || "";
+  const companyGstin = settings?.invoice?.gstin || "";
+
+  // 1. HEADER - RED COLOR FOR CREDIT NOTE
+  doc.setFillColor(200, 30, 30); // Red Background
+  doc.rect(0, 0, pageWidth, 40, 'F');
+  
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(22);
+  doc.setTextColor(255, 255, 255);
+  doc.text("CREDIT NOTE", 14, 25);
+  
+  doc.setFontSize(10);
+  doc.text("Sales Return / Refund Document", 14, 32);
+
+  // CN Details (Right Side)
+  doc.text(`CN No: CN-${order.invoiceNo}`, pageWidth - 14, 15, { align: "right" });
+  doc.text(`Date: ${new Date().toLocaleDateString('en-IN')}`, pageWidth - 14, 22, { align: "right" });
+  doc.text(`Ref Invoice: ${order.invoiceNo}`, pageWidth - 14, 29, { align: "right" });
+
+  // 2. PARTIES INFO
+  let currentY = 55;
+  doc.setTextColor(0);
+  
+  // From (Seller)
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "bold");
+  doc.text("ISSUED BY (Seller):", 14, currentY);
+  doc.setFont("helvetica", "normal");
+  doc.text(companyName, 14, currentY + 5);
+  doc.text(doc.splitTextToSize(companyAddress, 80), 14, currentY + 10);
+  doc.text(`GSTIN: ${companyGstin}`, 14, currentY + 25);
+
+  // To (Customer)
+  doc.setFont("helvetica", "bold");
+  doc.text("ISSUED TO (Buyer):", pageWidth / 2 + 10, currentY);
+  doc.setFont("helvetica", "normal");
+  doc.text(order.customerName, pageWidth / 2 + 10, currentY + 5);
+  // Address handle
+  const custAddress = typeof order.address === 'object' 
+      ? `${order.address.street}, ${order.address.city}, ${order.address.state} - ${order.address.pincode}`
+      : order.address;
+  doc.text(doc.splitTextToSize(custAddress, 80), pageWidth / 2 + 10, currentY + 10);
+
+  // 3. ITEM TABLE (Only Returned Items)
+  const tableRows: any[] = [];
+  let totalRefundValue = 0;
+
+  order.items.forEach((item: any, idx: number) => {
+      const qty = item.qty;
+      const rate = item.price;
+      const amount = qty * rate; // Refund amount for this item
+      
+      // Reverse Tax Calculation
+      const taxRate = item.gstRate || 3;
+      const taxableValue = amount / (1 + (taxRate / 100));
+      const taxAmount = amount - taxableValue;
+
+      totalRefundValue += amount;
+
+      tableRows.push([
+          idx + 1,
+          item.name,
+          item.hsn || "7117",
+          qty,
+          `Rs.${taxableValue.toFixed(2)}`, // Taxable Value (Reversed)
+          `${taxRate}%`,
+          `Rs.${taxAmount.toFixed(2)}`, // Tax Amount (Reversed)
+          `Rs.${amount.toFixed(2)}` // Total Refund
+      ]);
+  });
+
+  // Deduction Row (If Shipping Deducted)
+  const shippingDeduction = settings?.shippingCost || 100; // Assuming fixed deduction
+  const netRefund = totalRefundValue - shippingDeduction;
+
+  // Add Deduction Row to Table for clarity
+  tableRows.push([
+      '', 
+      'Less: Return Shipping & Handling', 
+      'SAC 9985', 
+      '-', 
+      '-', 
+      '18%', 
+      '-', 
+      `- Rs.${shippingDeduction.toFixed(2)}`
+  ]);
+
+  // @ts-ignore
+  autoTable(doc, {
+      startY: 95,
+      head: [["Sn", "Item Description", "HSN/SAC", "Qty", "Taxable Val", "Tax Rate", "Tax Amt", "Net Amount"]],
+      body: tableRows,
+      theme: 'grid',
+      headStyles: { fillColor: [200, 30, 30], textColor: 255 }, // Red Header
+      styles: { fontSize: 8, halign: 'center' },
+      columnStyles: { 1: { halign: 'left' } }
+  });
+
+  // 4. TOTALS
+  // @ts-ignore
+  let finalY = doc.lastAutoTable.finalY + 10;
+
+  doc.setFontSize(12);
+  doc.setFont("helvetica", "bold");
+  doc.text(`Net Refund Amount: Rs.${netRefund.toFixed(2)}`, pageWidth - 14, finalY, { align: "right" });
+
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "italic");
+  doc.text("Note: The refund amount has been adjusted for return shipping charges.", 14, finalY);
+  
+  doc.text("This is a computer-generated Credit Note for GST purposes.", 14, finalY + 10);
+
+  doc.save(`CreditNote_${order.id}.pdf`);
 };
 // --- ORDER MANAGER (Updates Trigger Notification) ---
 // --- ORDER MANAGER (Fixed Return Logic) ---
@@ -1478,13 +1597,58 @@ function OrderManager({ orders, updateOrderStatus, settings, deleteOrder }: any)
                                             </button>
                                         )}
 
+                                       {/* --- RETURN WORKFLOW --- */}
+
+{/* 1. Request Aayi Hai */}
+{/* --- RETURN WORKFLOW (FIXED) --- */}
                                         {viewingOrder.status === 'Return Requested' && (
-                                            <div className="bg-orange-500/10 border border-orange-500/30 p-4 rounded-xl">
-                                                <p className="text-orange-400 text-xs font-bold mb-3 flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> Return Request</p>
-                                                <div className="grid grid-cols-2 gap-2">
-                                                    <button onClick={() => handleReturnAction(viewingOrder.id, 'Approved')} className="py-2 bg-green-600 text-white rounded font-bold text-xs">Approve</button>
-                                                    <button onClick={() => handleReturnAction(viewingOrder.id, 'Rejected')} className="py-2 bg-red-600 text-white rounded font-bold text-xs">Reject</button>
+                                            <div className="bg-orange-500/10 border border-orange-500/30 p-4 rounded-xl mt-4">
+                                                <div className="flex items-start gap-3">
+                                                    <AlertTriangle className="w-5 h-5 text-orange-500" />
+                                                    <div>
+                                                        <h4 className="text-orange-400 text-sm font-bold">Return Requested</h4>
+                                                        {/* ✅ Reason Display Fix */}
+                                                        <p className="text-white/60 text-xs mt-1">Reason: <span className="text-white font-bold">{viewingOrder.returnReason || 'Not Provided'}</span></p>
+                                                    </div>
                                                 </div>
+                                                <div className="grid grid-cols-2 gap-3 mt-4">
+                                                    <button onClick={() => {
+                                                        updateOrderStatus(viewingOrder.id, 'Return Rejected');
+                                                        setViewingOrder({...viewingOrder, status: 'Return Rejected'}); // ✅ UI Refresh Fix
+                                                    }} className="py-2 bg-red-500/20 text-red-400 rounded-lg text-xs font-bold uppercase hover:bg-red-500 hover:text-white transition">
+                                                        Reject Request
+                                                    </button>
+                                                    <button onClick={() => {
+                                                        updateOrderStatus(viewingOrder.id, 'Return Approved');
+                                                        setViewingOrder({...viewingOrder, status: 'Return Approved'}); // ✅ UI Refresh Fix
+                                                    }} className="py-2 bg-green-500 text-[#0a1f1c] rounded-lg text-xs font-bold uppercase hover:bg-green-400 transition shadow-lg">
+                                                        Approve & Pickup
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* 2. Refund Process */}
+                                        {viewingOrder.status === 'Return Approved' && (
+                                            <div className="bg-blue-500/10 border border-blue-500/30 p-4 rounded-xl mt-4">
+                                                <h4 className="text-blue-400 text-sm font-bold flex items-center gap-2"><Truck className="w-4 h-4"/> Return Approved</h4>
+                                                <p className="text-white/50 text-xs mt-1 mb-3">Wait for item. Check quality then refund.</p>
+                                                <button onClick={() => {
+                                                     const refundAmt = viewingOrder.total - (settings.shippingCost || 100);
+                                                     if(confirm(`Process Refund of ₹${refundAmt}?`)) {
+                                                         updateOrderStatus(viewingOrder.id, 'Refunded');
+                                                         setViewingOrder({...viewingOrder, status: 'Refunded'}); // ✅ UI Refresh Fix
+                                                     }
+                                                }} className="w-full py-3 bg-white text-[#0a1f1c] rounded-lg text-xs font-bold uppercase hover:bg-gray-200 transition">Item Received & QC Pass</button>
+                                            </div>
+                                        )}
+
+                                        {/* 3. Download Credit Note */}
+                                        {viewingOrder.status === 'Refunded' && (
+                                            <div className="mt-4">
+                                                <button onClick={() => generateCreditNote(viewingOrder, settings)} className="w-full py-3 border border-dashed border-white/30 text-white/70 hover:text-white rounded-lg text-xs font-bold uppercase hover:bg-white/5 transition flex items-center justify-center gap-2">
+                                                    <FileText className="w-4 h-4"/> Download Credit Note
+                                                </button>
                                             </div>
                                         )}
                                     </div>
@@ -1586,28 +1750,31 @@ function ProductManager({ products, addProduct, updateProduct, deleteProduct }: 
         const allImages = [formData.image, ...(formData.galleryImages || [])].filter(Boolean) as string[];
         const pid = editingId ? editingId : Date.now().toString();
 
-        const finalProduct = {
-            id: pid,
-            name: formData.name,
-            price: Number(formData.price),
-            originalPrice: Number(formData.originalPrice) || 0,
-            category: formData.category || 'New',
-            description: formData.description || '',
-            image: formData.image || 'https://via.placeholder.com/800',
-            hoverImage: formData.hoverImage || formData.image,
-            images: allImages.length > 0 ? allImages : [formData.image || ''],
-            stock: Number(formData.stock),
-            // 👇 YE 2 LINES ADD KAREIN (ZAROORI HAI)
-            sku: formData.sku || `ZER-${Math.floor(Math.random() * 10000)}`, // Agar khali choda to auto-generate
-            hsn: formData.hsn || "7117", // Default Jewelry Code
-            colors: formData.colors?.map(c => c.trim()).filter(Boolean) || [],
-            sizes: formData.sizes?.map(s => s.trim()).filter(Boolean) || [],
-            tags: formData.tags || [],
-            // 👇 YE 3 LINES NAYI HAIN
-            material: formData.material || 'Premium Quality Material',
-            warranty: formData.warranty || 'Standard Brand Warranty',
-            care: formData.care || 'Avoid perfumes and water.'
-        } as Product;
+      const finalProduct = {
+    id: pid,
+    name: formData.name,
+    price: Number(formData.price),
+    originalPrice: Number(formData.originalPrice) || 0,
+    category: formData.category || 'New',
+    description: formData.description || '',
+    image: formData.image || 'https://via.placeholder.com/800',
+    hoverImage: formData.hoverImage || formData.image,
+    images: allImages.length > 0 ? allImages : [formData.image || ''],
+    stock: Number(formData.stock),
+    
+    // ✅ Updated Fields
+    sku: formData.sku || `ZER-${Math.floor(Math.random() * 10000)}`, 
+    hsn: formData.hsn || "7117", 
+    gstRate: Number(formData.gstRate) || 3, // ✅ Ye line add/check karein
+    
+    // ... baaki fields waise hi rahenge ...
+    colors: formData.colors?.map(c => c.trim()).filter(Boolean) || [],
+    sizes: formData.sizes?.map(s => s.trim()).filter(Boolean) || [],
+    tags: formData.tags || [],
+    material: formData.material || 'Premium Quality Material',
+    warranty: formData.warranty || 'Standard Brand Warranty',
+    care: formData.care || 'Avoid perfumes and water.'
+} as Product;
 
         try {
             if (editingId) await updateProduct(editingId, finalProduct);
@@ -1744,28 +1911,48 @@ function ProductManager({ products, addProduct, updateProduct, deleteProduct }: 
                                     </div>
                                     <div className="space-y-1"><label className="text-[10px] text-white/40 uppercase font-bold">Stock</label><input type="number" className="w-full p-4 bg-black/20 border border-white/10 rounded-xl text-white outline-none focus:border-amber-500/50" value={formData.stock || ''} onChange={e => setFormData({ ...formData, stock: Number(e.target.value) })} /></div>
                                 </div>
-                                <div className="grid grid-cols-2 gap-4 mt-4">
-                                    <div className="space-y-1">
-                                        <label className="text-[10px] text-white/40 uppercase font-bold">SKU (Stock ID)</label>
-                                        <input
-                                            type="text"
-                                            className="w-full p-4 bg-black/20 border border-white/10 rounded-xl text-white outline-none focus:border-amber-500/50 uppercase font-mono"
-                                            placeholder="RING-GOLD-001"
-                                            value={formData.sku || ''}
-                                            onChange={e => setFormData({ ...formData, sku: e.target.value })}
-                                        />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <label className="text-[10px] text-white/40 uppercase font-bold">HSN Code</label>
-                                        <input
-                                            type="text"
-                                            className="w-full p-4 bg-black/20 border border-white/10 rounded-xl text-white outline-none focus:border-amber-500/50 font-mono"
-                                            placeholder="7117 (Jewelry) / 3303 (Perfume)"
-                                            value={formData.hsn || ''}
-                                            onChange={e => setFormData({ ...formData, hsn: e.target.value })}
-                                        />
-                                    </div>
-                                </div>
+                              <div className="grid grid-cols-3 gap-4 mt-4">
+    {/* 1. SKU Field */}
+    <div className="space-y-1">
+        <label className="text-[10px] text-white/40 uppercase font-bold">SKU (Stock ID)</label>
+        <input
+            type="text"
+            className="w-full p-4 bg-black/20 border border-white/10 rounded-xl text-white outline-none focus:border-amber-500/50 uppercase font-mono"
+            placeholder="RING-GOLD-001"
+            value={formData.sku || ''}
+            onChange={e => setFormData({ ...formData, sku: e.target.value })}
+        />
+    </div>
+
+    {/* 2. HSN Code Field */}
+    <div className="space-y-1">
+        <label className="text-[10px] text-white/40 uppercase font-bold">HSN Code</label>
+        <input
+            type="text"
+            className="w-full p-4 bg-black/20 border border-white/10 rounded-xl text-white outline-none focus:border-amber-500/50 font-mono"
+            placeholder="7117"
+            value={formData.hsn || ''}
+            onChange={e => setFormData({ ...formData, hsn: e.target.value })}
+        />
+    </div>
+
+    {/* 3. ✅ NEW: GST Rate Dropdown */}
+    <div className="space-y-1">
+        <label className="text-[10px] text-white/40 uppercase font-bold">GST Rate (%)</label>
+        <select
+            className="w-full p-4 bg-[#0a1f1c] border border-white/10 rounded-xl text-white outline-none focus:border-amber-500/50 appearance-none cursor-pointer"
+            value={formData.gstRate || 3} // Default 3%
+            onChange={e => setFormData({ ...formData, gstRate: Number(e.target.value) })}
+        >
+            <option value="0">0% (Exempt)</option>
+            <option value="3">3% (Jewellery)</option>
+            <option value="5">5% (Apparel &lt; 1000)</option>
+            <option value="12">12% (Standard)</option>
+            <option value="18">18% (Perfume/Services)</option>
+            <option value="28">28% (Luxury)</option>
+        </select>
+    </div>
+</div>
                                 <div className="space-y-1"><label className="text-[10px] text-white/40 uppercase font-bold">Category</label><select className="w-full p-4 bg-[#0a1f1c] border border-white/10 rounded-xl text-white outline-none focus:border-amber-500/50 appearance-none" value={formData.category || ''} onChange={e => setFormData({ ...formData, category: e.target.value })}><option value="" className="text-stone-500">Select Category</option>{categoriesList.map(cat => (<option key={cat.name} value={cat.name} className={`${cat.color}`}>{cat.name}</option>))}</select></div>
                                 <div className="space-y-1"><label className="text-[10px] text-white/40 uppercase font-bold">Description</label><textarea className="w-full p-4 bg-black/20 border border-white/10 rounded-xl text-white h-24 resize-none outline-none focus:border-amber-500/50" value={formData.description || ''} onChange={e => setFormData({ ...formData, description: e.target.value })} /></div>
                                 {/* 👇 Naye Fields Yahan Start Honge */}
@@ -1901,6 +2088,7 @@ function ConfigManager({ showToast, updateSystemConfig }: any) {
         invoice: {
             companyName: 'ZERIMI JEWELS',
             address: '',
+            state: '',
             gstin: '',
             terms: 'Goods once sold cannot be returned after 7 days.',
             logoUrl: ''
@@ -2291,7 +2479,24 @@ function ConfigManager({ showToast, updateSystemConfig }: any) {
                                         className="w-full p-3 bg-black/40 border border-white/10 rounded-xl text-white text-sm outline-none focus:border-amber-500/50 h-20 resize-none"
                                     />
                                 </div>
-
+{/* ✅ NEW: Warehouse State Selector */}
+<div>
+    <label className="text-[10px] text-white/40 uppercase font-bold mb-1 block">Warehouse State (For GST)</label>
+    <div className="relative">
+        <select
+            value={config.invoice?.state || ''}
+            onChange={(e) => handleChange('invoice', 'state', e.target.value)}
+            className="w-full p-3 bg-black/40 border border-white/10 rounded-xl text-white text-sm outline-none focus:border-amber-500/50 appearance-none cursor-pointer"
+        >
+            <option value="" disabled>Select State</option>
+            {STATES.map(state => (
+                <option key={state} value={state} className="bg-stone-900">{state}</option>
+            ))}
+        </select>
+        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">▼</div>
+    </div>
+    <p className="text-[9px] text-white/30 mt-1">Required to calculate IGST vs SGST/CGST automatically.</p>
+</div>
                                 <div>
                                     <label className="text-[10px] text-white/40 uppercase font-bold mb-1 block">Terms & Conditions</label>
                                     <textarea

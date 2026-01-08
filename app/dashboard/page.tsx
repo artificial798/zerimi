@@ -753,31 +753,18 @@ const [isNotifOpen, setIsNotifOpen] = useState(false);
   const myOrders = orders.filter((o: Order) => o.customerEmail?.toLowerCase() === userEmail);
   const unreadCount = myNotifications.filter(n => !n.isRead).length;
 
-  const handleReturnRequest = (orderId: string) => {
-    const order = orders.find(o => o.id === orderId);
+  // ✅ FIX: (orderId) ki jagah (orderId, reason) likhein
+  const handleReturnRequest = (orderId: string, reason: string) => {
     
-    // 1. Check Logic
-    if (!order || !isOrderReturnable(order.date)) {
-        return toast.error("Return window (3 days) has expired.");
-    }
-
-    // 2. Confirmation & Action
-    // Note: Native confirm thik hai, ya aap custom modal bhi bana sakte hain future mein
-    if(confirm("Are you sure you want to return this item?")) {
-        // Update Status
-        updateOrderStatus(orderId, 'Return Requested');
-        
-        // Notify Admin
-        sendNotification('admin@zerimi.com', 'Return Request', `User ${currentUser.name} requested return for Order #${orderId}`);
-        
-        // ✅ Premium Success Message
-        toast.success("Return Request Submitted! Our team will review it shortly.");
-        
-        // Refresh UI
-        router.refresh();
-    }
+    // 1. Store se function nikalo
+    const { requestReturn } = useStore.getState(); 
+    
+    // 2. Ab 'reason' store function mein pass ho jayega
+    requestReturn(orderId, 'Return', reason);
+    
+    // 3. Refresh UI
+    router.refresh();
   };
-
   return (
     <div className="min-h-screen bg-[#0a1f1c] pt-28 pb-12 font-sans text-white flex flex-col md:flex-row relative">
       {/* 👇 YE LINE ADD KAREIN (Ye naya Drawer hai) */}
@@ -860,7 +847,16 @@ const [isNotifOpen, setIsNotifOpen] = useState(false);
             >
                {activeTab === 'overview' && <OverviewTab user={currentUser} orders={myOrders} setActiveTab={setActiveTab} />}
                {/* ✅ 2. YAHAN 'settings={systemSettings}' ADD KAREIN */}
-             {activeTab === 'orders' && <OrdersTab orders={myOrders} onReturn={handleReturnRequest} settings={systemSettings} sendNotification={sendNotification} currentUser={currentUser} />}
+            {activeTab === 'orders' && (
+    <OrdersTab 
+        orders={myOrders} 
+        // ✅ YE LINE SAHI HONI CHAHIYE
+        onReturn={(id: string, reason: string) => handleReturnRequest(id, reason)} 
+        settings={systemSettings} 
+        sendNotification={sendNotification} 
+        currentUser={currentUser} 
+    />
+)}
                
                {activeTab === 'returns' && <ReturnsTab orders={myOrders} />}
                {activeTab === 'vault' && <VaultTab vaultItems={vaultItems} user={currentUser} />}
@@ -959,24 +955,26 @@ function OverviewTab({ user, orders, setActiveTab }: any) {
   );
 }
 
+// ✅ UPDATED ORDERS TAB (With Return Modal & Reason Selector)
 function OrdersTab({ orders, onReturn, settings, sendNotification, currentUser }: any) {
     const router = useRouter();
     const [loadingId, setLoadingId] = useState<string | null>(null);
 
+    // --- NEW: RETURN MODAL STATE ---
+    const [returnModal, setReturnModal] = useState<{ isOpen: boolean; orderId: string | null }>({ isOpen: false, orderId: null });
+    const [returnReason, setReturnReason] = useState('');
+    const [customReason, setCustomReason] = useState('');
+
     // --- 1. SORTING & GROUPING LOGIC ---
-    // Pehle orders ko Date ke hisab se sort karein (Newest First)
     const sortedOrders = [...orders].sort((a: any, b: any) => 
         new Date(b.date).getTime() - new Date(a.date).getTime()
     );
 
-    // Active Statuses define karein
     const activeStatuses = ['Placed', 'Processing', 'Confirmed', 'Shipped', 'Out for Delivery'];
-
-    // Do groups mein baatein
     const activeOrders = sortedOrders.filter(o => activeStatuses.includes(o.status));
     const pastOrders = sortedOrders.filter(o => !activeStatuses.includes(o.status));
 
-    // --- CANCEL HANDLER (Same Logic) ---
+    // --- CANCEL HANDLER (Unchanged) ---
     const handleCancelOrder = async (orderId: string) => {
         if (!confirm("Are you sure you want to cancel this order?")) return;
         setLoadingId(orderId);
@@ -987,15 +985,31 @@ function OrdersTab({ orders, onReturn, settings, sendNotification, currentUser }
             const orderData = orderSnap.data();
             if ((orderData as any).shiprocketOrderId || (orderData as any).awb || (orderData as any).shipmentId) { toast.error("Cannot cancel: Shipment/AWB already generated."); setLoadingId(null); return; }
             await updateDoc(orderRef, { status: 'Cancelled', cancelledAt: new Date().toISOString(), cancellationReason: 'User requested cancellation' });
-            if (sendNotification) {
-                /* Notification Logic (Hidden for brevity, same as before) */
-            }
             toast.success("Order cancelled successfully");
             router.refresh();
         } catch (error) { console.error(error); toast.error("Failed to cancel order"); } finally { setLoadingId(null); }
     };
 
-    // --- HELPER: CARD RENDERER (Dry Code) ---
+    // --- NEW: RETURN SUBMIT HANDLER ---
+    const submitReturn = () => {
+        if (!returnReason) return toast.error("Please select a reason.");
+        
+        // Agar 'Other' select kiya hai to text box check karo
+        const finalReason = returnReason === 'Other' ? customReason : returnReason;
+        if (!finalReason) return toast.error("Please specify the reason.");
+
+        // Store function call karo (Reason ke saath)
+        if (returnModal.orderId) {
+            onReturn(returnModal.orderId, finalReason);
+        }
+        
+        // Reset & Close
+        setReturnModal({ isOpen: false, orderId: null });
+        setReturnReason('');
+        setCustomReason('');
+    };
+
+    // --- HELPER: CARD RENDERER ---
     const OrderCard = ({ order }: { order: Order }) => {
         const isCancellable = activeStatuses.includes(order.status) && !(order as any).shiprocketOrderId && !(order as any).awb;
         const formattedDate = new Date(order.date).toLocaleDateString('en-GB');
@@ -1074,11 +1088,18 @@ function OrdersTab({ orders, onReturn, settings, sendNotification, currentUser }
                             {loadingId === order.id ? 'Processing...' : 'Cancel Order'}
                         </button>
                     )}
+                    
+                    {/* ✅ UPDATED RETURN BUTTON (Triggers Modal) */}
                     {order.status === 'Delivered' && (
-                        <button onClick={() => onReturn(order.id)} disabled={!isOrderReturnable(order.date)} className={`w-full md:w-auto py-3 md:py-2 px-6 rounded text-[10px] uppercase font-bold tracking-wide transition flex items-center justify-center gap-2 border ${isOrderReturnable(order.date) ? 'border-white/20 hover:border-white/50 text-white hover:bg-white/5' : 'border-transparent text-white/20 cursor-not-allowed'}`}>
+                        <button 
+                            onClick={() => setReturnModal({ isOpen: true, orderId: order.id })} // Opens Modal
+                            disabled={!isOrderReturnable(order.date)} 
+                            className={`w-full md:w-auto py-3 md:py-2 px-6 rounded text-[10px] uppercase font-bold tracking-wide transition flex items-center justify-center gap-2 border ${isOrderReturnable(order.date) ? 'border-white/20 hover:border-white/50 text-white hover:bg-white/5' : 'border-transparent text-white/20 cursor-not-allowed'}`}
+                        >
                             <RotateCcw className="w-3 h-3" /> Return Item
                         </button>
                     )}
+                    
                     <button onClick={() => router.push(`/track-order?orderId=${order.id}`)} className="w-full md:w-auto bg-white text-[#0a1f1c] px-8 py-3 md:py-2.5 rounded text-[10px] uppercase font-bold tracking-widest hover:bg-stone-200 transition-all flex items-center justify-center gap-2 shadow-lg">
                         Track Shipment <ChevronRight className="w-3 h-3" />
                     </button>
@@ -1090,7 +1111,7 @@ function OrdersTab({ orders, onReturn, settings, sendNotification, currentUser }
     // --- MAIN RENDER ---
     return (
         <div className="space-y-8 animate-fade-in pb-20">
-            {/* MAIN HEADER (APPEARS ONLY ONCE) */}
+            {/* MAIN HEADER */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-white/5 pb-6">
                 <div>
                     <h2 className="font-serif text-3xl text-white tracking-wide">Purchase History</h2>
@@ -1145,6 +1166,60 @@ function OrdersTab({ orders, onReturn, settings, sendNotification, currentUser }
                             </div>
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* ✅ RETURN REASON MODAL (New Addition) */}
+            {returnModal.isOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+                    <div className="bg-[#0f2925] w-full max-w-md rounded-2xl border border-white/10 shadow-2xl p-6">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-white font-serif text-xl">Request Return</h3>
+                            <button onClick={() => setReturnModal({ isOpen: false, orderId: null })} className="text-white/40 hover:text-white">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        
+                        <p className="text-white/50 text-sm mb-4">Please select a reason for returning this item. This helps us improve.</p>
+                        
+                        <div className="space-y-3 mb-6">
+                            {['Size Issue', 'Damaged Product', 'Received Wrong Item', 'Quality Not as Expected', 'Other'].map(reason => (
+                                <label key={reason} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition ${returnReason === reason ? 'bg-amber-500/20 border-amber-500' : 'bg-black/20 border-white/5 hover:bg-white/5'}`}>
+                                    <input 
+                                        type="radio" 
+                                        name="reason" 
+                                        className="accent-amber-500 w-4 h-4" 
+                                        checked={returnReason === reason} 
+                                        onChange={() => setReturnReason(reason)} 
+                                    />
+                                    <span className="text-sm text-white">{reason}</span>
+                                </label>
+                            ))}
+                            
+                            {returnReason === 'Other' && (
+                                <textarea 
+                                    placeholder="Please describe the issue..." 
+                                    className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white text-sm focus:border-amber-500/50 outline-none h-24 resize-none placeholder:text-white/20" 
+                                    onChange={(e) => setCustomReason(e.target.value)} 
+                                />
+                            )}
+                        </div>
+
+                        <div className="flex gap-3">
+                            <button 
+                                onClick={() => setReturnModal({ isOpen: false, orderId: null })} 
+                                className="flex-1 py-3 bg-white/5 text-white/60 rounded-lg text-xs font-bold uppercase hover:bg-white/10 border border-white/5"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={submitReturn} 
+                                className="flex-1 py-3 bg-amber-600 text-white rounded-lg text-xs font-bold uppercase hover:bg-amber-700 shadow-lg shadow-amber-900/20"
+                            >
+                                Submit Request
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

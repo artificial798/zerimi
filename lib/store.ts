@@ -30,6 +30,7 @@ export type Product = {
     // 👇 YE 3 NAYI LINES ZAROORI HAIN DATA SAVE KARNE KE LIYE
     sku?: string;
   hsn?: string;
+  gstRate?: number;
     material?: string;
     warranty?: string;
     care?: string;
@@ -129,6 +130,7 @@ giftModeCost?: number;
     invoice?: {
         companyName: string;
         address: string;
+        state: string;
         gstin: string;
         terms: string;
         logoUrl: string;
@@ -217,6 +219,10 @@ type Store = {
     // Cart Actions
    addToCart: (product: Product, qty?: number, size?: string, color?: string) => void;
     removeFromCart: (id: string) => void;
+    // ✅ NEW: Checkout Page ke liye Silent Update Function
+    updateQuantity: (productId: string, change: number) => void;
+    // Store type definition ke andar (approx line 150-180 ke beech)
+    requestReturn: (orderId: string, type: 'Return' | 'Exchange', reason: string) => Promise<void>;
     toggleCart: (status: boolean) => void;
     toggleWishlist: (product: Product) => void;
     clearCart: () => void;
@@ -435,6 +441,34 @@ addToCart: (product, qty = 1, size, color) => {
         return { cart, isCartOpen: true };
     });
 },
+// ✅ NEW: SILENT QUANTITY UPDATE (Checkout Page ke liye)
+            updateQuantity: (productId, change) => set((state) => {
+                const cart = [...state.cart];
+                const index = cart.findIndex((item) => item.product.id === productId);
+
+                if (index > -1) {
+                    const item = cart[index];
+                    const newQty = item.qty + change;
+
+                    // 1. Stock Check (Agar quantity badha rahe hain)
+                    if (change > 0 && item.product.stock !== undefined && newQty > item.product.stock) {
+                        alert(`Cannot add more. Only ${item.product.stock} left in stock.`);
+                        return { cart };
+                    }
+
+                    // 2. Quantity Update
+                    if (newQty > 0) {
+                        cart[index].qty = newQty;
+                    } else {
+                        // Agar 0 ho jaye, toh item remove kar do (Optional)
+                        return { cart: cart.filter(i => i.product.id !== productId) };
+                    }
+                }
+                
+                // ❌ IMPORTANT: Humne yahan 'isCartOpen: true' NAHI likha hai
+                // Isliye drawer nahi khulega, bas value update hogi.
+                return { cart };
+            }),
             removeFromCart: (id) => set((state) => ({
                 cart: state.cart.filter((item) => item.product.id !== id)
             })),
@@ -505,7 +539,7 @@ addToCart: (product, qty = 1, size, color) => {
             // ✅ UPDATED: Ab ye Checkout Page se aayi hui exact values save karega
           // ✅ FIXED: placeOrder Logic (Saves Size & Color correctly)
 // ✅ FIXED PLACE ORDER LOGIC (Auto-Calculate Discount)
-            placeOrder: async (details) => {
+          placeOrder: async (details) => {
                 const state = get();
 
                 if (!state.currentUser && !details.email) {
@@ -513,7 +547,7 @@ addToCart: (product, qty = 1, size, color) => {
                     throw new Error("EMAIL_REQUIRED");
                 }
 
-                // --- 1. ID GENERATION ---
+                // 1. ID GENERATION
                 const now = new Date();
                 const year = now.getFullYear();
                 const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -523,14 +557,11 @@ addToCart: (product, qty = 1, size, color) => {
                 const orderId = `ZER-${year}${month}${day}-${uniqueSuffix}`;
                 const invoiceNo = `INV/${year}/${uniqueSuffix}`;
 
-                // --- 2. CALCULATE TOTAL DISCOUNT (Coupon + Points) ---
-                // Hum UI se aayi value par bharosa nahi karenge, Store State use karenge
-               // --- 2. CALCULATE DISCOUNTS ---
+                // 2. DISCOUNTS
                 const cDiscount = state.couponDiscount || 0;
                 const pDiscount = state.pointsDiscount || 0;
                 const totalDiscount = cDiscount + pDiscount;
 
-                // ✅ Data Preparation
                 const { name, email, address, total, subtotal, tax, shipping, items, paymentMethod, isGift, giftMessage, giftWrapPrice } = details;
 
                 const newOrder: Order = {
@@ -543,68 +574,95 @@ addToCart: (product, qty = 1, size, color) => {
                     subtotal: subtotal || 0,
                     tax: tax || 0,
                     shipping: shipping || 0,
+                    
+                    discount: totalDiscount,      
+                    couponDiscount: cDiscount,    
+                    pointsDiscount: pDiscount,    
 
-                    // ✅ FIX: Ab hum Total bhi bhejenge aur Breakdown bhi
-                    discount: totalDiscount,      // Total Discount (Compatibility ke liye)
-                    couponDiscount: cDiscount,    // Alag se save kiya
-                    pointsDiscount: pDiscount,    // Alag se save kiya
-
+                    // ✅ SECRET GIFT MODE DATA
                     isGift: isGift || false,
                     giftMessage: giftMessage || '',
-                    giftWrapPrice: giftWrapPrice || 0,
+                    giftWrapPrice: giftWrapPrice || 0, // Ye Store Settings se aayega Checkout page ke through
+
                     status: 'Pending',
                     date: new Date().toISOString(),
+                    
+                    // 🔥 HERE IS THE MAGIC FIX (Data Snapshot)
                     items: items || state.cart.map(item => ({
                         name: item.product.name,
                         qty: item.qty,
                         price: item.product.price,
                         image: item.product.image,
                         selectedSize: item.selectedSize || 'N/A',
-                        selectedColor: item.selectedColor || null
+                        selectedColor: item.selectedColor || null,
+                        
+                        // ✅ AB HUM HSN AUR GST RATE BHI SAVE KAR RAHE HAIN
+                        hsn: item.product.hsn || "7117", 
+                        gstRate: item.product.gstRate || state.systemSettings.taxRate || 3
                     })),
+                    
                     paymentMethod: paymentMethod || 'COD',
                 };
-                // 3. Database Save
+
+                // 3. SAVE TO DB
                 await setDoc(doc(db, "orders", orderId), newOrder);
 
-                // --- 4. LOYALTY LOGIC (Points Earn/Burn) ---
-              // 5. LOYALTY POINTS LOGIC (Smart Tier Protection)
-               // 5. LOYALTY LOGIC (Sirf Kharch karne ka logic)
-                // Note: Points earn tab honge jab order deliver hoga (updateOrderStatus mein).
+                // 4. LOYALTY POINTS DEDUCTION
                 if (state.currentUser && state.pointsRedeemed > 0) {
                     const currentPoints = state.currentUser.points || 0;
                     const usedPoints = state.pointsRedeemed || 0;
-
-                    // Sirf balance kam karein
                     const newWalletBalance = Math.max(0, currentPoints - usedPoints);
 
-                    // Database Update
-                    await updateDoc(doc(db, "users", state.currentUser.id), { 
-                        points: newWalletBalance 
-                    });
-
-                    // Local State Update
+                    await updateDoc(doc(db, "users", state.currentUser.id), { points: newWalletBalance });
+                    
                     set((prev) => ({
                         currentUser: prev.currentUser ? { ...prev.currentUser, points: newWalletBalance } : null
                     }));
                 }
 
-                // Notification
+                // 5. NOTIFICATION
                 await addDoc(collection(db, "notifications"), {
                     userId: email, title: 'Order Placed', message: `Order #${orderId} confirmed.`,
                     date: new Date().toLocaleDateString('en-IN'), createdAt: new Date().toISOString(), isRead: false
                 });
 
-                // ✅ RESET ALL STATES (Points bhi reset hone chahiye)
+                // 6. RESET STATE
                 set({ 
                     cart: [], 
                     appliedCoupon: null, 
                     couponDiscount: 0,
-                    pointsRedeemed: 0,  // 👈 Fix: Points reset
-                    pointsDiscount: 0   // 👈 Fix: Points discount reset
+                    pointsRedeemed: 0,
+                    pointsDiscount: 0
                 });
                 
                 return orderId;
+            },
+            // ✅ NEW: RETURN REQUEST LOGIC (Reason Save Karega)
+            requestReturn: async (orderId, type, reason) => {
+                const state = get();
+                
+                try {
+                    // 1. Database Update
+                    await updateDoc(doc(db, "orders", orderId), { 
+                        status: type === 'Return' ? 'Return Requested' : 'Exchange Requested',
+                        returnReason: reason, // ✅ Ye field zaroori hai
+                        returnDate: new Date().toISOString()
+                    });
+                    
+                    // 2. Local State Update (Taaki UI turant badle)
+                    set(prev => ({
+                        orders: prev.orders.map(o => o.id === orderId ? { 
+                            ...o, 
+                            status: type === 'Return' ? 'Return Requested' : 'Exchange Requested',
+                            returnReason: reason 
+                        } : o)
+                    }));
+                    
+                    alert(`${type} request submitted successfully!`);
+                } catch (e) {
+                    console.error("Return Error:", e);
+                    alert("Failed to submit request.");
+                }
             },
 // ✅ CHECK & UNLOCK POINTS (Runs on App Load)
             checkAndUnlockPoints: async (userId: string) => {
