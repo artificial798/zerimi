@@ -13,7 +13,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import ProductCard from '@/components/ProductCard';
-
+import Link from 'next/link';
 export default function ProductPage() {
   const { id } = useParams();
   const { products, addToCart, toggleWishlist, currentUser } = useStore() as any;
@@ -142,20 +142,72 @@ export default function ProductPage() {
     return "bg-white text-stone-800 border-stone-200";
   };
 
-  if (loading) return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[#0a1f1c]">
-          <div className="w-12 h-12 border-4 border-white/10 border-t-amber-500 rounded-full animate-spin mb-4"></div>
-          <p className="text-amber-500 font-serif tracking-widest text-xs animate-pulse">LOADING LUXURY...</p>
-      </div>
-  );
+// ---------------------------------------------------------
+  // ✨ SKELETON LOADING (Fake Product Effect)
+  // ---------------------------------------------------------
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#f8f5f2] pt-28 pb-20">
+        <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20">
+          
+          {/* Fake Image Block (Pulsing) */}
+          <div className="space-y-4">
+            <div className="aspect-[4/5] bg-stone-200 rounded-3xl animate-pulse border border-stone-100 relative overflow-hidden">
+               {/* Shimmer Effect */}
+               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full animate-[shimmer_1.5s_infinite]"></div>
+            </div>
+            <div className="flex gap-4">
+               {[1, 2, 3].map(i => (
+                 <div key={i} className="w-20 h-20 bg-stone-200 rounded-xl animate-pulse"></div>
+               ))}
+            </div>
+          </div>
 
-  if (!product) return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-stone-50 text-stone-800">
-          <h2 className="text-2xl font-serif mb-2">Product Not Found</h2>
-          <a href="/" className="px-6 py-2 bg-[#0a1f1c] text-white rounded uppercase text-xs font-bold">Back to Home</a>
-      </div>
-  );
+          {/* Fake Text Details (Pulsing) */}
+          <div className="space-y-8 py-8">
+            <div className="space-y-4">
+              <div className="h-4 w-24 bg-stone-200 rounded animate-pulse"></div> {/* Category */}
+              <div className="h-10 w-3/4 bg-stone-300 rounded-lg animate-pulse"></div> {/* Title */}
+              <div className="h-8 w-1/3 bg-amber-100 rounded-lg animate-pulse"></div> {/* Price */}
+            </div>
 
+            <div className="h-32 w-full bg-stone-100 rounded-2xl animate-pulse"></div> {/* Desc */}
+
+            <div className="grid grid-cols-2 gap-4">
+               <div className="h-14 bg-stone-200 rounded-xl animate-pulse"></div>
+               <div className="h-14 bg-stone-800 rounded-xl animate-pulse"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ---------------------------------------------------------
+  // 🚫 PRODUCT NOT FOUND (Sirf tab aayega jab loading 100% khatam ho)
+  // ---------------------------------------------------------
+ // 🚫 PRODUCT NOT FOUND (Fixed: Using Link instead of Router)
+  // ---------------------------------------------------------
+  if (!product) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#f8f5f2] text-center p-6">
+        <div className="w-24 h-24 bg-stone-200 rounded-full flex items-center justify-center mb-6 animate-bounce">
+          <span className="text-4xl">💎</span>
+        </div>
+        <h2 className="text-3xl font-serif text-[#0a1f1c] mb-2">Item Discontinued</h2>
+        <p className="text-stone-500 max-w-md mx-auto mb-8">
+          This luxury piece is no longer in our showcase. It might have been sold out or moved to the archives.
+        </p>
+        {/* ✅ FIX: Button ki jagah Link use kiya hai */}
+        <Link 
+          href="/" 
+          className="px-8 py-3 bg-[#0a1f1c] text-white rounded-lg uppercase tracking-widest text-xs font-bold hover:bg-amber-600 transition shadow-xl inline-block"
+        >
+          View Latest Collection
+        </Link>
+      </div>
+    );
+  }
   const galleryImages = (product.images && product.images.length > 0) ? product.images : [product.image];
   // ✅ NAYA LOGIC: Pehle Category check karega, agar nahi mila to koi bhi 4 products dikhayega
 const similarProducts = (() => {
