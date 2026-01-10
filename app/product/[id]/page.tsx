@@ -51,14 +51,26 @@ export default function ProductPage() {
   })();
 
   // --- LOADING & RECENTLY VIEWED LOGIC ---
+// --- LOADING & RECENTLY VIEWED LOGIC (FIXED) ---
   useEffect(() => {
-    if (products && products.length > 0) {
+    // 1. Agar product mil gaya hai, toh turant Loading hata do (Smooth Transition)
+    if (product) {
       setLoading(false);
-    } else {
-      const timer = setTimeout(() => setLoading(false), 2000);
-      return () => clearTimeout(timer);
+      return;
     }
-  }, [products]);
+
+    // 2. Agar Products ki list database se aa chuki hai (length > 0), 
+    //    lekin humara product (id ke hisab se) usme nahi hai -> Matlab Product exist nahi karta.
+    if (products && products.length > 0 && !product) {
+       setLoading(false); 
+       return;
+    }
+
+    // 3. Safety Fallback: Agar 3 second tak bhi kuch nahi hua (Slow Net/Empty DB), 
+    //    tab jaake Loading hatao taaki user atak na jaye.
+    const timer = setTimeout(() => setLoading(false), 3000);
+    return () => clearTimeout(timer);
+  }, [products, product]);
 
   useEffect(() => {
       if (product) {

@@ -62,14 +62,15 @@ export default function CartDrawer() {
     const progressPercent = Math.min(100, (subtotal / shippingThreshold) * 100);
 
     // Qty Handler
+   // Qty Handler (Updated Logic)
     const handleQty = (item: any, change: number) => {
         if (item.qty === 1 && change === -1) {
             if (confirm("Remove this item from your collection?")) {
-                removeFromCart(item.product.id);
+                removeFromCart(item.product.id, item.selectedSize, item.selectedColor); // Ensure removeFromCart handles variations
             }
         } else {
-            // Pass selectedSize too
-            addToCart(item.product, change, item.selectedSize);
+            // ✅ Fix: Pass specific attributes to update exact item
+            addToCart(item.product, change, item.selectedSize, item.selectedColor);
         }
     };
 
@@ -181,7 +182,7 @@ export default function CartDrawer() {
                                     <div>
                                         <div className="flex justify-between items-start">
                                             <h4 className="font-serif text-sm text-[#0a1f1c] leading-tight pr-4">{item.product.name}</h4>
-                                            <button onClick={() => removeFromCart(item.product.id)} className="text-stone-300 hover:text-red-500 transition p-1">
+                                            <button onClick={() => removeFromCart(item.product.id, item.selectedSize, item.selectedColor)} className="text-stone-300 hover:text-red-500 transition p-1">
                                                 <Trash2 className="w-4 h-4" />
                                             </button>
                                         </div>
@@ -236,16 +237,7 @@ export default function CartDrawer() {
     </div>
 </div>
 
-                            {/* Order Note */}
-                            <div className="relative">
-                                <FileText className="absolute top-3 left-3 w-4 h-4 text-stone-400" />
-                                <textarea
-                                    value={orderNote}
-                                    onChange={(e) => setOrderNote(e.target.value)}
-                                    placeholder="Add a note to your order (optional)..."
-                                    className="w-full pl-10 pr-4 py-3 bg-white border border-stone-200 rounded-xl text-xs focus:outline-none focus:border-amber-500 resize-none h-20"
-                                />
-                            </div>
+                
                         </div>
                     )}
                 </div>

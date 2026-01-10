@@ -73,17 +73,37 @@ const handleAddToCart = (e: any) => {
   const displayImage = (product.images && product.images.length > 0) ? product.images[currentImageIndex] : product.image;
   const colors = product.colors || [];
 
+  // ✨ NEW PREMIUM TAG STYLES
+ // ✨ ULTRA-PREMIUM LUXURY TAGS
   const getTagStyle = (tag: string) => {
-    if (!tag) return "bg-white/90 text-stone-800 border-stone-200";
+    if (!tag) return "bg-white/90 text-stone-900 border-stone-200";
     const t = tag.toLowerCase();
-    if (t.includes('gold')) return "bg-gradient-to-r from-yellow-100 to-yellow-200 text-yellow-800 border-yellow-300";
-    if (t.includes('platinum')) return "bg-gradient-to-r from-slate-100 to-slate-200 text-slate-800 border-slate-300";
-    if (t.includes('new')) return "bg-[#064e3b] text-white border-[#064e3b]";
-    if (t.includes('sale') || t.includes('off')) return "bg-rose-600 text-white border-rose-600"; 
-    if (t.includes('best') || t.includes('trend')) return "bg-[#fffbeb] text-[#92400e] border-[#fcd34d]";
-    if (t.includes('premium')) return "bg-[#312e81] text-white border-[#312e81]";
-    if (t.includes('sold')) return "bg-stone-800 text-white border-stone-800";
-    return "bg-white/90 backdrop-blur-md text-stone-800 border border-stone-200";
+
+    // 1. GOLD / PLATINUM (The "Metallic" Look)
+    if (t.includes('gold') || t.includes('premium') || t.includes('luxury')) 
+      return "bg-gradient-to-r from-[#FDFBF7] to-[#F3EAC2] text-[#856c26] border border-[#d4af37]/40 shadow-[0_2px_10px_rgba(212,175,55,0.15)]";
+    
+    if (t.includes('platinum') || t.includes('silver') || t.includes('diamond')) 
+      return "bg-gradient-to-r from-slate-50 to-slate-100 text-slate-800 border border-slate-300 shadow-sm";
+    
+    // 2. NEW ARRIVAL (Signature Dark Green + Gold Text)
+    if (t.includes('new')) 
+      return "bg-[#052e16] text-[#fbbf24] border border-[#fbbf24]/20 shadow-md";
+    
+    // 3. SALE / OFF (Elegant Burgundy - Not screaming Red)
+    if (t.includes('sale') || t.includes('off') || t.includes('deal')) 
+      return "bg-[#4c0519] text-white border border-[#881337] shadow-[0_2px_8px_rgba(76,5,25,0.3)]"; 
+    
+    // 4. BEST SELLER (Subtle Champagne)
+    if (t.includes('best') || t.includes('trend')) 
+      return "bg-[#fff7ed] text-[#7c2d12] border border-[#fed7aa]";
+    
+    // 5. SOLD OUT (Minimalist Black)
+    if (t.includes('sold')) 
+      return "bg-black text-white border border-stone-800 opacity-80";
+
+    // Default: Clean White Glassmorphism
+    return "bg-white/95 backdrop-blur-md text-stone-900 border border-stone-100";
   };
 
   return (
@@ -106,11 +126,18 @@ const handleAddToCart = (e: any) => {
         </Link>
 
         {/* Badges */}
-        <div className="absolute top-2.5 left-2.5 flex flex-col gap-1.5 z-10 items-start">
+       {/* Premium Badges */}
+        {/* Luxury Badges - Top Left */}
+        <div className="absolute top-0 left-0 p-3 flex flex-col gap-2 z-10 items-start">
             {product.tags?.slice(0, 2).map((tag: string, idx: number) => (
                 <span 
                   key={idx} 
-                  className={`text-[10px] font-bold px-2 py-0.5 uppercase tracking-widest rounded-sm border shadow-sm whitespace-nowrap ${getTagStyle(tag)}`}
+                  className={`
+                    text-[8px] font-extrabold uppercase tracking-[0.2em] px-3 py-1.5 
+                    rounded-[2px] backdrop-blur-sm transition-all duration-500
+                    group-hover:translate-x-1 shadow-sm
+                    ${getTagStyle(tag)}
+                  `}
                 >
                   {tag}
                 </span>

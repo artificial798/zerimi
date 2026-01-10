@@ -279,17 +279,18 @@ const subtotal = cartInclusiveTotal;
     }, [cart, router, step]);
 
   const handleQuantityChange = (item: any, change: number) => {
-        // Agar quantity 1 hai aur user kam kar raha hai, toh remove confirm karo
+        // 1. Agar quantity 1 hai aur user kam kar raha hai, toh delete confirm karo
         if (item.qty === 1 && change === -1) {
             if (confirm("Remove this item from cart?")) {
-                removeFromCart(item.product.id);
+                // Remove function ko bhi size/color pass karna zaroori hai
+                removeFromCart(item.product.id, item.selectedSize, item.selectedColor);
             }
             return;
         }
         
-        // ❌ OLD: addToCart(item.product, change); -> Ye Drawer khol deta tha
-        // ✅ NEW: Silent Update -> Sirf number badlega
-        updateQuantity(item.product.id, change);
+        // 2. ✅ FIX: Use 'updateQuantity' instead of 'addToCart'
+        // Ye function drawer open nahi karega, bas number update karega
+        updateQuantity(item.product.id, change, item.selectedSize, item.selectedColor);
     };
 
     // --- COUPON HANDLERS ---
@@ -1072,8 +1073,8 @@ const baseOrderDetails = {
                                     </div>
 
                                     {/* ✅ RESTORED DELETE BUTTON */}
-                                    <button 
-                                        onClick={() => removeFromCart(item.product.id)}
+                                   <button 
+                                        onClick={() => removeFromCart(item.product.id, item.selectedSize, item.selectedColor)}
                                         className="absolute top-2 right-2 text-stone-300 hover:text-red-500 transition p-1 hover:bg-red-50 rounded-full"
                                         title="Remove Item"
                                     >

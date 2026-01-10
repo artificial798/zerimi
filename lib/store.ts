@@ -399,79 +399,55 @@ export const useStore = create<Store>()(
            // ✅ FIXED: addToCart Logic (Checks ID + Size + Color)
         // ✅ FIXED: addToCart Logic (Handles Unique ID for Color/Size & Stock Check)
           // ✅ CORRECTED addToCart (Fixes 'reading price' error)
-addToCart: (product, qty = 1, size, color) => {
-    // 1. Stock Validation
-    if (product.stock !== undefined && product.stock < qty) {
-        alert(`Sorry, "${product.name}" is currently Out of Stock!`);
-        return;
-    }
+addToCart: (product: any, qty: number = 1, size: string = '', color: string = '') => {
+    set((state: any) => {
+      // Check agar same ID + Size + Color wala item pehle se hai
+      const existingItem = state.cart.find((item: any) => 
+        item.product.id === product.id && 
+        item.selectedSize === size && 
+        item.selectedColor === color
+      );
 
-    set((state) => {
-        const cart = [...state.cart];
-
-        // 2. Check if EXACT item (same ID + Size + Color) exists
-        const existingItemIndex = cart.findIndex(
-            (item) => 
-                item.product.id === product.id && 
-                item.selectedSize === size && 
-                item.selectedColor === color
-        );
-
-        if (existingItemIndex > -1) {
-            // Agar pehle se hai, to bas Quantity badhao
-            const newQty = cart[existingItemIndex].qty + qty;
-            
-            // Stock Check
-            if (product.stock !== undefined && newQty > product.stock) {
-                alert(`Cannot add more. Only ${product.stock} left in stock.`);
-                return state;
-            }
-            
-            cart[existingItemIndex].qty = newQty;
-        } else {
-            // 3. Naya Item Add karo (Sahi Structure ke sath)
-            cart.push({
-                product: product, // ✅ IMPORTANT: Isko aise hi rehne dein (Nested)
-                qty: qty,
-                selectedSize: size,
-                selectedColor: color
-            });
-        }
-
-        return { cart, isCartOpen: true };
+      if (existingItem) {
+        // ✅ Match Mila: Sirf Quantity badhao
+        return {
+          cart: state.cart.map((item: any) => 
+            (item.product.id === product.id && item.selectedSize === size && item.selectedColor === color)
+              ? { ...item, qty: item.qty + qty }
+              : item
+          ),
+          isCartOpen: true
+        };
+      } else {
+        // ✅ Naya Variation: Nayi row add karo
+        return {
+          cart: [...state.cart, { product, qty, selectedSize: size, selectedColor: color }],
+          isCartOpen: true
+        };
+      }
     });
-},
+  },
 // ✅ NEW: SILENT QUANTITY UPDATE (Checkout Page ke liye)
-            updateQuantity: (productId, change) => set((state) => {
-                const cart = [...state.cart];
-                const index = cart.findIndex((item) => item.product.id === productId);
-
-                if (index > -1) {
-                    const item = cart[index];
-                    const newQty = item.qty + change;
-
-                    // 1. Stock Check (Agar quantity badha rahe hain)
-                    if (change > 0 && item.product.stock !== undefined && newQty > item.product.stock) {
-                        alert(`Cannot add more. Only ${item.product.stock} left in stock.`);
-                        return { cart };
-                    }
-
-                    // 2. Quantity Update
-                    if (newQty > 0) {
-                        cart[index].qty = newQty;
-                    } else {
-                        // Agar 0 ho jaye, toh item remove kar do (Optional)
-                        return { cart: cart.filter(i => i.product.id !== productId) };
-                    }
-                }
-                
-                // ❌ IMPORTANT: Humne yahan 'isCartOpen: true' NAHI likha hai
-                // Isliye drawer nahi khulega, bas value update hogi.
-                return { cart };
-            }),
-            removeFromCart: (id) => set((state) => ({
-                cart: state.cart.filter((item) => item.product.id !== id)
-            })),
+          // ✅ SILENT QUANTITY UPDATE (Drawer nahi kholega)
+  updateQuantity: (productId: string, delta: number, size: string = '', color: string = '') => {
+    set((state: any) => ({
+      cart: state.cart.map((item: any) => 
+        // Sirf wahi item update karo jo ID, Size aur Color match kare
+        (item.product.id === productId && item.selectedSize === size && item.selectedColor === color)
+          ? { ...item, qty: Math.max(1, item.qty + delta) } // Quantity +1/-1
+          : item
+      ),
+      // ❌ Note: Humne yahan isCartOpen: true NAHI lagaya hai
+    }));
+  },
+           removeFromCart: (productId: string, size: string = '', color: string = '') => {
+    set((state: any) => ({
+      cart: state.cart.filter((item: any) => 
+        // Item tabhi rakho agar ID, Size ya Color match NA kare (yani dusra item ho)
+        !(item.product.id === productId && item.selectedSize === size && item.selectedColor === color)
+      )
+    }));
+  },
             toggleCart: (status) => set({ isCartOpen: status }),
             clearCart: () => set({ cart: [] }),
             toggleWishlist: (product) => set((state) => {
