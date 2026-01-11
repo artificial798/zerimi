@@ -2,7 +2,8 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import {
     collection, doc, addDoc, updateDoc, deleteDoc, setDoc, onSnapshot, query, orderBy,
-    getDocs, arrayUnion, arrayRemove, getDoc,
+    getDocs, arrayUnion, arrayRemove, getDoc,writeBatch, // 👈 Ye zaroori hai Bulk Update ke liye
+  increment
 } from "firebase/firestore";
 import {
     signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, updateProfile
@@ -192,7 +193,7 @@ type Store = {
     notifications: Notification[];
     allUsers: User[];
     messages: Message[]; // ✅ NEW: Messages List for Admin
-    
+    abandonedCarts: any[];
 
     // CMS
     banner: Banner;
@@ -293,7 +294,7 @@ export const useStore = create<Store>()(
             pointsRedeemed: 0,
             pointsDiscount: 0,
             products: [],
-
+abandonedCarts: [],
             reviews: [],
             blogs: [],
             coupons: [],
@@ -515,6 +516,7 @@ addToCart: (product: any, qty: number = 1, size: string = '', color: string = ''
             // ✅ UPDATED: Ab ye Checkout Page se aayi hui exact values save karega
           // ✅ FIXED: placeOrder Logic (Saves Size & Color correctly)
 // ✅ FIXED PLACE ORDER LOGIC (Auto-Calculate Discount)
+         // ✅ FIXED: placeOrder Logic (Invoice Number Empty Rakhega)
           placeOrder: async (details) => {
                 const state = get();
 
@@ -531,7 +533,9 @@ addToCart: (product: any, qty: number = 1, size: string = '', color: string = ''
                 const uniqueSuffix = Math.floor(1000 + Math.random() * 9000).toString();
 
                 const orderId = `ZER-${year}${month}${day}-${uniqueSuffix}`;
-                const invoiceNo = `INV/${year}/${uniqueSuffix}`;
+                
+                // 🛑 CHANGE: Pehle yahan Random Invoice ban raha tha, ab ise Empty rakhenge
+                const invoiceNo = ""; // ✅ Leave Empty for Admin Series Generation
 
                 // 2. DISCOUNTS
                 const cDiscount = state.couponDiscount || 0;
@@ -542,7 +546,7 @@ addToCart: (product: any, qty: number = 1, size: string = '', color: string = ''
 
                 const newOrder: Order = {
                     id: orderId,
-                    invoiceNo: invoiceNo,
+                    invoiceNo: invoiceNo, // ✅ Empty jayega (Admin Panel baad mein bharega)
                     customerName: name,
                     customerEmail: email,
                     address: address,
@@ -555,15 +559,14 @@ addToCart: (product: any, qty: number = 1, size: string = '', color: string = ''
                     couponDiscount: cDiscount,    
                     pointsDiscount: pDiscount,    
 
-                    // ✅ SECRET GIFT MODE DATA
+                    // Secret Gift Data
                     isGift: isGift || false,
                     giftMessage: giftMessage || '',
-                    giftWrapPrice: giftWrapPrice || 0, // Ye Store Settings se aayega Checkout page ke through
+                    giftWrapPrice: giftWrapPrice || 0,
 
                     status: 'Pending',
                     date: new Date().toISOString(),
                     
-                    // 🔥 HERE IS THE MAGIC FIX (Data Snapshot)
                     items: items || state.cart.map(item => ({
                         name: item.product.name,
                         qty: item.qty,
@@ -572,7 +575,6 @@ addToCart: (product: any, qty: number = 1, size: string = '', color: string = ''
                         selectedSize: item.selectedSize || 'N/A',
                         selectedColor: item.selectedColor || null,
                         
-                        // ✅ AB HUM HSN AUR GST RATE BHI SAVE KAR RAHE HAIN
                         hsn: item.product.hsn || "7117", 
                         gstRate: item.product.gstRate || state.systemSettings.taxRate || 3
                     })),
@@ -799,6 +801,57 @@ addToCart: (product: any, qty: number = 1, size: string = '', color: string = ''
                     set(prev => ({ orders: prev.orders.map(o => o.id === id ? { ...o, status } : o) }));
                 }
             },
+            // 1. ✅ BULK UPDATE (Ek sath multiple orders change karne ke liye)
+  bulkUpdateOrderStatus: async (orderIds: string[], status: string) => {
+    try {
+      const batch = writeBatch(db); // Firebase Batch (Fast)
+      orderIds.forEach((id) => {
+        const ref = doc(db, 'orders', id);
+        batch.update(ref, { status });
+      });
+      await batch.commit();
+
+      // Local State Update
+      set((state: any) => ({
+        orders: state.orders.map((o: any) => 
+          orderIds.includes(o.id) ? { ...o, status } : o
+        ),
+        selectedOrders: [] // Clear selection
+      }));
+      return true;
+    } catch (error) {
+      console.error(error);
+      return false;
+    }
+  },
+
+  // 2. ✅ TRACKING SAVE (Shiprocket AWB save karne ke liye)
+  updateOrderTracking: async (orderId: string, trackingData: any) => {
+    const orderRef = doc(db, 'orders', orderId);
+    await updateDoc(orderRef, {
+      tracking: trackingData,
+      status: 'Shipped', // Auto mark Shipped
+      shippedAt: new Date().toISOString()
+    });
+    // Local Update
+    set((state: any) => ({
+      orders: state.orders.map((o: any) => 
+        o.id === orderId ? { ...o, status: 'Shipped', tracking: trackingData } : o
+      )
+    }));
+  },
+
+  // 3. ✅ INTERNAL NOTES (Staff ke personal notes ke liye)
+  updateOrderNote: async (orderId: string, note: string) => {
+    const orderRef = doc(db, 'orders', orderId);
+    await updateDoc(orderRef, { internalNote: note });
+    // Local Update
+    set((state: any) => ({
+      orders: state.orders.map((o: any) => 
+        o.id === orderId ? { ...o, internalNote: note } : o
+      )
+    }));
+  },
 // ✅ ADD THIS FUNCTION HERE:
             deleteOrder: async (id) => {
                 if (!id) return;
@@ -1006,7 +1059,12 @@ const initListeners = () => {
     onSnapshot(query(collection(db, "messages"), orderBy("date", "desc")), (snap) => useStore.setState({
         messages: snap.docs.map(d => ({ ...d.data(), id: d.id }) as Message)
     }));
-
+// initListeners function ke andar (jahan baaki onSnapshot hain)
+onSnapshot(collection(db, "abandoned_carts"), (snap) => {
+    useStore.setState({ 
+        abandonedCarts: snap.docs.map(d => ({ ...d.data(), id: d.id })) 
+    });
+});
     onSnapshot(collection(db, "users"), (snap) => useStore.setState({
         allUsers: snap.docs.map(d => ({ ...d.data(), id: d.id }) as User)
     }));

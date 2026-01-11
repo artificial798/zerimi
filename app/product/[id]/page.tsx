@@ -68,7 +68,7 @@ export default function ProductPage() {
 
     // 3. Safety Fallback: Agar 3 second tak bhi kuch nahi hua (Slow Net/Empty DB), 
     //    tab jaake Loading hatao taaki user atak na jaye.
-    const timer = setTimeout(() => setLoading(false), 3000);
+    const timer = setTimeout(() => setLoading(false), 6000);
     return () => clearTimeout(timer);
   }, [products, product]);
 

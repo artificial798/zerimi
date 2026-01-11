@@ -79,11 +79,26 @@ export default function GSTManager({ orders, settings, onDownloadInvoice, onDown
             const orderDate = new Date(order.date);
             if (orderDate < start || orderDate > end) return;
 
+          // ---------------------------------------------
+            // 1. Identify Type (LOGIC UPDATED FOR RTO)
+            // ---------------------------------------------
             let type: 'B2C' | 'CN' | null = null;
-            if (order.status === 'Delivered') type = 'B2C';
-            if (order.status === 'Refunded' || order.status === 'Return Approved') type = 'CN';
-            if (!type) return;
 
+            // ✅ Sale Maana Jayega
+            if (order.status === 'Delivered') type = 'B2C';
+
+            // ✅ Credit Note Maana Jayega (RTO Added)
+            if (
+                order.status === 'Refunded' || 
+                order.status === 'Return Approved' || 
+                order.status === 'RTO' ||             // 👈 YE ADD KIYA
+                order.status === 'RTO Delivered'      // 👈 YE BHI ADD KIYA (Safety)
+            ) {
+                type = 'CN';
+            }
+            
+            // Agar status match nahi hua (Pending/Processing etc.), to skip karo
+            if (!type) return;
             const custStateRaw = order.address?.state || "Unknown";
             const custState = cleanStr(custStateRaw);
             const isInterState = adminState !== custState;
@@ -134,7 +149,8 @@ export default function GSTManager({ orders, settings, onDownloadInvoice, onDown
             const row: GSTRow = {
                 date: new Date(order.date).toLocaleDateString('en-GB'),
                 invoiceNo: order.invoiceNo || order.id,
-                cnNo: type === 'CN' ? `CN-${order.invoiceNo || order.id}` : undefined,
+                // ✅ FIX: Use Real Database Credit Note Number if exists
+                cnNo: type === 'CN' ? (order.creditNoteNo || `CN-${order.invoiceNo || order.id}`) : undefined,
                 customer: order.customerName,
                 state: custStateRaw,
                 
