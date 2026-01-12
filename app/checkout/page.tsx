@@ -66,7 +66,9 @@ export default function CheckoutPage() {
     const store = useStore() as any;
 
     const [isGift, setIsGift] = useState(false);
-    const [giftMessage, setGiftMessage] = useState('');
+const [giftMessage, setGiftMessage] = useState('');
+
+
 
     // ✅ FIX 1: Real Order ID Store karne ke liye State
     const [confirmedOrderId, setConfirmedOrderId] = useState<string>("");
@@ -94,7 +96,16 @@ export default function CheckoutPage() {
         removeCoupon,       // Global Function
         coupons             // List of coupons
     } = store;
-
+// ✨ NEW: AUTO-DETECT GIFT FROM CART
+useEffect(() => {
+    if (cart.length > 0) {
+        // Check agar cart ke kisi bhi item me 'isGift' true hai
+        const hasGiftItem = cart.some((item: any) => item.isGift === true);
+        if (hasGiftItem) {
+            setIsGift(true); // Auto Turn ON
+        }
+    }
+}, [cart]);
     // --- STATE ---
     const [step, setStep] = useState(1);
     const [loading, setLoading] = useState(false);
@@ -787,70 +798,106 @@ const baseOrderDetails = {
                             </div>
                             
                             {/* --- SECRET GIFT MODE SECTION --- */}
-                            <div className={`p-6 rounded-2xl border transition-all duration-500 relative overflow-hidden group mb-6 ${isGift ? 'bg-[#0a1f1c] border-amber-500/50 shadow-[0_0_30px_rgba(245,158,11,0.15)]' : 'bg-white border-stone-200'}`}>
-                                
-                                {isGift && (
-                                    <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none animate-pulse"></div>
-                                )}
+                           {/* --- SECRET GIFT MODE SECTION (UPDATED) --- */}
+{/* --- 🎁 ULTRA-PREMIUM SECRET GIFT SECTION --- */}
+<div className="mb-8 group relative">
+    
+    {/* 1. Animated Border Gradient (Gold Glow border) */}
+    <div className={`absolute -inset-[1px] rounded-2xl bg-gradient-to-r from-amber-500/40 via-white/10 to-amber-500/40 opacity-0 transition-opacity duration-500 ${isGift ? 'opacity-100 blur-[2px]' : 'group-hover:opacity-50'}`}></div>
 
-                                <div className="flex items-start gap-4 relative z-10">
-                                    <div className={`p-3 rounded-xl transition-colors duration-300 ${isGift ? 'bg-amber-600 text-white shadow-lg' : 'bg-stone-100 text-stone-400'}`}>
-                                        {isGift ? <Lock className="w-6 h-6" /> : <Gift className="w-6 h-6" />}
-                                    </div>
+    {/* 2. Main Card Container */}
+    <div className={`relative overflow-hidden rounded-2xl border transition-all duration-500 ${isGift ? 'bg-[#051614] border-amber-500/50 shadow-[0_10px_40px_-10px_rgba(245,158,11,0.2)]' : 'bg-white border-stone-200 hover:border-amber-300'}`}>
+        
+        {/* Background Texture (Subtle Noise/Pattern) */}
+        {isGift && (
+            <div className="absolute inset-0 opacity-20 pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/stardust.png')]"></div>
+        )}
 
-                                    <div className="flex-1">
-                                        <div className="flex justify-between items-center mb-1">
-                                            <div>
-                                                <h3 className={`font-serif text-lg tracking-wide flex items-center gap-2 ${isGift ? 'text-white' : 'text-stone-800'}`}>
-                                                    Secret Gift Mode™ 
-                                                    {isGift && <span className="text-[9px] bg-amber-600 text-white px-2 py-0.5 rounded-full uppercase tracking-widest font-bold">Active</span>}
-                                                </h3>
-                                            </div>
-                                            
-                                            <div 
-                                                onClick={() => setIsGift(!isGift)}
-                                                className={`w-12 h-6 rounded-full p-1 cursor-pointer transition-colors duration-300 ${isGift ? 'bg-amber-600' : 'bg-stone-300'}`}
-                                            >
-                                                <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-300 ${isGift ? 'translate-x-6' : 'translate-x-0'}`}></div>
-                                            </div>
-                                        </div>
-                                        
-                                        <p className={`text-xs leading-relaxed mb-4 ${isGift ? 'text-white/60' : 'text-stone-500'}`}>
-                                            Surprise them with luxury. We’ll hide your identity and the price tag.
-                                        </p>
+        {/* 3. Header & Toggle */}
+        <div 
+            className="p-6 cursor-pointer relative z-10"
+            onClick={() => setIsGift(!isGift)}
+        >
+            <div className="flex items-center gap-5">
+                
+                {/* Icon Box */}
+                <div className={`w-14 h-14 rounded-xl flex items-center justify-center transition-all duration-500 shadow-inner ${isGift ? 'bg-gradient-to-br from-amber-400 to-amber-700 text-white scale-110 shadow-amber-900/50' : 'bg-stone-100 text-stone-400'}`}>
+                    {isGift ? <Crown className="w-7 h-7 animate-pulse" /> : <Gift className="w-6 h-6" />}
+                </div>
 
-                                        <AnimatePresence>
-                                            {isGift && (
-                                                <motion.div 
-                                                    initial={{ height: 0, opacity: 0 }} 
-                                                    animate={{ height: 'auto', opacity: 1 }} 
-                                                    exit={{ height: 0, opacity: 0 }}
-                                                    className="overflow-hidden"
-                                                >
-                                                    <div className="grid grid-cols-2 gap-3 mb-4">
-                                                        <div className="flex items-center gap-2 text-[10px] text-amber-100/80 bg-white/5 p-2 rounded-lg border border-white/5">
-                                                            <span className="p-1 bg-amber-500/20 rounded-full text-amber-500">🎁</span> Unbranded Box
-                                                        </div>
-                                                        <div className="flex items-center gap-2 text-[10px] text-amber-100/80 bg-white/5 p-2 rounded-lg border border-white/5">
-                                                            <span className="p-1 bg-red-500/20 rounded-full text-red-400">🙈</span> No Invoice
-                                                        </div>
-                                                    </div>
+                <div className="flex-1">
+                    <div className="flex justify-between items-center">
+                        <h3 className={`font-serif text-lg tracking-wide transition-colors ${isGift ? 'text-white' : 'text-stone-800'}`}>
+                            Secret Gift Mode™
+                        </h3>
+                        
+                        {/* Custom Toggle Switch */}
+                        <div className={`w-12 h-6 rounded-full p-1 transition-colors duration-300 flex items-center ${isGift ? 'bg-amber-500' : 'bg-stone-300'}`}>
+                            <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-300 ${isGift ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                        </div>
+                    </div>
+                    
+                    <p className={`text-xs mt-1 transition-colors ${isGift ? 'text-amber-100/70' : 'text-stone-500'}`}>
+                        {isGift ? "VIP Packaging Active. Invoice Hidden." : "Upgrade to luxury packaging & hide the price tag."}
+                    </p>
+                </div>
+            </div>
+        </div>
 
-                                                    <textarea
-                                                        value={giftMessage}
-                                                        onChange={(e) => setGiftMessage(e.target.value)}
-                                                        placeholder="Type your secret message here..."
-                                                        className="w-full p-4 bg-black/30 border border-white/10 rounded-xl text-white text-sm outline-none focus:border-amber-500/50 resize-none h-24 font-serif placeholder:text-white/20"
-                                                    />
-                                                    <p className="text-[10px] text-amber-500 mt-3 flex items-center gap-1">
-                                                        <ShieldCheck className="w-3 h-3" /> They’ll never know who sent it.
-                                                    </p>
-                                                </motion.div>
-                                            )}
-                                        </AnimatePresence>
-                                    </div>
+        {/* 4. Expanded Content (Message Box) */}
+        <AnimatePresence>
+            {isGift && (
+                <motion.div 
+                    initial={{ height: 0, opacity: 0 }} 
+                    animate={{ height: 'auto', opacity: 1 }} 
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden bg-[#0a1f1c]/50 border-t border-white/5"
+                >
+                    <div className="p-6 pt-2">
+                        {/* Features Tags */}
+                        <div className="flex gap-3 mb-5 overflow-x-auto no-scrollbar">
+                            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-[10px] text-amber-200 font-bold uppercase tracking-wider whitespace-nowrap">
+                                <Sparkles className="w-3 h-3" /> No Invoice
+                            </span>
+                            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-[10px] text-amber-200 font-bold uppercase tracking-wider whitespace-nowrap">
+                                <Gift className="w-3 h-3" /> Premium Box
+                            </span>
+                            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-[10px] text-amber-200 font-bold uppercase tracking-wider whitespace-nowrap">
+                                <Lock className="w-3 h-3" /> Secret Identity
+                            </span>
+                        </div>
+
+                        {/* Message Input (Looks like a Premium Card) */}
+                        <div className="relative group/input">
+                            <div className="absolute -inset-0.5 bg-gradient-to-r from-amber-500/20 to-purple-500/20 rounded-xl opacity-0 group-hover/input:opacity-100 transition duration-500"></div>
+                            <div className="relative">
+                                <label className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-2 block pl-1">
+                                    Message on Card
+                                </label>
+                                <textarea
+                                    value={giftMessage}
+                                    onChange={(e) => setGiftMessage(e.target.value)}
+                                    placeholder="Write a heartfelt note... (e.g., Happy Birthday, My Love!)"
+                                    maxLength={200}
+                                    className="w-full bg-[#051614] border border-amber-500/30 rounded-xl p-4 text-amber-50 text-sm focus:border-amber-400 outline-none transition placeholder:text-white/20 resize-none h-28 font-serif leading-relaxed shadow-inner"
+                                />
+                                <div className="absolute bottom-3 right-3 text-[9px] text-white/30 font-mono">
+                                    {giftMessage.length}/200
                                 </div>
                             </div>
+                        </div>
+
+                        <p className="text-[10px] text-amber-500/80 mt-4 flex items-center gap-2 bg-amber-500/10 p-2 rounded-lg border border-amber-500/20 w-fit">
+                            <ShieldCheck className="w-3 h-3" /> 
+                            We will email the bill to <u>{formData.email || currentUser?.email || "you"}</u> only.
+                        </p>
+                    </div>
+                </motion.div>
+            )}
+        </AnimatePresence>
+    </div>
+</div>
+{/* ------------------------------------------- */}
                             
                             <div className="flex justify-end pt-4">
                                 <button onClick={() => setStep(2)} className="bg-[#0a1f1c] text-white px-10 py-4 rounded-xl text-xs uppercase tracking-widest font-bold hover:bg-amber-700 transition flex items-center gap-3 shadow-xl hover:shadow-2xl transform hover:-translate-y-1">

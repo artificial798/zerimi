@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Heart, Eye, ShoppingBag, Star, Loader2, ShieldCheck, Truck, Plus } from 'lucide-react';
+import { Heart, Eye, ShoppingBag, Star, Loader2, ShieldCheck, Truck, Plus, Gift } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import { toast } from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
@@ -15,7 +15,15 @@ export default function ProductCard({ product }: { product: any }) {
   const [isLoading, setIsLoading] = useState(false);
   
 // components/ProductCard.tsx
-
+// --- 1. HANDLE CARD CLICK (Make Whole Card Clickable) ---
+  const handleCardClick = (e: any) => {
+    // Agar user ne kisi Button ya Link par click kiya hai, to ye function mat chalao
+    if (e.target.closest('button') || e.target.closest('a')) {
+        return;
+    }
+    // Baaki kisi bhi jagah click karne par Product Page par bhej do
+    router.push(`/product/${product.id}`);
+  };
 const handleAddToCart = (e: any) => {
     e.preventDefault(); // Link click hone se rokein
     e.stopPropagation();
@@ -108,11 +116,12 @@ const handleAddToCart = (e: any) => {
 
   return (
     // ✅ CHANGE 1: Main Container Hover Effect (Rose Border & Pink Glow)
-    <div 
-      className="group relative bg-white rounded-xl overflow-hidden border border-stone-100 shadow-sm hover:shadow-[0_10px_40px_rgba(244,63,94,0.15)] hover:border-rose-300/50 transition-all duration-500 flex flex-col w-full h-full"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
+   <div 
+  onClick={handleCardClick} // 👈 YE LINE ADD KARNI HAI
+  className="group relative bg-white rounded-xl overflow-hidden border border-stone-100 shadow-sm hover:shadow-[0_10px_40px_rgba(244,63,94,0.15)] hover:border-rose-300/50 transition-all duration-500 flex flex-col w-full h-full cursor-pointer"
+  onMouseEnter={() => setIsHovered(true)}
+  onMouseLeave={() => setIsHovered(false)}
+>
       
       {/* IMAGE SECTION */}
       <div className="relative aspect-[4/5] w-full bg-stone-50 overflow-hidden">
@@ -128,6 +137,29 @@ const handleAddToCart = (e: any) => {
         {/* Badges */}
        {/* Premium Badges */}
         {/* Luxury Badges - Top Left */}
+        // ... Image component ke baad ...
+
+{/* --- NEW: ULTRA PREMIUM SECRET GIFT BUTTON (Smart Positioning) --- */}
+{/* --- UPDATED: SECRET GIFT BUTTON (With Functional Link) --- */}
+<Link 
+  href={`/product/${product.id}?gift=true`} // 👈 This link makes the redirect work
+  onClick={(e) => e.stopPropagation()} // Prevents triggering the main card click
+  className="absolute bottom-3 right-3 z-20 transition-all duration-500 transform md:group-hover:-translate-y-12"
+>
+  <div className="group/gift relative overflow-hidden rounded-full bg-[#051614]/90 backdrop-blur-md border border-amber-500/30 shadow-[0_4px_15px_rgba(0,0,0,0.3)] cursor-pointer hover:bg-black transition-all hover:scale-105 hover:border-amber-500/60">
+    
+    {/* Golden Shimmer Effect */}
+    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-400/20 to-transparent translate-x-[-150%] group-hover/gift:translate-x-[150%] transition-transform duration-1000 ease-in-out"></div>
+    
+    {/* Content */}
+    <div className="flex items-center gap-2 px-3 py-1.5">
+      <Gift className="w-3 h-3 text-amber-400 animate-pulse" />
+      <span className="text-[9px] font-bold text-amber-100 uppercase tracking-widest">SEND AS GIFT</span>
+    </div>
+  </div>
+</Link>
+{/* --------------------------------------------------------------- */}
+// ... Wishlist Button code se pehle ...
         <div className="absolute top-0 left-0 p-3 flex flex-col gap-2 z-10 items-start">
             {product.tags?.slice(0, 2).map((tag: string, idx: number) => (
                 <span 
@@ -178,13 +210,29 @@ const handleAddToCart = (e: any) => {
         </Link>
 
         {/* Gap Filler */}
-        <div className="min-h-[20px] flex items-center">
-             {product.stock > 0 && product.stock < 5 ? (
-                 <p className="text-[10px] font-bold text-amber-700 flex items-center gap-1.5 bg-amber-50 px-2 py-0.5 rounded w-fit"><span className="w-1.5 h-1.5 rounded-full bg-amber-600 animate-pulse"></span>Only {product.stock} Left</p>
-             ) : (
-                 <div className="flex items-center gap-3 opacity-80"><span className="text-[10px] text-stone-500 flex items-center gap-1"><ShieldCheck className="w-3 h-3 text-stone-400" /> Certified</span><span className="text-[10px] text-stone-500 flex items-center gap-1"><Truck className="w-3 h-3 text-stone-400" /> Fast Del.</span></div>
-             )}
+       {/* Gap Filler (Premium Trust Badges) */}
+<div className="min-h-[24px] flex items-center mt-1 mb-1">
+     {product.stock > 0 && product.stock < 5 ? (
+         <p className="text-[10px] font-bold text-rose-700 flex items-center gap-1.5 bg-rose-50 px-2 py-0.5 rounded w-fit border border-rose-100">
+            <span className="w-1.5 h-1.5 rounded-full bg-rose-600 animate-pulse"></span>
+            Only {product.stock} Left
+         </p>
+     ) : (
+        <div className="flex flex-wrap gap-2">
+             {/* Badge 1: Anti-Tarnish (Gold Style) */}
+             <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-100 shadow-sm">
+                 <ShieldCheck className="w-3 h-3 text-amber-600" />
+                 <span className="text-[9px] font-bold text-amber-800 uppercase tracking-wide">Anti-Tarnish</span>
+             </div>
+             
+             {/* Badge 2: Express (Mint Style) */}
+             <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-100 shadow-sm">
+                 <Truck className="w-3 h-3 text-emerald-600" />
+                 <span className="text-[9px] font-bold text-emerald-800 uppercase tracking-wide">Express</span>
+             </div>
         </div>
+     )}
+</div>
 
         {/* Footer: Price & Actions */}
         <div className="flex items-end justify-between mt-auto pt-2 border-t border-stone-100 md:border-none md:pt-1">

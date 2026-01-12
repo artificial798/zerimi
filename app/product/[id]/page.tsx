@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { useStore } from '@/lib/store';
 import ProductGallery from '@/components/ProductGallery';
 import ProductReviews from '@/components/ProductReviews'; // ✅ NEW: Imported Component
@@ -8,7 +8,7 @@ import SizeGuide from '@/components/SizeGuide';           // ✅ NEW: Imported C
 import { 
   Star, Truck, ShieldCheck, Heart, Share2, 
   Minus, Plus, ShoppingBag, ChevronDown, User, RefreshCcw, Award, Gift, Headphones, 
-  History, Clock, MessageCircle, Ruler // ✅ Ruler Icon & MessageCircle Added
+  History, Clock, MessageCircle, Ruler, CheckCircle // ✅ Ruler Icon & MessageCircle Added
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -29,6 +29,25 @@ export default function ProductPage() {
 
   const product = products.find((p: any) => p.id == id);
   const colors = product?.colors || [];
+// --- GIFT MODE LOGIC ---
+// 1. URL Check (kya card se click karke aaye hain?)
+// --- GIFT MODE LOGIC (UPDATED) ---
+const searchParams = useSearchParams(); // ✅ Next.js Hook use karein
+const isAutoGift = searchParams.get('gift') === 'true';
+
+// State initialize
+const [isGiftWrapped, setIsGiftWrapped] = useState(false);
+
+// Effect: Jaise hi URL load ho, check karein
+useEffect(() => {
+    if (isAutoGift) {
+        setIsGiftWrapped(true);
+        // Optional: Toast dikhana ho to
+        // toast.success("Gift Mode Activated! 🎁");
+    }
+}, [isAutoGift]);
+
+// Effect to auto-select if URL has ?gift=true
 
   // ✅ SMART SIZING LOGIC (Agar DB mein sizes nahi hain to Category ke hisab se dikhao)
  // ✅ SMART SIZING LOGIC (PRIORITY OVERRIDE)
@@ -365,6 +384,31 @@ const similarProducts = (() => {
 
              {/* Actions */}
              <div className="flex flex-col gap-4 mb-8">
+              {/* 🎁 SECRET GIFT TOGGLE (New Addition) */}
+   <div 
+     onClick={() => setIsGiftWrapped(!isGiftWrapped)}
+     className={`relative overflow-hidden rounded-xl border p-4 cursor-pointer transition-all duration-300 group ${isGiftWrapped ? 'bg-[#0a1f1c]/5 border-[#0a1f1c]' : 'bg-white border-stone-200 hover:border-amber-400'}`}
+   >
+      {/* Selection Indicator */}
+      <div className={`absolute top-4 right-4 w-5 h-5 rounded-full border flex items-center justify-center transition-colors ${isGiftWrapped ? 'bg-[#0a1f1c] border-[#0a1f1c]' : 'border-stone-300 bg-white'}`}>
+          {isGiftWrapped && <CheckCircle className="w-3 h-3 text-white" />}
+      </div>
+
+      <div className="flex items-start gap-4">
+          <div className={`p-3 rounded-full ${isGiftWrapped ? 'bg-[#0a1f1c] text-white' : 'bg-amber-50 text-amber-600'}`}>
+              <Gift className="w-5 h-5" />
+          </div>
+          <div>
+              <h4 className={`font-serif font-bold text-sm ${isGiftWrapped ? 'text-[#0a1f1c]' : 'text-stone-700'}`}>
+                  Send as a Secret Gift?
+              </h4>
+              <p className="text-xs text-stone-500 mt-1 max-w-[250px] leading-relaxed">
+                  We will hide the invoice, remove price tags, and pack it in our signature luxury box.
+              </p>
+          </div>
+      </div>
+   </div>
+   {/* -------------------------------------- */}
                 <div className="flex gap-4">
                     {/* Qty */}
                     <div className="flex items-center border border-stone-200 rounded-lg h-12">
@@ -381,7 +425,8 @@ const similarProducts = (() => {
       product, 
       qty, 
       selectedSize || productSizes[0], 
-      selectedColor || colors[0]
+      selectedColor || colors[0],
+      isGiftWrapped
   ); 
   toast.success("Added to Bag");
 }}
@@ -401,16 +446,65 @@ const similarProducts = (() => {
                 </div>
 
                 {/* ✅ WHATSAPP BUTTON (Restored & Premium) */}
-                <a
-                  href={`https://wa.me/918077162909?text=${encodeURIComponent(
-                    `Hi ZERIMI, I am interested in ${product.name} (ID: ${product.id}).\nPrice: ₹${product.price}\nLink: ${typeof window !== 'undefined' ? window.location.href : ''}`
-                  )}`}
-                  target="_blank"
-                  className="w-full h-12 border border-green-600/30 text-green-700 bg-green-50 rounded-lg flex items-center justify-center gap-2 hover:bg-green-600 hover:text-white transition-all duration-300 uppercase text-xs font-bold tracking-widest group"
-                >
-                  <MessageCircle className="w-4 h-4 group-hover:scale-110 transition-transform" /> 
-                  Order via WhatsApp
-                </a>
+        {/* --- 🛡️ ULTRA-PREMIUM PAYMENT TRUST STRIP --- */}
+<div className="mt-8 relative group">
+    
+    {/* Background Glow (Subtle Gold) */}
+    <div className="absolute -inset-0.5 bg-gradient-to-r from-transparent via-amber-200/40 to-transparent rounded-xl opacity-50 blur-md pointer-events-none"></div>
+
+    <div className="relative bg-white border border-amber-100 rounded-xl p-5 text-center shadow-[0_4px_20px_rgba(0,0,0,0.03)]">
+        
+        {/* Header with Lock Icon */}
+        <div className="flex items-center justify-center gap-2 mb-4">
+            <div className="p-1.5 bg-green-50 rounded-full border border-green-100">
+                <ShieldCheck className="w-3.5 h-3.5 text-green-600" />
+            </div>
+            <span className="text-[10px] font-bold text-stone-600 uppercase tracking-[0.2em]">
+                Guaranteed Safe Checkout
+            </span>
+        </div>
+
+        {/* Logos Grid (Mobile Friendly) */}
+        <div className="flex flex-wrap justify-center items-center gap-3 md:gap-4 mb-4">
+            
+            {/* UPI Apps */}
+            <div className="h-8 px-3 border border-stone-100 rounded-lg flex items-center justify-center bg-stone-50/50 hover:bg-white hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 w-[70px]">
+                <img src="https://cdn.worldvectorlogo.com/logos/google-pay-1.svg" alt="GPay" className="h-4 w-auto object-contain" />
+            </div>
+            <div className="h-8 px-3 border border-stone-100 rounded-lg flex items-center justify-center bg-stone-50/50 hover:bg-white hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 w-[70px]">
+                <img src="https://cdn.worldvectorlogo.com/logos/phonepe-1.svg" alt="PhonePe" className="h-4 w-auto object-contain" />
+            </div>
+            <div className="h-8 px-3 border border-stone-100 rounded-lg flex items-center justify-center bg-stone-50/50 hover:bg-white hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 w-[70px]">
+                <img src="https://cdn.worldvectorlogo.com/logos/paytm.svg" alt="Paytm" className="h-3 w-auto object-contain" />
+            </div>
+
+            {/* Cards */}
+            <div className="h-8 px-3 border border-stone-100 rounded-lg flex items-center justify-center bg-stone-50/50 hover:bg-white hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 w-[60px]">
+                <img src="https://cdn.worldvectorlogo.com/logos/visa-10.svg" alt="Visa" className="h-3 w-auto object-contain" />
+            </div>
+    
+            <div className="h-8 px-3 border border-stone-100 rounded-lg flex items-center justify-center bg-stone-50/50 hover:bg-white hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 w-[60px]">
+                {/* RuPay ka reliable SVG */}
+                <img src="https://upload.wikimedia.org/wikipedia/commons/c/cb/Rupay-Logo.png" alt="RuPay" className="h-3 w-auto object-contain" />
+            </div>
+        </div>
+
+        {/* Bottom Trust Badge */}
+        <div className="flex flex-col md:flex-row items-center justify-center gap-2 text-[9px] text-stone-400 font-medium pt-3 border-t border-stone-50">
+            <span className="flex items-center gap-1">
+                <Truck className="w-3 h-3 text-amber-500" />
+                Shipping Partners: <strong>Shiprocket & BlueDart</strong>
+            </span>
+            <span className="hidden md:block w-1 h-1 rounded-full bg-stone-300"></span>
+            <span className="flex items-center gap-1">
+                <ShieldCheck className="w-3 h-3 text-blue-500" />
+                Payments Verified by <strong>Razorpay</strong>
+            </span>
+        </div>
+
+    </div>
+</div>
+{/* --------------------------------------------------------- */}       
              </div>
 
              {/* Description Snippet */}

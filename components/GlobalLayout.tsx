@@ -260,7 +260,7 @@ const subtotal = cart.reduce((sum: number, item: any) => sum + (item.product?.pr
                 <ShieldCheck className="w-5 h-5 md:w-7 md:h-7 stroke-[1.5]" />
               </div>
               <div>
-                <h4 className="font-serif text-xs md:text-base text-[#0a1f1c] font-bold md:font-medium tracking-wide leading-tight">12-Mo Warranty</h4>
+                <h4 className="font-serif text-xs md:text-base text-[#0a1f1c] font-bold md:font-medium tracking-wide leading-tight">Six Month Warranty</h4>
                 <p className="hidden md:block text-[10px] md:text-xs text-stone-500 mt-1.5">Plating & stone cover</p>
                 <p className="md:hidden text-[9px] text-stone-400 mt-0.5">Plating & Stone</p>
               </div>
@@ -339,7 +339,7 @@ const subtotal = cart.reduce((sum: number, item: any) => sum + (item.product?.pr
             <div className="relative h-10 w-32"><Image src={logoWhite} alt="ZERIMI" fill className="object-contain opacity-90" /></div>
             <p className="text-sm leading-relaxed text-stone-500">Luxury artificial jewelry crafted for elegance. Bridging the gap between traditional artistry and modern aesthetics.</p>
             <div className="flex gap-4">
-              <Link href="https://www.instagram.com/zerimi.luxury" target="_blank" className="hover:text-white transition-colors">
+              <Link href="https://www.instagram.com/zerimi.official" target="_blank" className="hover:text-white transition-colors">
                 <Instagram className="w-4 h-4 cursor-pointer" />
               </Link>
               <Link href="https://www.facebook.com/profile.php?id=61584024450925" target="_blank" className="hover:text-white transition-colors">
@@ -355,7 +355,7 @@ const subtotal = cart.reduce((sum: number, item: any) => sum + (item.product?.pr
               <li><Link href="/category/all" className="hover:text-amber-500 transition">Collections</Link></li>
               <li><Link href="/category/rings" className="hover:text-amber-500 transition">Best Sellers</Link></li>
               <li><Link href="/about" className="hover:text-amber-500 transition">Our Story</Link></li>
-              <li><Link href="/contact" className="hover:text-amber-500 transition">Book Appointment</Link></li>
+            
             </ul>
           </div>
 

@@ -203,7 +203,13 @@ type Store = {
     siteText: SiteText;
 
     // App State
-    cart: { product: Product; qty: number; selectedSize?: string; selectedColor?: string }[];
+   cart: { 
+    product: Product; 
+    qty: number; 
+    selectedSize?: string; 
+    selectedColor?: string; 
+    isGift?: boolean; // 👈 NEW: Add this optional property
+}[];
     wishlist: Product[];
     isCartOpen: boolean;
     currentUser: User | null;
@@ -218,7 +224,7 @@ type Store = {
     redeemLoyaltyPoints: (points: number) => void; 
     removeLoyaltyPoints: () => void;
     // Cart Actions
-   addToCart: (product: Product, qty?: number, size?: string, color?: string) => void;
+   addToCart: (product: Product, qty?: number, size?: string, color?: string, isGift?: boolean) => void;
     removeFromCart: (id: string) => void;
     // ✅ NEW: Checkout Page ke liye Silent Update Function
     updateQuantity: (productId: string, change: number) => void;
@@ -400,34 +406,45 @@ abandonedCarts: [],
            // ✅ FIXED: addToCart Logic (Checks ID + Size + Color)
         // ✅ FIXED: addToCart Logic (Handles Unique ID for Color/Size & Stock Check)
           // ✅ CORRECTED addToCart (Fixes 'reading price' error)
-addToCart: (product: any, qty: number = 1, size: string = '', color: string = '') => {
+// ✅ UPDATED addToCart (Supports Gift Mode)
+addToCart: (product: any, qty: number = 1, size: string = '', color: string = '', isGift: boolean = false) => {
     set((state: any) => {
-      // Check agar same ID + Size + Color wala item pehle se hai
+      // Check if item exists with same ID + Size + Color + Gift Status
       const existingItem = state.cart.find((item: any) => 
         item.product.id === product.id && 
         item.selectedSize === size && 
-        item.selectedColor === color
+        item.selectedColor === color &&
+        item.isGift === isGift // 👈 Match gift status too
       );
 
       if (existingItem) {
-        // ✅ Match Mila: Sirf Quantity badhao
+        // ✅ Match Found: Update Quantity
         return {
           cart: state.cart.map((item: any) => 
-            (item.product.id === product.id && item.selectedSize === size && item.selectedColor === color)
+            (item.product.id === product.id && 
+             item.selectedSize === size && 
+             item.selectedColor === color && 
+             item.isGift === isGift)
               ? { ...item, qty: item.qty + qty }
               : item
           ),
           isCartOpen: true
         };
       } else {
-        // ✅ Naya Variation: Nayi row add karo
+        // ✅ New Item: Add to Cart with Gift Status
         return {
-          cart: [...state.cart, { product, qty, selectedSize: size, selectedColor: color }],
+          cart: [...state.cart, { 
+              product, 
+              qty, 
+              selectedSize: size, 
+              selectedColor: color, 
+              isGift: isGift // 👈 Save gift status
+          }],
           isCartOpen: true
         };
       }
     });
-  },
+},
 // ✅ NEW: SILENT QUANTITY UPDATE (Checkout Page ke liye)
           // ✅ SILENT QUANTITY UPDATE (Drawer nahi kholega)
   updateQuantity: (productId: string, delta: number, size: string = '', color: string = '') => {

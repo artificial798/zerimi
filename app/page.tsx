@@ -420,7 +420,7 @@ export default function Home() {
               </div>
               <div className="flex items-center gap-2 justify-center md:justify-start">
                 <div className="bg-white p-2 rounded-full"><Star className="w-3 h-3 md:w-4 md:h-4 text-amber-500 fill-current" /></div>
-                <span className="text-xs md:text-sm font-bold text-[#0a1f1c]">Lifetime Warranty</span>
+                <span className="text-xs md:text-sm font-bold text-[#0a1f1c]">Zerimi Elite Edition</span>
               </div>
             </div>
             <Link href="/category/all" className="inline-block bg-[#0a1f1c] text-white px-8 md:px-10 py-3 md:py-4 mt-4 text-xs uppercase tracking-widest hover:bg-amber-700 transition">
