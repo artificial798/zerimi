@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import {
     collection, doc, addDoc, updateDoc, deleteDoc, setDoc, onSnapshot, query, orderBy,
-    getDocs, arrayUnion, arrayRemove, getDoc,writeBatch, // 👈 Ye zaroori hai Bulk Update ke liye
+    getDocs, arrayUnion, arrayRemove, getDoc,writeBatch, where, // 👈 Ye zaroori hai Bulk Update ke liye
   increment
 } from "firebase/firestore";
 import {
@@ -1061,57 +1061,33 @@ addToCart: (product: any, qty: number = 1, size: string = '', color: string = ''
 // 4. REAL-TIME LISTENERS
 // ==========================================
 
-let listenersInitialized = false;
+// ==========================================
+// 4. SMART REAL-TIME LISTENERS (FIXED)
+// ==========================================
+
+let unsubscribers: Function[] = []; // To store listeners and stop them later
 
 const initListeners = () => {
-    if (listenersInitialized) return;
-    listenersInitialized = true;
-
-    // Data Collections
+    // 1. PUBLIC DATA (Always Listen)
+    // Ye data sabko dikhna chahiye (Products, Blogs, CMS)
     onSnapshot(collection(db, "products"), (snap) => useStore.setState({ products: snap.docs.map(d => d.data() as Product) }));
-    onSnapshot(query(collection(db, "orders"), orderBy("date", "desc")), (snap) => useStore.setState({ orders: snap.docs.map(d => d.data() as Order) }));
     onSnapshot(collection(db, "reviews"), (snap) => useStore.setState({ reviews: snap.docs.map(d => d.data() as Review) }));
+    onSnapshot(collection(db, "coupons"), (snap) => useStore.setState({ coupons: snap.docs.map(d => d.data() as Coupon) }));
+    onSnapshot(collection(db, "blogs"), (snap) => useStore.setState({ blogs: snap.docs.map(d => d.data() as BlogPost) }));
+    onSnapshot(collection(db, "warranties"), (snap) => useStore.setState({ warranties: snap.docs.map(d => d.data() as Warranty) }));
 
-    // ✅ NEW: Messages Listener (For Admin Inbox)
-    onSnapshot(query(collection(db, "messages"), orderBy("date", "desc")), (snap) => useStore.setState({
-        messages: snap.docs.map(d => ({ ...d.data(), id: d.id }) as Message)
-    }));
-// initListeners function ke andar (jahan baaki onSnapshot hain)
-onSnapshot(collection(db, "abandoned_carts"), (snap) => {
-    useStore.setState({ 
-        abandonedCarts: snap.docs.map(d => ({ ...d.data(), id: d.id })) 
-    });
-});
-    onSnapshot(collection(db, "users"), (snap) => useStore.setState({
-        allUsers: snap.docs.map(d => ({ ...d.data(), id: d.id }) as User)
-    }));
-
-    // CMS Documents
-  // CMS Documents
+    // CMS (Config, Banners etc)
     const cmsKeys = ["banner", "categories", "featured", "promo", "siteText", "config"];
-    
     cmsKeys.forEach(key => {
         onSnapshot(doc(db, "cms", key), (docSnapshot) => {
             if (docSnapshot.exists()) {
                 const data = docSnapshot.data();
-
-                if (key === 'categories') {
-                    useStore.setState({ categories: data.list });
-                } 
-                else if (key === 'siteText') {
-                    useStore.setState({ siteText: data as SiteText });
-                } 
-                else if (key === 'banner') {
-                    useStore.setState({ banner: data as Banner });
-                } 
-                else if (key === 'featured') {
-                    useStore.setState({ featuredSection: data as FeaturedSection });
-                } 
-                else if (key === 'promo') {
-                    useStore.setState({ promoSection: data as PromoSection });
-                } 
+                if (key === 'categories') useStore.setState({ categories: data.list });
+                else if (key === 'siteText') useStore.setState({ siteText: data as SiteText });
+                else if (key === 'banner') useStore.setState({ banner: data as Banner });
+                else if (key === 'featured') useStore.setState({ featuredSection: data as FeaturedSection });
+                else if (key === 'promo') useStore.setState({ promoSection: data as PromoSection });
                 else if (key === 'config') {
-                    // ✅ COMPLETE CONFIG LOAD LOGIC
                     useStore.setState({
                         systemSettings: {
                             maintenanceMode: data.store?.maintenanceMode || false,
@@ -1120,36 +1096,12 @@ onSnapshot(collection(db, "abandoned_carts"), (snap) => {
                             taxRate: Number(data.store?.taxRate) || 3,
                             shippingThreshold: Number(data.store?.freeShippingThreshold) || 5000,
                             shippingCost: Number(data.store?.shippingCost) || 150,
-                            // ✅ YE LINE ADD KAREIN:
                             giftModeCost: Number(data.store?.giftModeCost) || 50,
                             globalAlert: data.store?.globalAlert || '',
-// 👇 YE PART ADD KAREIN (Isse Admin Settings Customer tak pahunchengi)
-            pointValue: Number(data.store?.pointValue) || 1,
-            tierConfig: {
-                goldThreshold: Number(data.store?.tierConfig?.goldThreshold) || 1000,
-                platinumThreshold: Number(data.store?.tierConfig?.platinumThreshold) || 5000,
-                solitaireThreshold: Number(data.store?.tierConfig?.solitaireThreshold) || 10000,
-                goldMultiplier: Number(data.store?.tierConfig?.goldMultiplier) || 1.5,
-                platinumMultiplier: Number(data.store?.tierConfig?.platinumMultiplier) || 2,
-                solitaireMultiplier: Number(data.store?.tierConfig?.solitaireMultiplier) || 3,
-            },
-                            // Payment Data Load
-                            payment: {
-                                instamojoApiKey: data.store?.payment?.instamojoApiKey,
-                                instamojoAuthToken: data.store?.payment?.instamojoAuthToken,
-                                instamojoEnabled: data.store?.payment?.instamojoEnabled,
-                                razorpay: data.razorpay, // Direct Root se load
-                                payu: data.payu          // Direct Root se load
-                            },
-
-                            // ✅ INVOICE DATA LOAD (Ye Add kiya hai)
-                            invoice: data.invoice || {
-                                companyName: 'ZERIMI JEWELS',
-                                address: '',
-                                gstin: '',
-                                terms: '',
-                                logoUrl: ''
-                            }
+                            pointValue: Number(data.store?.pointValue) || 1,
+                            tierConfig: data.store?.tierConfig || {},
+                            payment: { ...data.store?.payment, razorpay: data.razorpay, payu: data.payu },
+                            invoice: data.invoice
                         }
                     });
                 }
@@ -1157,42 +1109,108 @@ onSnapshot(collection(db, "abandoned_carts"), (snap) => {
         });
     });
 
-    // Auth & User Profile Listener
+    // 2. AUTH AUTHENTICATION LISTENER
     onAuthStateChanged(auth, (user) => {
+        // Purane listeners band karein (taaki data mix na ho logout par)
+        unsubscribers.forEach(unsub => unsub());
+        unsubscribers = [];
+
         if (user) {
-            onSnapshot(doc(db, "users", user.uid), (docSnapshot) => {
+            // A. User Profile Load Karein
+            const userUnsub = onSnapshot(doc(db, "users", user.uid), (docSnapshot) => {
                 if (docSnapshot.exists()) {
                     const userData = docSnapshot.data();
-                    useStore.setState({
-                        currentUser: { ...userData, id: user.uid } as User,
-                        authCheckComplete: true
-                    });
-                    // 👇 [STEP 1] YAHAN PASTE KAREIN (State set hone ke baad)
+                    useStore.setState({ currentUser: { ...userData, id: user.uid } as User, authCheckComplete: true });
+                    
+                    // Unlock Points Check
                     useStore.getState().checkAndUnlockPoints(user.uid);
-                
+
+                    // --- ADMIN SPECIFIC LISTENERS ---
+                    // Agar User ADMIN ya MANAGER hai, tabhi ye heavy data fetch karein
+                    if (['admin', 'manager'].includes(userData.role)) {
+                        console.log("💎 Admin Access Granted: Loading Dashboard Data...");
+                        
+                        // All Orders (For Admin)
+                        unsubscribers.push(onSnapshot(query(collection(db, "orders"), orderBy("date", "desc")), (snap) => 
+                            useStore.setState({ orders: snap.docs.map(d => d.data() as Order) })
+                        ));
+                        // All Users
+                        unsubscribers.push(onSnapshot(collection(db, "users"), (snap) => 
+                            useStore.setState({ allUsers: snap.docs.map(d => ({ ...d.data(), id: d.id }) as User) })
+                        ));
+                        // Admin Inbox (Messages)
+                        unsubscribers.push(onSnapshot(query(collection(db, "messages"), orderBy("date", "desc")), (snap) => 
+                            useStore.setState({ messages: snap.docs.map(d => ({ ...d.data(), id: d.id }) as Message) })
+                        ));
+                        // Abandoned Carts
+                        unsubscribers.push(onSnapshot(collection(db, "abandoned_carts"), (snap) => 
+                            useStore.setState({ abandonedCarts: snap.docs.map(d => ({ ...d.data(), id: d.id })) })
+                        ));
+                    } 
+                    // --- CUSTOMER SPECIFIC LISTENERS ---
+                    else {
+                        // Sirf User ke apne Orders load karein (Security Rule compatible)
+                        // Note: Hum query filter use nahi kar rahe kyunki Firestore indexes required honge.
+                        // Instead, user apne orders "My Orders" page par alag se fetch karega.
+                        // Global state ke liye hum orders array khali rakhenge ya filtered query layenge:
+                        
+                        // Option: Fetch Only My Orders
+                         unsubscribers.push(onSnapshot(query(collection(db, "orders"), orderBy("date", "desc")), (snap) => {
+                             // Client side filter (Temporary safe mode)
+                             const myOrders = snap.docs.map(d => d.data() as Order).filter(o => o.customerEmail === user.email);
+                             useStore.setState({ orders: myOrders });
+                         }));
+                    }
                 } else {
-                    const fallbackUser = {
-                        id: user.uid, name: user.displayName || 'User', email: user.email!,
-                        role: 'customer', tier: 'Silver', points: 0,
-                        joinedDate: new Date().toLocaleDateString(), addresses: [], profileImage: ""
-                    };
-                    useStore.setState({ currentUser: fallbackUser, authCheckComplete: true });
+                     // Fallback for new Google Users
+                    useStore.setState({ currentUser: { id: user.uid, name: user.displayName || 'User', email: user.email!, role: 'customer', tier: 'Silver', points: 0, joinedDate: new Date().toLocaleDateString(), addresses: [] }, authCheckComplete: true });
                 }
             });
+            unsubscribers.push(userUnsub);
+
+            // Notifications (Sabke liye)
+          // ✅ Fix: Only fetch My Notifications (Rules Compatible)
+// ------------------------------------------
+// NOTIFICATIONS LISTENER (FIXED)
+// ------------------------------------------
+// ✅ Fix: Query mein 'where' aur 'orderBy' dono hain
+// Agar purani notifications mein 'createdAt' field nahi hai, to wo nahi dikhengi.
+// Isliye nayi notification bhej kar test karna padega.
+
+// ------------------------------------------
+// NOTIFICATIONS LISTENER (NO-INDEX VERSION)
+// ------------------------------------------
+// ✅ Fix: Humne 'orderBy' hata diya hai taaki Index error na aaye.
+// Sorting ab hum Javascript (Client Side) me karenge.
+
+unsubscribers.push(onSnapshot(
+    query(
+        collection(db, "notifications"), 
+        where("userId", "==", user.email) // 👈 Sirf user check karega (Koi Index nahi chahiye)
+    ), 
+    (snap) => {
+        const myNotifs = snap.docs.map(d => ({ ...d.data(), id: d.id }) as Notification);
+        
+        // 🔄 Client-Side Sorting (Newest First)
+        myNotifs.sort((a, b) => {
+            const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            return dateB - dateA;
+        });
+
+        useStore.setState({ notifications: myNotifs });
+    },
+    (error) => {
+        console.warn("Notification Listener Error:", error.message);
+    }
+));
+
         } else {
-            useStore.setState({ currentUser: null, authCheckComplete: true });
+            // Logout State
+            useStore.setState({ currentUser: null, authCheckComplete: true, orders: [], messages: [], allUsers: [] });
         }
         useStore.setState({ loading: false });
     });
-
-    // Secondary Collections
-    onSnapshot(collection(db, "warranties"), (snap) => useStore.setState({ warranties: snap.docs.map(d => d.data() as Warranty) }));
-  // ✅ FIX: OrderBy 'desc' (Newest First) aur ID Mapping
-onSnapshot(query(collection(db, "notifications"), orderBy("createdAt", "desc")), (snap) => useStore.setState({ 
-    notifications: snap.docs.map(d => ({ ...d.data(), id: d.id }) as Notification) 
-}));
-    onSnapshot(collection(db, "coupons"), (snap) => useStore.setState({ coupons: snap.docs.map(d => d.data() as Coupon) }));
-    onSnapshot(collection(db, "blogs"), (snap) => useStore.setState({ blogs: snap.docs.map(d => d.data() as BlogPost) }));
 };
 
 // Start Syncing on Client Side
