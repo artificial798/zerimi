@@ -42,7 +42,7 @@ const FilterSidebar = ({
                 <ul className="space-y-2 text-sm text-stone-600">
                     <li>
                         <Link href="/category/all" onClick={() => setShowMobileFilters(false)} className={`flex items-center justify-between p-2 rounded-lg transition ${rawSlug === 'all' ? 'bg-[#0a1f1c] text-white font-bold' : 'hover:bg-stone-100'}`}>
-                            All Jewelry
+                            ALL JEWELRY
                             {rawSlug === 'all' && <Check className="w-3 h-3"/>}
                         </Link>
                     </li>

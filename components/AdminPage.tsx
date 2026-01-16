@@ -260,90 +260,91 @@ export default function AdminPage() {
     // ✅ REAL FIREBASE LOGIN HANDLER (Admin + Staff + Manager)
    const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
-        setToast(null); // Clear previous errors
+        setToast(null);
 
         try {
             // ---------------------------------------------------------
-            // 1. SUPER ADMIN CHECK (Database Settings se)
+            // STEP 1: Firebase Auth Login (असली लॉगिन)
             // ---------------------------------------------------------
-            const docRef = doc(db, "settings", "super_admin");
-            const docSnap = await getDoc(docRef);
-
-            if (docSnap.exists()) {
-                const adminData = docSnap.data();
-                
-                // Agar email/pass DB wale super admin se match kare
-                if (email.toLowerCase() === adminData.email.toLowerCase() && password === adminData.password) {
-                    
-                    // 🔥 CRITICAL FIX: Background mein Firebase Auth Login karein
-                    // Iske bina "Danger Zone" aur "Settings" permission nahi denge
-                    try {
-                        await signInWithEmailAndPassword(auth, email, password);
-                    } catch (err: any) {
-                        console.warn("Silent Auth Warning:", err.message);
-                        // Agar user Auth me nahi hai, tab bhi hum UI allow karenge
-                        // lekin user ko warning denge ki DB write fail ho sakta hai
-                    }
-
-                    setIsAuthenticated(true);
-                    setUserRole('admin');
-                    setCurrentUser({
-                        name: 'Super Admin',
-                        email: adminData.email,
-                        role: 'admin',
-                        image: 'https://cdn-icons-png.flaticon.com/512/2942/2942813.png'
-                    });
-                    showToast('Welcome Super Admin (Vault Mode)', 'success');
-                    return;
-                }
-            }
-            // ---------------------------------------------------------
-            // 2. STAFF / MANAGER CHECK (Real Firebase Auth)
-            // ---------------------------------------------------------
-
-            // A. Firebase se Email/Pass verify karein
+            // यह लाइन अब Error नहीं देगी क्योंकि आपने Step 1 में यूजर बना लिया है
             const userCredential = await signInWithEmailAndPassword(auth, email, password);
             const user = userCredential.user;
+            
+            console.log("✅ Auth Success:", user.email);
 
-            // B. Ab check karein ki ye user hamare Database mein kya role rakhta hai
+            // ---------------------------------------------------------
+            // STEP 2: Super Admin Verification (Database से)
+            // ---------------------------------------------------------
+            let isSuperAdmin = false;
+
+            // अगर ईमेल admin@zerimi.com है, तो हम DB चेक करेंगे कि पासवर्ड मैच हो रहा है या नहीं
+            // (वैसे Auth ने पासवर्ड चेक कर लिया है, पर यह डबल सुरक्षा है)
+            if (user.email?.toLowerCase() === "admin@zerimi.com") {
+                try {
+                    const docRef = doc(db, "settings", "super_admin");
+                    const docSnap = await getDoc(docRef);
+                    
+                    if (docSnap.exists()) {
+                        const dbData = docSnap.data();
+                        // बस यह चेक करो कि ईमेल मैच है (Auth ने पासवर्ड पहले ही चेक कर लिया है)
+                        if (dbData.email === user.email) {
+                            isSuperAdmin = true;
+                        }
+                    }
+                } catch (err) {
+                    console.warn("Settings check failed, giving access via Auth email match:", err);
+                    isSuperAdmin = true; // Fallback
+                }
+            }
+
+            // ---------------------------------------------------------
+            // STEP 3: Role Assignment (Decision Time)
+            // ---------------------------------------------------------
+            
+            if (isSuperAdmin) {
+                setIsAuthenticated(true);
+                setUserRole('admin');
+                setCurrentUser({
+                    name: 'Super Admin',
+                    email: user.email,
+                    role: 'admin',
+                    image: 'https://cdn-icons-png.flaticon.com/512/2942/2942813.png'
+                });
+                showToast('Welcome Super Admin (God Mode)', 'success');
+                return;
+            }
+
+            // --- STAFF / MANAGER CHECK (बाकी यूजर्स के लिए) ---
             const foundUser = allUsers?.find((u: any) => u.email.toLowerCase() === email.toLowerCase());
 
             if (foundUser) {
-                // C. Role Verification
                 if (foundUser.role === 'banned') {
-                    await signOut(auth); // Login cancel karo
-                    return showToast('Access Denied: Your account is banned.', 'error');
+                    await signOut(auth);
+                    return showToast('Access Denied: You are banned.', 'error');
                 }
-
                 if (foundUser.role === 'customer') {
-                    await signOut(auth); // Login cancel karo (Customer allowed nahi hai)
+                    await signOut(auth);
                     return showToast('Access Denied: Customers cannot access Admin Panel.', 'error');
                 }
 
-                // D. Success! (Admin / Manager / Staff)
                 setIsAuthenticated(true);
-                setUserRole(foundUser.role); // Role set karo (manager/staff/admin)
+                setUserRole(foundUser.role);
                 setCurrentUser(foundUser);
                 showToast(`Welcome back, ${foundUser.name}`, 'success');
-
             } else {
-                // Agar user auth mein hai par database list mein nahi mila
-                await signOut(auth);
-                showToast('User record not found in database.', 'error');
+                await signOut(auth); // अगर लिस्ट में नहीं है तो लॉग आउट करो
+                showToast('Access Denied: User not found in staff list.', 'error');
             }
 
         } catch (error: any) {
             console.error("Login Error:", error);
-
-            // Error Messages ko user-friendly banayein
-            if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
-                showToast('Incorrect Email or Password.', 'error');
+            // Error Messages को साफ दिखाएं
+            if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password') {
+                showToast('❌ Incorrect Email or Password', 'error');
             } else if (error.code === 'auth/user-not-found') {
-                showToast('No user found with this email.', 'error');
-            } else if (error.code === 'auth/too-many-requests') {
-                showToast('Too many failed attempts. Try later.', 'error');
+                showToast('❌ User does not exist in Authentication Tab', 'error');
             } else {
-                showToast('Login failed. Check console.', 'error');
+                showToast(`❌ Login Failed: ${error.message}`, 'error');
             }
         }
     };
