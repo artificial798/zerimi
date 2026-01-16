@@ -264,91 +264,73 @@ export default function AdminPage() {
 
         try {
             // ---------------------------------------------------------
-            // STEP 1: Firebase Auth Login (असली लॉगिन)
+            // STEP 1: Firebase Auth Login (Check Password)
             // ---------------------------------------------------------
-            // यह लाइन अब Error नहीं देगी क्योंकि आपने Step 1 में यूजर बना लिया है
             const userCredential = await signInWithEmailAndPassword(auth, email, password);
             const user = userCredential.user;
             
             console.log("✅ Auth Success:", user.email);
 
             // ---------------------------------------------------------
-            // STEP 2: Super Admin Verification (Database से)
+            // STEP 2: Check 'users' Collection in Database
             // ---------------------------------------------------------
-            let isSuperAdmin = false;
+            // Hum sidha Database se puchenge: "Is UID ka role kya hai?"
+            const userDocRef = doc(db, "users", user.uid);
+            const userSnap = await getDoc(userDocRef);
 
-            // अगर ईमेल admin@zerimi.com है, तो हम DB चेक करेंगे कि पासवर्ड मैच हो रहा है या नहीं
-            // (वैसे Auth ने पासवर्ड चेक कर लिया है, पर यह डबल सुरक्षा है)
-            if (user.email?.toLowerCase() === "admin@zerimi.com") {
-                try {
-                    const docRef = doc(db, "settings", "super_admin");
-                    const docSnap = await getDoc(docRef);
-                    
-                    if (docSnap.exists()) {
-                        const dbData = docSnap.data();
-                        // बस यह चेक करो कि ईमेल मैच है (Auth ने पासवर्ड पहले ही चेक कर लिया है)
-                        if (dbData.email === user.email) {
-                            isSuperAdmin = true;
-                        }
-                    }
-                } catch (err) {
-                    console.warn("Settings check failed, giving access via Auth email match:", err);
-                    isSuperAdmin = true; // Fallback
-                }
-            }
-
-            // ---------------------------------------------------------
-            // STEP 3: Role Assignment (Decision Time)
-            // ---------------------------------------------------------
-            
-            if (isSuperAdmin) {
-                setIsAuthenticated(true);
-                setUserRole('admin');
-                setCurrentUser({
-                    name: 'Super Admin',
-                    email: user.email,
-                    role: 'admin',
-                    image: 'https://cdn-icons-png.flaticon.com/512/2942/2942813.png'
-                });
-                showToast('Welcome Super Admin (God Mode)', 'success');
+            if (!userSnap.exists()) {
+                await signOut(auth);
+                showToast("Access Denied: User profile not found in database.", "error");
                 return;
             }
 
-            // --- STAFF / MANAGER CHECK (बाकी यूजर्स के लिए) ---
-            const foundUser = allUsers?.find((u: any) => u.email.toLowerCase() === email.toLowerCase());
+            const userData = userSnap.data();
+            const role = userData.role;
 
-            if (foundUser) {
-                if (foundUser.role === 'banned') {
-                    await signOut(auth);
-                    return showToast('Access Denied: You are banned.', 'error');
-                }
-                if (foundUser.role === 'customer') {
-                    await signOut(auth);
-                    return showToast('Access Denied: Customers cannot access Admin Panel.', 'error');
-                }
+            // ---------------------------------------------------------
+            // STEP 3: Role Based Access Control
+            // ---------------------------------------------------------
 
+            // 👑 CASE A: SUPER ADMIN
+            if (role === 'admin') {
                 setIsAuthenticated(true);
-                setUserRole(foundUser.role);
-                setCurrentUser(foundUser);
-                showToast(`Welcome back, ${foundUser.name}`, 'success');
-            } else {
-                await signOut(auth); // अगर लिस्ट में नहीं है तो लॉग आउट करो
-                showToast('Access Denied: User not found in staff list.', 'error');
+                setUserRole('admin');
+                setCurrentUser({
+                    id: user.uid,
+                    name: userData.name || 'Super Admin',
+                    email: user.email,
+                    role: 'admin',
+                    image: userData.profileImage || 'https://cdn-icons-png.flaticon.com/512/2942/2942813.png'
+                });
+                showToast('Welcome Super Admin (God Mode)', 'success');
+            } 
+            
+            // 🛡️ CASE B: STAFF / MANAGER
+            else if (['manager', 'staff'].includes(role)) {
+                setIsAuthenticated(true);
+                setUserRole(role);
+                setCurrentUser(userData);
+                showToast(`Welcome back, ${userData.name || 'Staff'}`, 'success');
+            } 
+            
+            // 🚫 CASE C: CUSTOMER OR BANNED
+            else {
+                await signOut(auth);
+                const msg = role === 'banned' ? 'Access Denied: You are banned.' : 'Access Denied: Customers cannot access Admin Panel.';
+                showToast(msg, 'error');
             }
 
         } catch (error: any) {
             console.error("Login Error:", error);
-            // Error Messages को साफ दिखाएं
             if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password') {
                 showToast('❌ Incorrect Email or Password', 'error');
             } else if (error.code === 'auth/user-not-found') {
-                showToast('❌ User does not exist in Authentication Tab', 'error');
+                showToast('❌ User does not exist in Firebase Auth', 'error');
             } else {
                 showToast(`❌ Login Failed: ${error.message}`, 'error');
             }
         }
     };
-
     useEffect(() => {
         setIsMounted(true);
         if (typeof window !== 'undefined') {
@@ -510,14 +492,18 @@ export default function AdminPage() {
                                 <span className="hidden lg:inline">Popup Manager</span>
                             </button>
 
-                            <p className="px-4 py-2 text-[10px] text-white/20 uppercase tracking-widest hidden lg:block mt-4">Administration</p>
-                            <SidebarBtn icon={<Users />} label="Staff & Users" active={activeTab === 'users'} onClick={() => setActiveTab('users')} />
+                            
                         </>
                     )}
 
                     {/* 3. SIRF ADMIN KE LIYE (Manager ko bhi nahi dikhega) */}
                     {userRole === 'admin' && (
-                        <><SidebarBtn icon={<FileText />} label="GST & Reports" active={activeTab === 'gst'} onClick={() => setActiveTab('gst')} />
+                        
+                        <>{/* 👇 YAHAN PASTE KAREIN */}
+        <p className="px-4 py-2 text-[10px] text-white/20 uppercase tracking-widest hidden lg:block mt-4">Administration</p>
+        <SidebarBtn icon={<Users />} label="Staff & Users" active={activeTab === 'users'} onClick={() => setActiveTab('users')} />
+        {/* 👆 AB YE SIRF ADMIN KO DIKHEGA */}
+                        <SidebarBtn icon={<FileText />} label="GST & Reports" active={activeTab === 'gst'} onClick={() => setActiveTab('gst')} />
                             <SidebarBtn icon={<Settings />} label="Payment & Config" active={activeTab === 'config'} onClick={() => setActiveTab('config')} />
                             <SidebarBtn icon={<AlertOctagon />} label="Danger Zone" active={activeTab === 'danger'} onClick={() => setActiveTab('danger')} />
                         </>
@@ -690,19 +676,20 @@ export default function AdminPage() {
 
                             {activeTab === 'popup' && <div className="animate-fade-in"><PopupManager siteText={store.siteText} onSave={store.updateSiteText} /></div>}
 
-                            {activeTab === 'users' && <UserManager
-                                allUsers={allUsers}
-                                updateUserRole={updateUserRole}
-                                deleteUser={store.deleteUser}
-                                showToast={showToast}
-                                currentUser={currentUser} // ✅ Safety Prop
-                            />}
+                           
                         </>
                     )}
 
                     {/* ✅ 2. ONLY ADMIN ACCESS (Settings & Danger Zone) */}
                     {userRole === 'admin' && (
-                        <>
+                        <>{/* 👇 YAHAN ADD KAREIN */}
+        {activeTab === 'users' && <UserManager 
+            allUsers={allUsers}
+            updateUserRole={updateUserRole}
+            deleteUser={store.deleteUser}
+            showToast={showToast}
+            currentUser={currentUser}
+        />}
                             {activeTab === 'config' && <ConfigManager updateSystemConfig={store.updateSystemConfig} showToast={showToast} />}
                             {activeTab === 'danger' && <DangerZone nukeDatabase={nukeDatabase} products={products} orders={orders} allUsers={allUsers} showToast={showToast} />}
                         </>
