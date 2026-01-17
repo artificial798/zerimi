@@ -706,7 +706,7 @@ const [isNotifOpen, setIsNotifOpen] = useState(false);
 // --- 🟢 UPDATED: VAULT LOGIC (Auto Create & Auto Delete) ---
   // --- 🟢 UPDATED: VAULT LOGIC (Auto Create & Auto Delete) ---
 // --- 🟢 UPDATED: VAULT LOGIC (Auto Create & Auto Delete) ---
-  useEffect(() => {
+useEffect(() => {
     // ✅ FIX: Check added (currentUser.email) to prevent TypeScript Error
     if (currentUser && currentUser.email && orders) {
        const userEmail = currentUser.email?.toLowerCase() || "";
@@ -740,7 +740,6 @@ const [isNotifOpen, setIsNotifOpen] = useState(false);
 
   // ✅ FIX 2: Main Render Check for Email
   const userEmail = currentUser.email?.toLowerCase() || "";
- // ✅ FIX: Notifications Sorted (Newest First) & Filtered
   // Hum array ko reverse kar rahe hain kyunki Firebase usually purana data pehle bhejta hai
  // ✅ FIX: Notifications ko Newest First Sort karein
     const myNotifications = notifications
