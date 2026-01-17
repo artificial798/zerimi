@@ -705,23 +705,21 @@ const [isNotifOpen, setIsNotifOpen] = useState(false);
  
 // --- 🟢 UPDATED: VAULT LOGIC (Auto Create & Auto Delete) ---
   // --- 🟢 UPDATED: VAULT LOGIC (Auto Create & Auto Delete) ---
+// --- 🟢 UPDATED: VAULT LOGIC (Auto Create & Auto Delete) ---
   useEffect(() => {
     // ✅ FIX: Check added (currentUser.email) to prevent TypeScript Error
     if (currentUser && currentUser.email && orders) {
        const userEmail = currentUser.email?.toLowerCase() || "";
         
         // 1. Sirf 'Delivered' orders ko filter karo.
-        // Jaise hi Admin status badal kar 'Returned' karega, ye filter usse hata dega.
         const deliveredOrders = orders.filter((o: any) => 
             o.customerEmail?.toLowerCase() === userEmail && 
-            o.status.toLowerCase() === 'delivered' // Case-insensitive check
+            o.status.toLowerCase() === 'delivered' 
         );
 
         // 2. Items ko map karke Certificate banao
         const certificates = deliveredOrders.flatMap((order: any) => 
             order.items.map((item: any, index: number) => {
-                // Stable Certificate ID generate karna (Order ID + Item Index)
-                // Taki refresh karne par ID badle nahi
                 const cleanOrderId = order.id.replace('ZER-', '').replace(/-/g, '');
                 const stableCertId = `CERT-${cleanOrderId}-${index + 1}`;
 
@@ -740,6 +738,7 @@ const [isNotifOpen, setIsNotifOpen] = useState(false);
 
   if (!isMounted || !currentUser) return null;
 
+  // ✅ FIX 2: Main Render Check for Email
   const userEmail = currentUser.email?.toLowerCase() || "";
  // ✅ FIX: Notifications Sorted (Newest First) & Filtered
   // Hum array ko reverse kar rahe hain kyunki Firebase usually purana data pehle bhejta hai
