@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { auth } from "@/lib/firebase"; // Apni firebase config import karein
+import { auth } from "@/lib/firebase"; 
 import { RecaptchaVerifier, signInWithPhoneNumber } from "firebase/auth";
 import { Phone, ArrowRight, Loader2, CheckCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -13,16 +13,39 @@ export default function PhoneLogin() {
   const [confirmationResult, setConfirmationResult] = useState<any>(null);
   const router = useRouter();
 
-  // 1. Recaptcha Setup (Invisible)
+  // 1. Recaptcha Setup (Better & Safer Logic)
   useEffect(() => {
-    if (!window.recaptchaVerifier) {
-      window.recaptchaVerifier = new RecaptchaVerifier(auth, "recaptcha-container", {
-        size: "invisible",
-        callback: () => {
-          // Recaptcha solved automatically
-        },
-      });
-    }
+    const initRecaptcha = () => {
+        // Agar pehle se bana hua hai to clear karo (prevent duplicate error)
+        if (window.recaptchaVerifier) {
+            window.recaptchaVerifier.clear();
+            window.recaptchaVerifier = null;
+        }
+
+        const container = document.getElementById("recaptcha-container");
+        if (container) {
+            window.recaptchaVerifier = new RecaptchaVerifier(auth, "recaptcha-container", {
+                size: "invisible",
+                callback: () => {
+                    // Recaptcha solved - auto otp send ho jayega
+                },
+                "expired-callback": () => {
+                    // Agar expire ho jaye
+                    alert("Session expired. Please try again.");
+                }
+            });
+        }
+    };
+
+    initRecaptcha();
+
+    // Cleanup: Jab user page se jaye to recaptcha hata do
+    return () => {
+        if (window.recaptchaVerifier) {
+            window.recaptchaVerifier.clear();
+            window.recaptchaVerifier = null;
+        }
+    };
   }, []);
 
   // 2. Send OTP
@@ -32,15 +55,36 @@ export default function PhoneLogin() {
     setLoading(true);
     try {
       const formattedNumber = phoneNumber.startsWith("+91") ? phoneNumber : `+91${phoneNumber}`;
-      const appVerifier = window.recaptchaVerifier;
+      
+      // Safety check
+      if (!window.recaptchaVerifier) {
+          alert("Security Check Failed. Please refresh the page.");
+          setLoading(false);
+          return;
+      }
 
-      const confirmation = await signInWithPhoneNumber(auth, formattedNumber, appVerifier);
+      const confirmation = await signInWithPhoneNumber(auth, formattedNumber, window.recaptchaVerifier);
       setConfirmationResult(confirmation);
       setStep("INPUT_OTP");
-      alert("✅ OTP Sent!");
+      // alert("✅ OTP Sent!"); // User experience ke liye alert hata diya, sidha screen change hogi
     } catch (error: any) {
       console.error(error);
-      alert("❌ Error sending OTP: " + error.message);
+      
+      // Agar Hostname error hai to user ko saaf batao
+      if(error.message.includes("auth/quota-exceeded")) {
+          alert("Too many attempts. Please try again later.");
+      } else if (error.message.includes("Hostname match not found")) {
+          alert("Setup Error: Domain not allowed in Firebase. Please contact admin.");
+      } else {
+          alert("❌ Error: " + error.message);
+      }
+      
+      // Error ke baad recaptcha reset karo
+      if (window.recaptchaVerifier) {
+          window.recaptchaVerifier.clear();
+          window.recaptchaVerifier = null;
+          window.location.reload(); // Quick fix to reset state
+      }
     } finally {
       setLoading(false);
     }
@@ -52,12 +96,11 @@ export default function PhoneLogin() {
     setLoading(true);
     try {
       await confirmationResult.confirm(otp);
-      // Login Success!
-      alert("🎉 Login Successful!");
-      router.push("/"); // Home page par bhejo
+      // alert("🎉 Login Successful!");
+      router.push("/"); 
     } catch (error: any) {
       console.error(error);
-      alert("❌ Invalid OTP");
+      alert("❌ Invalid OTP. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -79,7 +122,7 @@ export default function PhoneLogin() {
                 placeholder="98765 43210"
                 className="w-full p-3 pl-12 bg-black/20 border border-white/10 rounded-lg text-white outline-none focus:border-amber-500/50 transition text-sm focus:bg-black/40 font-mono tracking-wide"
                 value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, "").slice(0, 10))} // Sirf numbers allow karega
+                onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, "").slice(0, 10))}
               />
             </div>
           </div>
@@ -95,7 +138,7 @@ export default function PhoneLogin() {
         <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
           <div className="text-center">
             <p className="text-white/60 text-xs">OTP sent to +91 {phoneNumber}</p>
-            <button onClick={() => setStep("INPUT_PHONE")} className="text-[10px] text-amber-500 hover:underline mt-1">Change Number</button>
+            <button onClick={() => { setStep("INPUT_PHONE"); setOtp(""); }} className="text-[10px] text-amber-500 hover:underline mt-1">Change Number</button>
           </div>
           
           <div>
@@ -122,7 +165,6 @@ export default function PhoneLogin() {
   );
 }
 
-// Typescript fix for global window object
 declare global {
   interface Window {
     recaptchaVerifier: any;
