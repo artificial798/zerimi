@@ -44,7 +44,7 @@ export default function RootLayout({
   };
 
   return (
-    <html lang="en" suppressHydrationWarning className="scroll-smooth">
+    <html lang="en" suppressHydrationWarning className="scroll-smooth" data-scroll-behavior="smooth">
       <body 
         // ✅ CHANGED: Selection color to Rose-200 and Text Rose-900
         className={`${luxuryFont.variable} ${bodyFont.variable} font-sans bg-[#ffffff] text-[#1c1917] antialiased selection:bg-rose-200 selection:text-rose-900`}

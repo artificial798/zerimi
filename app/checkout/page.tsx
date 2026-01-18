@@ -366,6 +366,35 @@ const handlePincodeChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
             }
         }
     };
+    
+    // --- ✅ NEW: EMAIL SENDING FUNCTION ---
+const sendOrderConfirmationEmail = async (details: any, orderId: string) => {
+    try {
+        const res = await fetch('/api/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: details.email,
+                name: details.name,
+                orderId: orderId,
+                amount: Math.round(details.total)
+            }),
+        });
+
+        // ✅ AB SACH PATA CHALEGA:
+        // Hum check kar rahe hain ki kya server ne 'OK' (200) bola ya Error (500)
+        if (!res.ok) {
+            const errorData = await res.json(); // Server se pucho kya hua
+            throw new Error(errorData.error || "Email failed to send"); // Error phenko
+        }
+
+        console.log("Confirmation email sent successfully");
+
+    } catch (error) {
+        // Ab ye asli error pakdega
+        console.error("Failed to send email:", error);
+    }
+};
   // --- ✅ CORRECT HANDLE PLACE ORDER FUNCTION ---
     const handlePlaceOrder = async () => {
         const finalEmail = formData.email?.trim().toLowerCase() || currentUser?.email?.trim().toLowerCase();
@@ -439,7 +468,9 @@ const baseOrderDetails = {
                     theme: { color: "#d4af37" },
                     
                     // 4. Payment Success Handler
+        // 4. Payment Success Handler
                     handler: async function (response: any) {
+                        await new Promise(resolve => setTimeout(resolve, 1500));
                         const finalOrder = { 
                             ...baseOrderDetails, 
                             status: 'Processing',
@@ -450,12 +481,19 @@ const baseOrderDetails = {
                         // Order Save Karein
                         const newOrderId = await placeOrder(finalOrder);
                         
+                        // --- ✅ 1. EMAIL TRIGGER (Ye line add ki gayi hai) ---
+                        if (newOrderId) {
+                            await sendOrderConfirmationEmail(finalOrder, newOrderId);
+                        }
+                        // -----------------------------------------------------
+
                         setConfirmedOrderId(newOrderId || "ZER-PAID");
                         setSuccessDetails(finalOrder);
                         
                         if (typeof clearCart === 'function') clearCart();
+                          setStep(3); // Success Screen
                         setLoading(false);
-                        setStep(3); // Success Screen
+                      
                     },
                     modal: {
                         ondismiss: function() {
@@ -464,7 +502,6 @@ const baseOrderDetails = {
                         }
                     }
                 };
-
                 const paymentObject = new (window as any).Razorpay(options);
                 paymentObject.open();
                 return; 
@@ -473,48 +510,63 @@ const baseOrderDetails = {
             // ==========================================
             // OPTION B: CASH ON DELIVERY (COD)
             // ==========================================
-            else if (paymentMethod === 'cod') {
-                await new Promise(resolve => setTimeout(resolve, 1500)); 
+          else if (paymentMethod === 'cod') {
+    await new Promise(resolve => setTimeout(resolve, 1000)); 
 
-                const orderDetails = {
-                    name: `${formData.firstName} ${formData.lastName}`,
-                    email: finalEmail,
-                    address: {
-                        id: `addr_${Date.now()}`,
-                        street: formData.address,
-                        city: formData.city,
-                        state: formData.state,
-                        pincode: formData.pincode,
-                        phone: formData.phone,
-                    },
-                    isGift, 
-                    giftMessage: giftMessage || "", 
-                    giftWrapPrice: currentGiftCost,
-                    status: 'Pending',
-                    paymentMethod: 'COD',
-                    date: new Date().toLocaleDateString('en-IN'),
-                    total, subtotal, shipping, discount: discountAmount, tax: totalGST,
+    const orderDetails = {
+        name: `${formData.firstName} ${formData.lastName}`,
+        email: finalEmail,
+        address: {
+            id: `addr_${Date.now()}`,
+            street: formData.address,
+            city: formData.city,
+            state: formData.state,
+            pincode: formData.pincode,
+            phone: formData.phone,
+        },
+        isGift, 
+        giftMessage: giftMessage || "", 
+        giftWrapPrice: currentGiftCost,
+        status: 'Pending',
+        paymentMethod: 'COD',
+        date: new Date().toLocaleDateString('en-IN'),
+        
+        // Financials
+        total, 
+        subtotal, 
+        shipping, 
+        // ✅ FIX: Coupon + Loyalty Points dono ka total discount database mein jaye
+        discount: discountAmount + (pointsDiscount || 0), 
+        tax: totalGST,
 
-                    items: cart.map((item: any) => ({
-                        name: item.product.name, 
-                        qty: item.qty, 
-                        price: item.product.price,
-                        image: item.product.image, 
-                        selectedSize: item.selectedSize || null, 
-                        selectedColor: item.selectedColor || null
-                    }))
-                };
+        items: cart.map((item: any) => ({
+            name: item.product.name, 
+            qty: item.qty, 
+            price: item.product.price,
+            image: item.product.image, 
+            selectedSize: item.selectedSize || null, 
+            selectedColor: item.selectedColor || null
+        }))
+    };
 
-                const newOrderId = await placeOrder(orderDetails);
-                
-                setConfirmedOrderId(newOrderId || "ZER-PENDING");
-                setSuccessDetails(orderDetails);
+    // 1. Database mein Order Place karein
+    const newOrderId = await placeOrder(orderDetails);
+    
+    // ✅ 2. EMAIL TRIGGER (Ye line naye order confirmation email ke liye hai)
+    if (newOrderId) {
+        await sendOrderConfirmationEmail(orderDetails, newOrderId);
+    }
+    
+    // 3. UI Update karein
+    setConfirmedOrderId(newOrderId || "ZER-PENDING");
+    setSuccessDetails(orderDetails);
 
-                if (typeof clearCart === 'function') clearCart();
-                setLoading(false);
-                setStep(3); // Success Screen
-                return;
-            }
+    if (typeof clearCart === 'function') clearCart();
+   setStep(3); // Success Screen Redirect 
+    setLoading(false);
+    
+    return;
+}
 
         } catch (error: any) {
             console.error("Order Error:", error);
@@ -523,20 +575,21 @@ const baseOrderDetails = {
         }
     };
 
-    if (cart.length === 0 && step !== 3) {
-        return (
-            <div className="min-h-screen flex flex-col items-center justify-center bg-stone-50 font-sans">
-                <div className="w-20 h-20 bg-stone-200 rounded-full flex items-center justify-center mb-6 animate-pulse">
-                    <ShoppingBag className="w-10 h-10 text-stone-400" />
-                </div>
-                <h2 className="text-2xl font-serif text-[#0a1f1c] mb-2">Your cart is empty</h2>
-                <p className="text-stone-500 text-sm mb-8">Looks like you haven't added any luxury items yet.</p>
-                <Link href="/" className="px-8 py-3 bg-[#0a1f1c] text-white rounded-lg text-xs uppercase font-bold tracking-widest hover:bg-amber-700 transition">
-                    Start Shopping
-                </Link>
+   // ✅ FIX: Agar loading ho rahi hai, toh Empty Cart page MAT dikhao
+if (cart.length === 0 && step !== 3 && !loading) {
+    return (
+        <div className="min-h-screen flex flex-col items-center justify-center bg-stone-50 font-sans">
+            <div className="w-20 h-20 bg-stone-200 rounded-full flex items-center justify-center mb-6 animate-pulse">
+                <ShoppingBag className="w-10 h-10 text-stone-400" />
             </div>
-        );
-    }
+            <h2 className="text-2xl font-serif text-[#0a1f1c] mb-2">Your cart is empty</h2>
+            <p className="text-stone-500 text-sm mb-8">Looks like you haven't added any luxury items yet.</p>
+            <Link href="/" className="px-8 py-3 bg-[#0a1f1c] text-white rounded-lg text-xs uppercase font-bold tracking-widest hover:bg-amber-700 transition">
+                Start Shopping
+            </Link>
+        </div>
+    );
+}
 
     // --- ✅ STEP 3: PREMIUM SUCCESS SCREEN ---
     if (step === 3) {
@@ -1198,7 +1251,38 @@ const baseOrderDetails = {
                         </div>
                     </div>
                 </div>
+{/* ✅ STEP: IS CODE KO YAHAN PASTE KAREIN (Last </div> se theek pehle) */}
+            
+            <AnimatePresence>
+                {loading && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[9999] bg-[#0a1f1c]/95 backdrop-blur-xl flex flex-col items-center justify-center text-white"
+                    >
+                        {/* Animated Logo/Spinner */}
+                        <div className="relative mb-8">
+                            <div className="w-24 h-24 border-4 border-amber-500/20 border-t-amber-500 rounded-full animate-spin"></div>
+                            <div className="absolute inset-0 flex items-center justify-center">
+                                <ShoppingBag className="w-8 h-8 text-white/50" />
+                            </div>
+                        </div>
 
+                        <h2 className="text-3xl font-serif tracking-[0.2em] text-white mb-4">PROCESSING</h2>
+                        
+                        <div className="flex flex-col items-center space-y-2">
+                            <p className="text-amber-500/80 text-xs uppercase tracking-widest animate-pulse">
+                                Securing your luxury items...
+                            </p>
+                            <p className="text-stone-400 text-[10px]">
+                                Please do not close or refresh the page.
+                            </p>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+            {/* ✅ YAHAN CODE KHATAM */}
             </div>
         </div>
     );

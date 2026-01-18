@@ -83,7 +83,11 @@ export default function PhoneLogin() {
       if (window.recaptchaVerifier) {
           window.recaptchaVerifier.clear();
           window.recaptchaVerifier = null;
-          window.location.reload(); // Quick fix to reset state
+         if (window.recaptchaVerifier) {
+  window.recaptchaVerifier.clear();
+  window.recaptchaVerifier = null;
+}
+// Quick fix to reset state
       }
     } finally {
       setLoading(false);
