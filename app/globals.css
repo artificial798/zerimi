@@ -82,3 +82,12 @@ h1, h2, h3, h4, .luxury-text {
 .premium-zoom:hover {
   transform: scale(1.06); /* Thoda subtle zoom, jyada aggressive nahi */
 }
+/* Hide scrollbar for Chrome, Safari and Opera */
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}
+/* Hide scrollbar for IE, Edge and Firefox */
+.scrollbar-hide {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+}

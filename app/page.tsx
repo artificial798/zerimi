@@ -74,7 +74,8 @@ export default function Home() {
   {/* =========================================
           1. HERO SECTION (PREMIUM & COMPACT TEXT)
          ========================================= */}
-      <section className="relative h-[60vh] md:h-screen w-full flex items-center justify-center overflow-hidden bg-black">
+     {/* Mobile: Aspect 16:10 (Horizontal) | Desktop: Aspect 16:7 (Wide) */}
+<section className="relative w-full h-auto min-h-[350px] aspect-[16/10] md:aspect-[16/7] flex items-center justify-center overflow-hidden bg-black">
         
         {/* SLIDES */}
         {slides.map((slide, index) => (
@@ -158,87 +159,124 @@ export default function Home() {
       {/* =========================================
           2. CATEGORY CARDS (SIMPLE DESIGN + MOBILE VISIBLE SHOP NOW)
          ========================================= */}
-      <section className="relative z-20 -mt-12 md:-mt-16 px-4 md:px-6">
-        <div className="max-w-7xl mx-auto grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-6">
-          {categories?.map((cat: any) => {
-             
-             // Link Fixer
-             let categorySlug = "all";
-             const title = cat.title ? cat.title.toLowerCase() : "";
-             if (title.includes("ring")) categorySlug = "Ring";
-             else if (title.includes("neck") || title.includes("neclace")) categorySlug = "Necklace";
-             else if (title.includes("ear")) categorySlug = "Earring";
-             else if (title.includes("brace")) categorySlug = "Bracelet";
-             else categorySlug = "all";
+ {/* =========================================
+    2. CATEGORY CARDS (OVERLAPPING & PREMIUM)
+   ========================================= */}
+{/* 👇 UPDATE: '-mt-14' (Mobile) aur '-mt-24' (Desktop). 
+    Isse ye Banner ke upar chadh jayega aur gap khatam ho jayega. */}
+<section className="relative z-20 -mt-14 md:-mt-24 px-3 md:px-8 pb-12">
+  
+  <div className="max-w-6xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6">
+    
+    {categories?.map((cat: any) => {
+       
+       let categorySlug = "all";
+       const title = cat.title ? cat.title.toLowerCase() : "";
+       if (title.includes("ring")) categorySlug = "Ring";
+       else if (title.includes("neck") || title.includes("neclace")) categorySlug = "Necklace";
+       else if (title.includes("ear")) categorySlug = "Earring";
+       else if (title.includes("brace")) categorySlug = "Bracelet";
+       else categorySlug = "all";
 
-             return (
-              <motion.div 
-                key={cat.id || Math.random()} 
-                whileHover={{ y: -10 }} 
-                className="bg-[#f9f4e8] rounded-t-2xl rounded-b-lg text-center shadow-lg cursor-pointer group"
-              >
-                <Link href={`/category/${categorySlug}`} className="block p-3 md:p-6">
-                  {/* Image Area */}
-                  <div className="relative w-full h-28 md:h-48 mb-3 md:mb-4 overflow-hidden rounded-t-xl rounded-b-lg">
-                    <Image 
-                      src={getSafeImage(cat.image)} 
-                      alt={cat.title || "Category"} 
-                      fill 
-                      className="object-cover group-hover:scale-110 transition duration-700" 
-                    />
-                  </div>
-                  
-                  {/* Category Title */}
-                  <h3 className="font-serif text-sm md:text-xl text-[#0a1f1c] uppercase tracking-wide font-bold">
-                    {cat.title || "Category"}
-                  </h3>
-                  
-                  {/* Shop Now Button (Visible on Mobile, Hover on Desktop) */}
-                  <p className="flex text-[10px] md:text-xs uppercase text-amber-700 font-bold mt-2 justify-center items-center gap-1 transition-all duration-300
-                    opacity-100 md:opacity-0 md:group-hover:opacity-100 
-                    translate-y-0 md:translate-y-2 md:group-hover:translate-y-0">
-                    Shop Now <ArrowRight className="w-3 h-3" />
-                  </p>
-                </Link>
-              </motion.div>
-            );
-          })}
-        </div>
-      </section>
+       return (
+        <motion.div 
+          key={cat.id || Math.random()} 
+          whileHover="hover" 
+          initial="rest"
+          animate="rest"
+          // 👇 PREMIUM LOOK: 'rounded-xl' (Soft), 'bg-white' (Clean), 'shadow-xl' (Pop effect)
+          className="relative w-full aspect-[4/5] overflow-hidden group cursor-pointer bg-white rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.15)] border border-white/50"
+        >
+          <Link href={`/category/${categorySlug}`} className="block w-full h-full relative">
+            
+            {/* 1. IMAGE LAYER */}
+            <motion.div 
+              className="w-full h-full relative"
+              variants={{ 
+                rest: { scale: 1 },
+                hover: { scale: 1.1 } 
+              }} 
+              transition={{ duration: 0.8, ease: "easeOut" }}
+            >
+              <Image 
+                src={getSafeImage(cat.image)} 
+                alt={cat.title || "Category"} 
+                fill 
+                sizes="(max-width: 768px) 50vw, 25vw"
+                className="object-cover" 
+              />
+            </motion.div>
 
+            {/* 2. GRADIENT (Thoda Soft Black niche se) */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent opacity-80 transition-opacity duration-300" />
+            
+            {/* 3. CONTENT (Floating Glass Effect) */}
+            <div className="absolute inset-0 flex flex-col justify-end p-3 text-center items-center pb-4">
+              
+              {/* Category Name */}
+              <h3 className="font-serif text-white text-xs md:text-base uppercase tracking-[0.15em] font-medium drop-shadow-lg mb-2 transform translate-y-1 group-hover:translate-y-0 transition-transform duration-500">
+                {cat.title || "Category"}
+              </h3>
+
+              {/* Decorative Line (Gold) */}
+              <div className="w-6 h-[2px] bg-amber-400 rounded-full mb-3 shadow-[0_0_10px_rgba(251,191,36,0.8)]"></div>
+
+              {/* 'Shop Now' Glass Button */}
+              <div className="bg-white/10 backdrop-blur-sm border border-white/20 px-3 py-1.5 rounded-full group-hover:bg-white group-hover:text-black transition-all duration-300">
+                 <p className="text-[9px] md:text-[10px] text-white group-hover:text-black uppercase tracking-widest font-bold flex items-center gap-1">
+                   Shop Now
+                 </p>
+              </div>
+
+            </div>
+
+          </Link>
+        </motion.div>
+      );
+    })}
+  </div>
+</section>
       {/* =========================================
           3. NEW ARRIVALS (Grid Fix: 2 Columns on Mobile)
          ========================================= */}
-      <section className="max-w-7xl mx-auto px-4 md:px-6 py-16 md:py-20">
-        <div className="flex justify-between items-end mb-8 md:mb-12">
-          <div>
-            <h2 className="font-serif text-2xl md:text-4xl text-[#0a1f1c] mb-1 md:mb-2">
-              {siteText?.newArrivalsTitle || "New Arrivals"}
-            </h2>
-            <p className="text-stone-500 text-xs md:text-base">
-              {siteText?.newArrivalsSub || "Curated specifically for the modern you."}
-            </p>
-          </div>
-          <Link href="/category/all" className="flex items-center gap-1 text-[#0a1f1c] uppercase text-[10px] md:text-xs font-bold tracking-widest hover:text-amber-600 transition">
-            View All <ArrowRight className="w-3 h-3 md:w-4 md:h-4" />
-          </Link>
-        </div>
+     {/* =========================================
+    3. NEW ARRIVALS (HORIZONTAL SCROLL ON MOBILE)
+   ========================================= */}
+<section className="max-w-7xl mx-auto px-4 md:px-6 py-12 md:py-20">
+  
+  <div className="flex justify-between items-end mb-6 md:mb-10 px-1 md:px-0">
+    <div>
+      <h2 className="font-serif text-2xl md:text-4xl text-[#0a1f1c] mb-1">
+        {siteText?.newArrivalsTitle || "New Arrivals"}
+      </h2>
+      <p className="text-stone-500 text-xs md:text-base">
+        {siteText?.newArrivalsSub || "Freshly crafted for the modern you."}
+      </p>
+    </div>
+    <Link href="/category/all" className="flex items-center gap-1 text-[#0a1f1c] uppercase text-[10px] md:text-xs font-bold tracking-widest hover:text-amber-600 transition">
+      View All <ArrowRight className="w-3 h-3 md:w-4 md:h-4" />
+    </Link>
+  </div>
 
-        {/* ✅ NAYA CODE: Jo nayi logic se products dikhayega */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8">
-            {newArrivals.length > 0 ? (
-                // Agar data hai to products dikhao
-                newArrivals.map((product: any) => (
-                    <ProductCard key={product.id} product={product} />
-                ))
-            ) : (
-                // Agar data load ho raha hai to 'Loading Skeleton' dikhao
-                [...Array(4)].map((_, i) => (
-                    <div key={i} className="aspect-[3/4] bg-stone-100 animate-pulse rounded-xl" />
-                ))
-            )}
-        </div>
-      </section>
+  {/* 👇 MAGIC CODE: Mobile par 'Flex + Scroll' | Desktop par 'Grid' */}
+  <div className="flex md:grid md:grid-cols-4 overflow-x-auto md:overflow-visible gap-3 md:gap-8 pb-8 md:pb-0 -mx-4 px-4 md:mx-0 scrollbar-hide snap-x snap-mandatory">
+      
+      {newArrivals.length > 0 ? (
+          newArrivals.map((product: any) => (
+              // 👇 Mobile Width: 45% (Ek baar mein 2.2 products dikhenge)
+              <div key={product.id} className="min-w-[45%] md:min-w-0 md:w-auto snap-start">
+                  <ProductCard product={product} />
+              </div>
+          ))
+      ) : (
+          // Loading Skeleton (Horizontal)
+          [...Array(4)].map((_, i) => (
+              <div key={i} className="min-w-[45%] md:min-w-0 aspect-square bg-stone-100 animate-pulse rounded-xl" />
+          ))
+      )}
+
+  </div>
+</section>
 {/* --- 🤫 SECRET GIFT MODE USP SECTION (Mobile Optimized) --- */}
 <section className="py-16 md:py-24 bg-[#0a1f1c] text-white overflow-hidden relative">
   

@@ -282,12 +282,16 @@ const subtotal = cartInclusiveTotal;
     }, [isGift]); // dependency added
 
     // --- EFFECTS ---
+    // --- ✅ FIX: Cart tabhi khali karo jab Success Page aa jaye ---
     useEffect(() => {
-        if (cart.length === 0 && step !== 3) {
-            const timer = setTimeout(() => router.push('/'), 3000);
+        if (step === 3) {
+            // Thoda sa delay taaki animation smooth lage
+            const timer = setTimeout(() => {
+                if (typeof clearCart === 'function') clearCart();
+            }, 500);
             return () => clearTimeout(timer);
         }
-    }, [cart, router, step]);
+    }, [step, clearCart]);
 
   const handleQuantityChange = (item: any, change: number) => {
         // 1. Agar quantity 1 hai aur user kam kar raha hai, toh delete confirm karo
@@ -395,6 +399,29 @@ const sendOrderConfirmationEmail = async (details: any, orderId: string) => {
         console.error("Failed to send email:", error);
     }
 };
+// --- ✅ SMS SENDING FUNCTION ---
+const sendOrderConfirmationSMS = async (phone: string, orderId: string, amount: any) => {
+    try {
+        // Phone number validation check
+        if (!phone || phone.length < 10) {
+            console.log("Invalid phone number for SMS");
+            return;
+        }
+
+        await fetch('/api/send-sms', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                phone: phone,
+                orderId: orderId,
+                amount: Math.round(amount)
+            }),
+        });
+        console.log("SMS Request Sent");
+    } catch (error) {
+        console.error("Failed to send SMS:", error);
+    }
+};
   // --- ✅ CORRECT HANDLE PLACE ORDER FUNCTION ---
     const handlePlaceOrder = async () => {
         const finalEmail = formData.email?.trim().toLowerCase() || currentUser?.email?.trim().toLowerCase();
@@ -431,7 +458,12 @@ const totalDiscount = discountAmount + (pointsDiscount || 0);
 const baseOrderDetails = {
     name: `${formData.firstName} ${formData.lastName}`,
     email: finalEmail,
-    address: {
+    address: { 
+        street: formData.address,
+        city: formData.city,
+        state: formData.state,
+        pincode: formData.pincode,
+        phone: formData.phone,
         // ... address fields ...
     },
     isGift, 
@@ -484,6 +516,9 @@ const baseOrderDetails = {
                         // --- ✅ 1. EMAIL TRIGGER (Ye line add ki gayi hai) ---
                         if (newOrderId) {
                             await sendOrderConfirmationEmail(finalOrder, newOrderId);
+                            const phoneToSend = finalOrder.address?.phone || formData.phone;
+    await sendOrderConfirmationSMS(phoneToSend, newOrderId, total);
+                            
                         }
                         // -----------------------------------------------------
 
@@ -555,13 +590,15 @@ const baseOrderDetails = {
     // ✅ 2. EMAIL TRIGGER (Ye line naye order confirmation email ke liye hai)
     if (newOrderId) {
         await sendOrderConfirmationEmail(orderDetails, newOrderId);
+        const phoneToSend = orderDetails.address.phone || formData.phone;
+        await sendOrderConfirmationSMS(phoneToSend, newOrderId, total);
     }
     
     // 3. UI Update karein
     setConfirmedOrderId(newOrderId || "ZER-PENDING");
     setSuccessDetails(orderDetails);
 
-    if (typeof clearCart === 'function') clearCart();
+   
    setStep(3); // Success Screen Redirect 
     setLoading(false);
     
@@ -576,20 +613,7 @@ const baseOrderDetails = {
     };
 
    // ✅ FIX: Agar loading ho rahi hai, toh Empty Cart page MAT dikhao
-if (cart.length === 0 && step !== 3 && !loading) {
-    return (
-        <div className="min-h-screen flex flex-col items-center justify-center bg-stone-50 font-sans">
-            <div className="w-20 h-20 bg-stone-200 rounded-full flex items-center justify-center mb-6 animate-pulse">
-                <ShoppingBag className="w-10 h-10 text-stone-400" />
-            </div>
-            <h2 className="text-2xl font-serif text-[#0a1f1c] mb-2">Your cart is empty</h2>
-            <p className="text-stone-500 text-sm mb-8">Looks like you haven't added any luxury items yet.</p>
-            <Link href="/" className="px-8 py-3 bg-[#0a1f1c] text-white rounded-lg text-xs uppercase font-bold tracking-widest hover:bg-amber-700 transition">
-                Start Shopping
-            </Link>
-        </div>
-    );
-}
+
 
     // --- ✅ STEP 3: PREMIUM SUCCESS SCREEN ---
     if (step === 3) {
