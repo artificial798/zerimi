@@ -196,11 +196,35 @@ export default function CartDrawer() {
 
                                     <div className="flex justify-between items-center mt-2">
                                         {/* Elegant Qty Control */}
-                                        <div className="flex items-center bg-stone-50 rounded-lg p-1 border border-stone-100">
-                                            <button onClick={() => handleQty(item, -1)} className="w-6 h-6 flex items-center justify-center bg-white rounded shadow-sm hover:bg-stone-100 text-stone-600 transition"><Minus className="w-3 h-3" /></button>
-                                            <span className="w-8 text-center text-xs font-bold text-[#0a1f1c]">{item.qty}</span>
-                                            <button onClick={() => handleQty(item, 1)} className="w-6 h-6 flex items-center justify-center bg-white rounded shadow-sm hover:bg-stone-100 text-stone-600 transition"><Plus className="w-3 h-3" /></button>
-                                        </div>
+                                       {/* Elegant Qty Control */}
+<div className="flex items-center bg-stone-50 rounded-lg p-1 border border-stone-100">
+    <button onClick={() => handleQty(item, -1)} className="w-6 h-6 flex items-center justify-center bg-white rounded shadow-sm hover:bg-stone-100 text-stone-600 transition"><Minus className="w-3 h-3" /></button>
+    <span className="w-8 text-center text-xs font-bold text-[#0a1f1c]">{item.qty}</span>
+    
+    {/* ✅ PLUS BUTTON UPDATED (Stock Check Logic) */}
+    <button 
+        onClick={() => {
+            // Check: Kya aur stock available hai?
+            const maxStock = item.product.stock || 0;
+            if (item.qty >= maxStock) {
+                toast.error(`Only ${maxStock} units available!`, {
+                    style: { border: '1px solid #ef4444', color: '#ef4444' },
+                    icon: '🚫'
+                });
+            } else {
+                handleQty(item, 1);
+            }
+        }} 
+        // Agar stock limit pahunch gayi to button disable dikhega
+        className={`w-6 h-6 flex items-center justify-center bg-white rounded shadow-sm transition 
+            ${item.qty >= (item.product.stock || 0)
+                ? 'opacity-50 cursor-not-allowed text-stone-300' 
+                : 'hover:bg-stone-100 text-stone-600 cursor-pointer'
+            }`}
+    >
+        <Plus className="w-3 h-3" />
+    </button>
+</div>
                                         <p className="text-sm font-bold text-[#0a1f1c]">₹{(item.product.price * item.qty).toLocaleString()}</p>
                                     </div>
                                 </div>

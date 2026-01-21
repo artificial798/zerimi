@@ -9,7 +9,7 @@ import {
     signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, updateProfile
 } from "firebase/auth";
 import { auth, db } from './firebase';
-
+import { toast } from 'react-hot-toast';
 // ==========================================
 // 1. TYPE DEFINITIONS
 // ==========================================
@@ -411,57 +411,104 @@ abandonedCarts: [],
         // ✅ FIXED: addToCart Logic (Handles Unique ID for Color/Size & Stock Check)
           // ✅ CORRECTED addToCart (Fixes 'reading price' error)
 // ✅ UPDATED addToCart (Supports Gift Mode)
+// ✅ UPDATED addToCart (With Premium Toast Alert)
 addToCart: (product: any, qty: number = 1, size: string = '', color: string = '', isGift: boolean = false) => {
     set((state: any) => {
-      // Check if item exists with same ID + Size + Color + Gift Status
       const existingItem = state.cart.find((item: any) => 
         item.product.id === product.id && 
         item.selectedSize === size && 
         item.selectedColor === color &&
-        item.isGift === isGift // 👈 Match gift status too
+        item.isGift === isGift
       );
 
+      const currentQty = existingItem ? existingItem.qty : 0;
+      const availableStock = product.stock || 0;
+
+      // 🛑 STOCK CHECK (With Premium Toast)
+      if (currentQty + qty > availableStock) {
+        toast.error(`Limited Stock: Only ${availableStock} units available`, {
+            style: { 
+                background: '#0a1f1c', // Dark Green (Theme)
+                color: '#fff', 
+                border: '1px solid #d4af37', // Gold Border
+                fontSize: '12px',
+                fontWeight: 'bold'
+            },
+            icon: '⚠️',
+            duration: 3000
+        });
+        return state; // Stop action
+      }
+
       if (existingItem) {
-        // ✅ Match Found: Update Quantity
+        // ... (Logic Same Rahegi)
         return {
           cart: state.cart.map((item: any) => 
             (item.product.id === product.id && 
              item.selectedSize === size && 
              item.selectedColor === color && 
              item.isGift === isGift)
-              ? { ...item, qty: item.qty + qty }
-              : item
+             ? { ...item, qty: item.qty + qty }
+             : item
           ),
           isCartOpen: true
         };
       } else {
-        // ✅ New Item: Add to Cart with Gift Status
+        // ✅ Success Toast (Jab naya item add ho)
+        toast.success("Added to Bag", {
+            style: { background: '#0a1f1c', color: '#fff', border: '1px solid #d4af37', fontSize: '12px' },
+            icon: '🛍️'
+        });
+
+        // ... (Logic Same Rahegi)
         return {
           cart: [...state.cart, { 
               product, 
               qty, 
               selectedSize: size, 
               selectedColor: color, 
-              isGift: isGift // 👈 Save gift status
+              isGift: isGift
           }],
           isCartOpen: true
         };
       }
     });
 },
-// ✅ NEW: SILENT QUANTITY UPDATE (Checkout Page ke liye)
-          // ✅ SILENT QUANTITY UPDATE (Drawer nahi kholega)
-  updateQuantity: (productId: string, delta: number, size: string = '', color: string = '') => {
-    set((state: any) => ({
-      cart: state.cart.map((item: any) => 
-        // Sirf wahi item update karo jo ID, Size aur Color match kare
-        (item.product.id === productId && item.selectedSize === size && item.selectedColor === color)
-          ? { ...item, qty: Math.max(1, item.qty + delta) } // Quantity +1/-1
-          : item
-      ),
-      // ❌ Note: Humne yahan isCartOpen: true NAHI lagaya hai
-    }));
-  },
+
+// ✅ UPDATED updateQuantity (With Premium Toast Alert)
+updateQuantity: (productId: string, delta: number, size: string = '', color: string = '') => {
+    set((state: any) => {
+      const itemToUpdate = state.cart.find((item: any) => 
+        item.product.id === productId && item.selectedSize === size && item.selectedColor === color
+      );
+
+      // 🛑 STOCK CHECK FOR PLUS BUTTON
+      if (itemToUpdate && delta > 0) {
+         const maxStock = itemToUpdate.product.stock || 0;
+         if (itemToUpdate.qty + delta > maxStock) {
+             toast.error(`Sorry, we only have ${maxStock} in stock!`, {
+                style: { 
+                    background: '#fff', 
+                    color: '#000', 
+                    border: '1px solid #ef4444', // Red Border for Error
+                    fontSize: '12px',
+                    fontWeight: 'bold'
+                },
+                icon: '🚫'
+             });
+             return state; // Stop action
+         }
+      }
+
+      return {
+        cart: state.cart.map((item: any) => 
+          (item.product.id === productId && item.selectedSize === size && item.selectedColor === color)
+            ? { ...item, qty: Math.max(1, item.qty + delta) }
+            : item
+        ),
+      };
+    });
+},
            removeFromCart: (productId: string, size: string = '', color: string = '') => {
     set((state: any) => ({
       cart: state.cart.filter((item: any) => 

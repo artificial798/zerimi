@@ -8,7 +8,7 @@ import SizeGuide from '@/components/SizeGuide';           // ✅ NEW: Imported C
 import { 
   Star, Truck, ShieldCheck, Heart, Share2, 
   Minus, Plus, ShoppingBag, ChevronDown, User, RefreshCcw, Award, Gift, Headphones, 
-  History, Clock, MessageCircle, Ruler, CheckCircle // ✅ Ruler Icon & MessageCircle Added
+  History, Clock, MessageCircle, Ruler, CheckCircle, Eye, ChevronRight // ✅ Ruler Icon & MessageCircle Added
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -26,7 +26,8 @@ export default function ProductPage() {
   // ✅ NEW: SIZE STATE
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [isSizeGuideOpen, setIsSizeGuideOpen] = useState(false);
-
+// ✅ NEW: Fake Live Viewers (Random 15-40 log)
+  const [viewers] = useState(Math.floor(Math.random() * (40 - 15 + 1)) + 15);
   const product = products.find((p: any) => p.id == id);
   const colors = product?.colors || [];
 // --- GIFT MODE LOGIC ---
@@ -252,7 +253,14 @@ const similarProducts = (() => {
       <SizeGuide isOpen={isSizeGuideOpen} onClose={() => setIsSizeGuideOpen(false)} category={product.category} />
 
       <div className="max-w-7xl mx-auto px-4 md:px-6">
-        
+      {/* ✅ BREADCRUMBS (Navigation Path) */}
+        <div className="flex items-center gap-2 text-[10px] uppercase font-bold text-stone-400 mb-6">
+            <Link href="/" className="hover:text-amber-600">Home</Link>
+            <ChevronRight className="w-3 h-3" />
+            <span className="text-amber-600">{product.category}</span>
+            <ChevronRight className="w-3 h-3" />
+            <span className="text-stone-800 line-clamp-1">{product.name}</span>
+        </div>  
        {/* --- MAIN PRODUCT SECTION (Grid Balanced) --- */}
 <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-20 mb-8 relative">
  
@@ -283,7 +291,11 @@ const similarProducts = (() => {
 
              {/* Title */}
              <h1 className="font-serif text-3xl md:text-5xl text-[#0a1f1c] mb-3 leading-tight tracking-tight">{product.name}</h1>
-             
+             {/* ✅ LIVE VIEWERS (Social Proof) */}
+             <div className="flex items-center gap-2 text-[11px] font-medium text-stone-500 mb-4 animate-fade-in">
+                <Eye className="w-3.5 h-3.5 text-green-500 animate-pulse" />
+                <span><strong className="text-stone-800">{viewers} people</strong> are viewing this product right now.</span>
+             </div>
              {/* Tags */}
              {product.tags && product.tags.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-6">
@@ -381,7 +393,13 @@ const similarProducts = (() => {
                      </div>
                  </div>
              )}
-
+{/* ✅ STOCK ALERT (Urgency) - Only shows if stock < 5 */}
+             {product.stock > 0 && product.stock < 5 && (
+                <div className="flex items-center gap-2 mb-4 text-amber-700 bg-amber-50 border border-amber-100 px-3 py-2 rounded-lg w-full animate-pulse">
+                    <Clock className="w-4 h-4" />
+                    <span className="text-xs font-bold uppercase tracking-wide">Hurry! Only {product.stock} units left in stock</span>
+                </div>
+             )}
              {/* Actions */}
              <div className="flex flex-col gap-4 mb-8">
               {/* 🎁 SECRET GIFT TOGGLE (New Addition) */}
@@ -411,11 +429,44 @@ const similarProducts = (() => {
    {/* -------------------------------------- */}
                 <div className="flex gap-4">
                     {/* Qty */}
-                    <div className="flex items-center border border-stone-200 rounded-lg h-12">
-                       <button onClick={() => setQty(Math.max(1, qty-1))} className="px-3 h-full hover:bg-stone-50 text-stone-500"><Minus className="w-4 h-4"/></button>
-                       <span className="w-10 text-center font-bold text-sm">{qty}</span>
-                       <button onClick={() => setQty(qty+1)} className="px-3 h-full hover:bg-stone-50 text-stone-500"><Plus className="w-4 h-4"/></button>
-                    </div>
+                   {/* ✅ Qty Selector (With Stock Limit Check) */}
+<div className="flex items-center border border-stone-200 rounded-lg h-12">
+   {/* Minus Button (Same rahega) */}
+   <button 
+       onClick={() => setQty(Math.max(1, qty-1))} 
+       className="px-3 h-full hover:bg-stone-50 text-stone-500"
+   >
+       <Minus className="w-4 h-4"/>
+   </button>
+
+   {/* Quantity Display */}
+   <span className="w-10 text-center font-bold text-sm">{qty}</span>
+
+   {/* ✅ PLUS BUTTON (Logic Updated) */}
+   <button 
+       onClick={() => {
+           const maxStock = product.stock || 0;
+           // Check: Kya current qty stock se kam hai?
+           if (qty < maxStock) {
+               setQty(qty + 1);
+           } else {
+               // Agar limit cross ho rahi hai to Toast dikhao
+               toast.error(`Only ${maxStock} units left in stock!`, {
+                   style: { border: '1px solid #ef4444', color: '#ef4444' },
+                   icon: '🚫'
+               });
+           }
+       }} 
+       // Visual Disable Logic: Agar qty == stock hai to button dhundhla (fade) ho jayega
+       className={`px-3 h-full text-stone-500 transition 
+           ${qty >= (product.stock || 0) 
+               ? 'opacity-50 cursor-not-allowed' 
+               : 'hover:bg-stone-50'
+           }`}
+   >
+       <Plus className="w-4 h-4"/>
+   </button>
+</div>
                     
                     {/* Add to Cart */}
                     <button
@@ -428,7 +479,7 @@ const similarProducts = (() => {
       selectedColor || colors[0],
       isGiftWrapped
   ); 
-  toast.success("Added to Bag");
+  
 }}
                       disabled={product.stock === 0}
                       className={`flex-1 text-white rounded-lg flex items-center justify-center gap-3 h-12 shadow-xl transition-all hover:shadow-2xl hover:-translate-y-1 ${product.stock === 0 ? 'bg-stone-400 cursor-not-allowed' : 'bg-[#0a1f1c] hover:bg-amber-700'}`}
