@@ -102,6 +102,8 @@ export type SystemSettings = {
     shippingThreshold: number;
     globalAlert: string;
     shippingCost?: number;
+    showNoticeBanner: boolean;
+noticeBannerText: string;
 giftModeCost?: number;
 // 👇 Points Redemption Rate (Ex: 1 Point = ₹0.50)
     pointValue?: number; 
@@ -322,7 +324,8 @@ abandonedCarts: [],
             isCartOpen: false,
             currentUser: null,
             authCheckComplete: false,
-            systemSettings: { maintenanceMode: false, siteName: 'ZERIMI', currencySymbol: '₹', taxRate: 3, shippingThreshold: 5000, globalAlert: '' },
+            systemSettings: { maintenanceMode: false, siteName: 'ZERIMI', currencySymbol: '₹', taxRate: 3, shippingThreshold: 5000, globalAlert: '', showNoticeBanner: false,      // Default off rahega
+    noticeBannerText: '' },
             loading: true,
             // ✅ NEW: COUPON LOGIC (PERSONALIZED)
           applyCoupon: (code: string) => {
@@ -1000,6 +1003,8 @@ completeProfile: async (name, email) => {
                     set((state) => ({
                         systemSettings: {
                             ...state.systemSettings,
+                            showNoticeBanner: data.store?.showNoticeBanner || false,
+                noticeBannerText: data.store?.noticeBannerText || '',
                             pointValue: Number(data.store?.pointValue) || 1,
 
                 // 👇 NEW: Tier Config Load Logic
@@ -1181,6 +1186,8 @@ const initListeners = () => {
                             shippingCost: Number(data.store?.shippingCost) || 150,
                             giftModeCost: Number(data.store?.giftModeCost) || 50,
                             globalAlert: data.store?.globalAlert || '',
+                            showNoticeBanner: data.store?.showNoticeBanner || false,
+            noticeBannerText: data.store?.noticeBannerText || 'Luxury is an experience • ZERIMI Jewelry',
                             pointValue: Number(data.store?.pointValue) || 1,
                             tierConfig: data.store?.tierConfig || {},
                             payment: { ...data.store?.payment, razorpay: data.razorpay, payu: data.payu },

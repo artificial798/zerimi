@@ -2129,6 +2129,8 @@ function ConfigManager({ showToast, updateSystemConfig }: any) {
             maintenanceMode: false,
             globalAlert: 'Welcome to ZERIMI - Premium Jewelry',
             giftModeCost: 50,
+            showNoticeBanner: false,
+        noticeBannerText: '',
             // 👇 LOYALTY SETTINGS
             pointValue: 1, // 1 Point = ₹1
             tierConfig: {
@@ -2569,6 +2571,32 @@ function ConfigManager({ showToast, updateSystemConfig }: any) {
                         <div className="space-y-6">
                             <div><label className="text-[10px] text-white/40 uppercase font-bold mb-1 block">Global Announcement Bar</label><div className="relative"><Megaphone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" /><input value={config.store.globalAlert} onChange={(e) => handleChange('store', 'globalAlert', e.target.value)} placeholder="e.g. FLAT 20% OFF on all Diamonds!" className="w-full p-3 pl-10 bg-black/40 border border-white/10 rounded-xl text-white text-sm outline-none focus:border-purple-500/50" /></div></div>
                             <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl flex items-center justify-between">
+                            {/* --- NOTICE BANNER CONTROL (MARQUEE) --- */}
+<div className="bg-white/5 p-4 rounded-xl border border-white/10 space-y-4 mb-6">
+    <div className="flex items-center justify-between">
+        <div>
+            <h4 className="text-amber-500 font-bold text-sm flex items-center gap-2">
+                <Zap className="w-4 h-4" /> Homepage Notice Banner
+            </h4>
+            <p className="text-[10px] text-white/40 uppercase">Scrolling text for sales/offers</p>
+        </div>
+        <button 
+            onClick={() => handleChange('store', 'showNoticeBanner', !config.store.showNoticeBanner)}
+            className={`w-12 h-6 rounded-full p-1 transition-all ${config.store.showNoticeBanner ? 'bg-amber-600' : 'bg-white/10'}`}
+        >
+            <div className={`w-4 h-4 bg-white rounded-full transition-transform ${config.store.showNoticeBanner ? 'translate-x-6' : 'translate-x-0'}`} />
+        </button>
+    </div>
+
+    {config.store.showNoticeBanner && (
+        <input 
+            value={config.store.noticeBannerText || ''} 
+            onChange={(e) => handleChange('store', 'noticeBannerText', e.target.value)}
+            placeholder="Text here (e.g. LUXURY IS AN EXPERIENCE • ZERIMI)"
+            className="w-full p-3 bg-black/40 border border-white/10 rounded-xl text-white text-xs outline-none focus:border-amber-500/50"
+        />
+    )}
+</div>
                                 <div><h4 className="text-red-400 font-bold text-sm flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> Maintenance Mode</h4><p className="text-[10px] text-white/40">Shutdown storefront for customers.</p></div>
                                 <div onClick={() => handleChange('store', 'maintenanceMode', !config.store.maintenanceMode)} className={`w-12 h-6 rounded-full p-1 cursor-pointer transition-colors duration-300 ${config.store.maintenanceMode ? 'bg-red-500' : 'bg-white/10'}`}><div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-300 ${config.store.maintenanceMode ? 'translate-x-6' : 'translate-x-0'}`}></div></div>
                             </div>

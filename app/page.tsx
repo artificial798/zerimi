@@ -6,7 +6,7 @@ import { useStore } from '@/lib/store';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRight, Star, Truck, ShieldCheck, RefreshCw, Lock, Gift, EyeOff } from 'lucide-react';
 import ProductCard from '@/components/ProductCard';
-
+import PremiumMarquee from '@/components/PremiumMarquee';
 
 // ✅ FIX: Fallback Image
 const FALLBACK_IMAGE = "https://via.placeholder.com/1920x1080?text=ZERIMI+JEWELRY";
@@ -236,6 +236,7 @@ export default function Home() {
     })}
   </div>
 </section>
+<PremiumMarquee />
       {/* =========================================
           3. NEW ARRIVALS (Grid Fix: 2 Columns on Mobile)
          ========================================= */}
