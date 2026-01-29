@@ -196,21 +196,21 @@ export default function AdminPage() {
     }, []);
 
     // --- ACTIONS ---
-   const handleStatusUpdate = (id: string, status: string) => {
+  const handleStatusUpdate = async (id: string, status: string) => {
         // 1. Database Update
         updateOrderStatus(id, status);
 
         // 2. Admin System Log
         addSystemNotification('Order Updated', `Order #${id} status changed to ${status}`, 'order');
 
-        // 👇 3. NEW: SEND NOTIFICATION TO CUSTOMER (Connects to Dashboard)
-        const order = orders.find((o: any) => o.id === id); // Order details nikalo
+        // 👇 3. NEW: REAL PUSH NOTIFICATION LOGIC
+        const order = orders.find((o: any) => o.id === id); 
         
         if (order && order.customerEmail) {
-            let title = "Order Update";
+            let title = "Order Update 📦";
             let msg = `Your order #${id} status is now: ${status}.`;
 
-            // Custom Messages for Premium Feel
+            // Custom Messages
             if (status === 'Shipped') {
                 title = "Order Shipped 🚚";
                 msg = "Great news! Your package has been dispatched and is on its way.";
@@ -223,19 +223,31 @@ export default function AdminPage() {
             } else if (status === 'Return Approved') {
                 title = "Return Approved 🔄";
                 msg = "Your return request has been approved. Pickup will be scheduled shortly.";
-            } else if (status === 'Return Rejected') {
-                title = "Return Update ⚠️";
-                msg = "Your return request could not be processed at this time.";
             }
 
-            // Firebase Notification Send (Customer Dashboard will catch this)
+            // A. Bell Icon Update (Database)
             sendNotification(order.customerEmail, title, msg);
+
+            // B. REAL POPUP NOTIFICATION (API Call) 🔥 <-- YE NAYA HAI
+            try {
+                await fetch('/api/send-notification', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        title: title,
+                        body: msg,
+                        targetUserEmail: order.customerEmail // Sirf is customer ko jayega
+                    })
+                });
+                console.log("Push Notification Sent ✅");
+            } catch (err) {
+                console.error("Notification Failed ❌", err);
+            }
         }
 
         // 4. Admin Toast
         showToast(`Order #${id} marked as ${status}`, 'success');
     };
-
     const handleProductDelete = (id: string) => {
         if (confirm('Delete this product?')) {
             deleteProduct(id);
@@ -3803,27 +3815,51 @@ function MarketingManager({ allUsers, sendNotification, showToast }: any) {
     const [message, setMessage] = useState('');
     const [sending, setSending] = useState(false);
 
-    const handleSend = () => {
+   const handleSend = async () => {
         if (!title || !message) return showToast("Title and Message are required", "error");
         if (target === 'specific' && !selectedUser) return showToast("Please select a user", "error");
 
         setSending(true);
 
-        // Simulate sending delay for realistic effect
-        setTimeout(() => {
-            if (target === 'all') {
-                // Real app mein ye backend job hoti, yahan hum simulate kar rahe hain
-                allUsers?.forEach((u: any) => sendNotification(u.email, title, message));
-                showToast(`Broadcast sent to ${allUsers?.length || 0} users`, "success");
+        try {
+            // 👇 1. ASLI API CALL (Sabke phone par popup bhejne ke liye)
+            const res = await fetch('/api/send-notification', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title: title,
+                    body: message,
+                    // Agar 'Specific' select hai to uska email bhejo, nahi to null (sabko jayega)
+                    targetUserEmail: target === 'specific' ? selectedUser : null
+                })
+            });
+
+            const data = await res.json();
+
+            if (data.success) {
+                showToast(`🚀 Sent to ${data.sentCount || 'active'} devices!`, "success");
+
+                // 👇 2. DATABASE UPDATE (Bell Icon ke liye - Ye purana logic same rakhein)
+                if (target === 'all') {
+                    // Sabke bell icon me save karo
+                    allUsers?.forEach((u: any) => sendNotification(u.email, title, message));
+                } else {
+                    // Sirf ek ke bell icon me save karo
+                    sendNotification(selectedUser, title, message);
+                }
+
+                setTitle('');
+                setMessage('');
             } else {
-                sendNotification(selectedUser, title, message);
-                showToast("Notification sent successfully", "success");
+                showToast(`⚠️ Failed: ${data.message}`, "error");
             }
 
-            setTitle('');
-            setMessage('');
+        } catch (error) {
+            console.error("Marketing Error:", error);
+            showToast("Failed to send notification", "error");
+        } finally {
             setSending(false);
-        }, 1500);
+        }
     };
 
     return (

@@ -9,7 +9,9 @@ import { useStore } from '@/lib/store';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import PopupModal from '@/components/PopupModal';
+import useNotification from '@/hooks/useNotification';
 export default function GlobalLayout({ children }: { children: React.ReactNode }) {
+  useNotification();
   const pathname = usePathname();
   const router = useRouter();
   // ✅ 1. 'currentUser' aur 'as any' zaroor add karein

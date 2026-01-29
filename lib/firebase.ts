@@ -31,4 +31,5 @@ if (typeof window !== "undefined") {
   });
 }
 
-export { analytics };
+// 'app' ko bhi export list mein add karein
+export { analytics, app };
