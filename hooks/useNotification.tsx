@@ -5,7 +5,7 @@ import { app, db } from "@/lib/firebase";
 import { doc, updateDoc, arrayUnion } from "firebase/firestore";
 import { useStore } from "@/lib/store"; 
 import { toast } from "react-hot-toast"; 
-import { X } from "lucide-react"; // Close icon ke liye
+import { X } from "lucide-react"; 
 
 export default function useNotification() {
   const { currentUser } = useStore() as any;
@@ -18,6 +18,7 @@ export default function useNotification() {
           const permission = await Notification.requestPermission();
           
           if (permission === "granted") {
+            // URL Params generation
             const params = new URLSearchParams({
               apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "",
               authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "",
@@ -27,25 +28,35 @@ export default function useNotification() {
               appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "",
             });
 
+            // Register SW with params
             const registration = await navigator.serviceWorker.register(`/firebase-messaging-sw.js?${params.toString()}`);
+            
             const messaging = getMessaging(app);
 
+            // Get FCM Token
             const token = await getToken(messaging, {
               vapidKey: process.env.NEXT_PUBLIC_VAPID_KEY, 
               serviceWorkerRegistration: registration
             });
 
+            // Save Token to Database
             if (token && currentUser?.id) {
               await updateDoc(doc(db, "users", currentUser.id), {
                 fcmTokens: arrayUnion(token)
               });
             }
 
-            // 👇 PREMIUM FOREGROUND NOTIFICATION DESIGN
+            // 👇 FINAL PREMIUM FOREGROUND HANDLER
             onMessage(messaging, (payload) => {
               console.log("Foreground Message:", payload);
-              
-              // Custom Luxury Toast
+
+              // 1. Data Extract (Prioritize 'data' payload for custom fields)
+              const title = payload.data?.title || payload.notification?.title || "Zerimi Update";
+              const body = payload.data?.body || payload.notification?.body || "You have a new notification.";
+              const image = payload.data?.icon || "/logo-white.png";
+              const link = payload.data?.link || payload.data?.url || "/";
+
+              // 2. Custom Luxury Toast
               toast.custom((t) => (
                 <div
                   className={`${
@@ -53,7 +64,10 @@ export default function useNotification() {
                   } max-w-sm w-full bg-[#0a1f1c]/95 backdrop-blur-xl border border-amber-500/30 shadow-[0_8px_30px_rgba(0,0,0,0.5)] rounded-2xl pointer-events-auto flex ring-1 ring-black ring-opacity-5 relative overflow-hidden group transition-all duration-300 hover:border-amber-500/60 hover:shadow-amber-500/10 cursor-pointer`}
                   onClick={() => {
                     toast.dismiss(t.id);
-                    // Agar link par le jana ho to yahan window.location laga sakte hain
+                    // Click karne par navigate karo
+                    if (typeof window !== 'undefined' && link) {
+                        window.location.href = link;
+                    }
                   }}
                 >
                   {/* Gold Glow Effect Background */}
@@ -62,16 +76,18 @@ export default function useNotification() {
                   <div className="flex-1 w-0 p-4 relative z-10">
                     <div className="flex items-start">
                       <div className="flex-shrink-0 pt-0.5">
-                        {/* ✅ LOGO: Yahan apni actual logo file ka naam likhein (white version best rahega dark background par) */}
+                        {/* Logo Container */}
                         <div className="h-10 w-10 rounded-xl bg-black/40 border border-white/10 flex items-center justify-center overflow-hidden p-1 shadow-inner">
                              <img 
-                               src="/logo-white.png"  // 👈 Yahan /logo.png ya /logo-dark.png try karein
+                               src={image}
                                alt="Zerimi" 
                                className="w-full h-full object-contain"
                                onError={(e) => {
-                                 // Agar image load na ho to fallback
+                                 // Fallback if image fails
                                  (e.target as HTMLImageElement).style.display = 'none';
-                                 (e.target as HTMLImageElement).parentElement!.innerHTML = '💎'; 
+                                 if ((e.target as HTMLImageElement).parentElement) {
+                                    (e.target as HTMLImageElement).parentElement!.innerText = '💎';
+                                 }
                                }}
                              />
                         </div>
@@ -81,17 +97,17 @@ export default function useNotification() {
                            Zerimi Updates
                         </p>
                         <p className="text-sm font-medium text-white leading-snug">
-                          {payload.notification?.title}
+                          {title}
                         </p>
                         <p className="mt-1 text-xs text-white/60 line-clamp-2">
-                          {payload.notification?.body}
+                          {body}
                         </p>
                       </div>
                       <div className="ml-4 flex-shrink-0 flex">
                         <button
                           className="bg-transparent rounded-md inline-flex text-white/40 hover:text-white focus:outline-none"
                           onClick={(e) => {
-                            e.stopPropagation();
+                            e.stopPropagation(); // Parent click rokne ke liye
                             toast.dismiss(t.id);
                           }}
                         >
@@ -102,18 +118,18 @@ export default function useNotification() {
                     </div>
                   </div>
                   
-                  {/* Progress Bar Animation (Optional Visual Touch) */}
+                  {/* Progress Bar Animation */}
                   <div className="absolute bottom-0 left-0 h-0.5 bg-gradient-to-r from-amber-600 to-yellow-400 w-full animate-pulse"></div>
                 </div>
               ), {
                 duration: 6000, 
-                position: "top-right", // ✅ Desktop par Right side aayega (Not center)
+                position: "top-right", // Desktop Standard Position
               });
 
-              // Sound
+              // Play Sound
               try {
                 const audio = new Audio('/notification.mp3');
-                audio.play().catch(() => {});
+                audio.play().catch(() => {}); // Silent catch if user hasn't interacted
               } catch(e) {}
             });
 

@@ -22,27 +22,28 @@ if (firebaseConfig.apiKey && firebaseConfig.projectId) {
   firebase.initializeApp(firebaseConfig);
   const messaging = firebase.messaging();
 
-  // ✅ BACKGROUND HANDLER (Jab Tab Band Ho)
+  // ✅ BACKGROUND HANDLER (Data Payload Padhne ke liye Updated)
   messaging.onBackgroundMessage((payload) => {
-    console.log('[Background Message] Received:', payload);
+    console.log('[Background Message]', payload);
 
-    const notificationTitle = payload.notification?.title || "Zerimi Update";
+    // 👇 DATA se title/body nikalo (Notification se nahi)
+    const title = payload.data?.title || "Zerimi Update";
+    const body = payload.data?.body || "New notification.";
+    const link = payload.data?.link || self.location.origin;
+
     const notificationOptions = {
-      body: payload.notification?.body || "Check out new offers!",
-      icon: '/logo-dark.png', // Make sure ye image public folder me ho
+      body: body,
+      icon: '/logo-dark.png', 
+      badge: '/logo-dark.png',
       
-      // 👇 Yeh zaroori settings hain background ke liye
-      requireInteraction: true, // User jab tak close na kare, tab tak dikhega
-      tag: 'zerimi-notification', // Messages group karega
-      renotify: true, // Har message par sound bajega
+      requireInteraction: true,
+      tag: 'zerimi-notification',
+      renotify: true,
       
-      // Click karne par website khulni chahiye
-      data: {
-        url: self.location.origin 
-      }
+      data: { url: link }
     };
 
-    return self.registration.showNotification(notificationTitle, notificationOptions);
+    return self.registration.showNotification(title, notificationOptions);
   });
 }
 
