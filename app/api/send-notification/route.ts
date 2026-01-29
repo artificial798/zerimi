@@ -5,7 +5,9 @@ export async function POST(req: Request) {
   try {
     const { title, body, targetUserEmail } = await req.json();
 
-    // 1. Get Tokens (Logic same rahega)
+    // Debugging ke liye server console me print karo
+    console.log("Sending Notification -> Title:", title, "Body:", body);
+
     let tokens: string[] = [];
     if (targetUserEmail) {
       const usersSnap = await adminDb.collection("users").where("email", "==", targetUserEmail).get();
@@ -24,25 +26,25 @@ export async function POST(req: Request) {
     const uniqueTokens = [...new Set(tokens)].filter(t => t);
     if (uniqueTokens.length === 0) return NextResponse.json({ success: false, message: "No devices found." });
 
-    // 👇 2. CHANGE IS HERE (Data Message Bhejo)
+    // 👇 FIX: Force Convert to String (Data must be string map)
+    const safeTitle = title ? String(title) : "Zerimi Update";
+    const safeBody = body ? String(body) : "Check app for details";
+
     const message = {
-      // ❌ "notification" key hata di gayi hai (ye duplicate cause kar rahi thi)
-      
-      // ✅ "data" key use karein (Isse full control milta hai)
       data: {
-        title: title,
-        body: body,
-        link: '/admin', // Click karne par kahan jana hai
+        title: safeTitle,
+        body: safeBody,
+        link: '/admin',
         icon: '/logo-dark.png'
       },
       tokens: uniqueTokens,
     };
 
     const response = await adminMessaging.sendEachForMulticast(message);
-
     return NextResponse.json({ success: true, sentCount: response.successCount });
 
   } catch (error: any) {
+    console.error("Notification API Error:", error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
