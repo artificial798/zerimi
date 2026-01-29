@@ -18,34 +18,46 @@ const firebaseConfig = {
   appId: getQueryParam('appId'),
 };
 
+// ... upar imports aur config same rahega ...
+
 if (firebaseConfig.apiKey && firebaseConfig.projectId) {
   firebase.initializeApp(firebaseConfig);
   const messaging = firebase.messaging();
 
-  // ✅ BACKGROUND HANDLER (Data Payload Padhne ke liye Updated)
+  // ✅ BACKGROUND HANDLER (Updated for Android Icons)
   messaging.onBackgroundMessage((payload) => {
     console.log('[Background Message]', payload);
 
-    // 👇 DATA se title/body nikalo (Notification se nahi)
     const title = payload.data?.title || "Zerimi Update";
     const body = payload.data?.body || "New notification.";
     const link = payload.data?.link || self.location.origin;
+    
+    // Images nikalo
+    // 1. Bada wala rangeen icon (Notification shade ke liye)
+    const largeIcon = payload.data?.icon || '/logo-dark.png';
+    // 2. Chhota wala safed icon (Status bar ke liye) - Fallback bhi white hi rakhein
+    const smallSilhouetteIcon = payload.data?.smallIcon || '/notification-icon-white.png';
 
     const notificationOptions = {
       body: body,
-      icon: '/logo-dark.png', 
-      badge: '/logo-dark.png',
       
+      // 👇 ANDROID SPECIAL SETTINGS
+      icon: smallSilhouetteIcon,  // Status bar icon (Must be transparent/white)
+      badge: smallSilhouetteIcon, // Small icon next to app name
+      image: largeIcon,           // Big hero image in expanded notification
+      
+      // Baaki settings same
       requireInteraction: true,
       tag: 'zerimi-notification',
       renotify: true,
-      
       data: { url: link }
     };
 
     return self.registration.showNotification(title, notificationOptions);
   });
 }
+
+// ... niche click handler same rahega ...
 
 // ✅ NOTIFICATION CLICK HANDLER (Website Kholne ke liye)
 self.addEventListener('notificationclick', function(event) {

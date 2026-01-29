@@ -35,7 +35,8 @@ export async function POST(req: Request) {
         title: safeTitle,
         body: safeBody,
         link: '/admin',
-        icon: '/logo-dark.png'
+        icon: '/logo-dark.png',
+        smallIcon: '/notification-icon-white.png'
       },
       tokens: uniqueTokens,
     };
