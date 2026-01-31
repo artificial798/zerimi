@@ -107,7 +107,7 @@ export default function RefundPolicy() {
 
           {/* Footer Contact */}
           <div className="pt-10 border-t border-white/10 text-center">
-            <p className="text-sm text-white/40">Need help? Email us at <a href="mailto:support@zerimi.com" className="text-amber-500 hover:text-amber-400 transition">support@zerimi.com</a></p>
+            <p className="text-sm text-white/40">Need help? Email us at <a href="mailto:support@zerimi.in" className="text-amber-500 hover:text-amber-400 transition">support@zerimi.in</a></p>
           </div>
 
         </div>

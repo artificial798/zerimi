@@ -378,7 +378,7 @@ const subtotal = cart.reduce((sum: number, item: any) => sum + (item.product?.pr
             <ul className="space-y-4 text-sm tracking-wide text-stone-400">
               <li className="flex items-start gap-3"><MapPin className="w-5 h-5 text-amber-600 flex-shrink-0" /><span>Main Market,Delhi-Road near Tehsil,<br />Baraut, India - 250611</span></li>
               <li className="flex items-center gap-3"><Phone className="w-5 h-5 text-amber-600 flex-shrink-0" /><span>+91 8077162909</span></li>
-              <li className="flex items-center gap-3"><Mail className="w-5 h-5 text-amber-600 flex-shrink-0" /><span>support@zerimi.com</span></li>
+              <li className="flex items-center gap-3"><Mail className="w-5 h-5 text-amber-600 flex-shrink-0" /><span>support@zerimi.in</span></li>
               <li className="pt-2"><Link href="/contact" className="text-amber-500 underline text-xs uppercase font-bold">Open Contact Page</Link></li>
             </ul>
           </div>

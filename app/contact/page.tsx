@@ -85,7 +85,7 @@ export default function ContactPage() {
                  </div>
                  <div>
                     <h5 className="font-bold text-white text-xs uppercase tracking-widest mb-1">Email Concierge</h5>
-                    <p className="text-white/60 text-sm leading-relaxed">support@zerimi.com</p>
+                    <p className="text-white/60 text-sm leading-relaxed">support@zerimi.in</p>
                     <p className="text-[10px] text-white/30 mt-1">Response within 24 hours</p>
                  </div>
               </div>

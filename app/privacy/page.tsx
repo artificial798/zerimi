@@ -86,7 +86,7 @@ export default function PrivacyPage() {
           {/* Footer Contact */}
           <div className="pt-10 border-t border-white/10 text-center">
             <p className="text-sm text-white/40 mb-2">For privacy-related concerns, please contact our Data Protection Officer at:</p>
-            <a href="mailto:privacy@zerimi.com" className="text-lg font-serif text-amber-500 hover:text-white transition">privacy@zerimi.com</a>
+            <a href="mailto:privacy@zerimi.com" className="text-lg font-serif text-amber-500 hover:text-white transition">support@zerimi.in</a>
           </div>
 
         </div>

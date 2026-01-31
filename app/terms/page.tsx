@@ -95,7 +95,7 @@ export default function TermsPage() {
           {/* Contact Footer */}
           <div className="pt-10 border-t border-white/10 text-center">
             <p className="text-sm text-white/40 mb-2">Questions about the Terms of Service should be sent to us at:</p>
-            <a href="mailto:legal@zerimi.com" className="text-lg font-serif text-amber-500 hover:text-white transition">legal@zerimi.com</a>
+            <a href="mailto:legal@zerimi.com" className="text-lg font-serif text-amber-500 hover:text-white transition">support@zerimi.in</a>
           </div>
 
         </div>
