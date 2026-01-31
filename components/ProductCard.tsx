@@ -2,7 +2,8 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Heart, Star, Loader2, Zap, Gift, Plus, Eye } from 'lucide-react';
+// ✅ 1. Added Share2 icon
+import { Heart, Star, Loader2, Zap, Gift, Plus, Eye, Share2, ShieldCheck, BadgeCheck } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import { toast } from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
@@ -14,7 +15,6 @@ export default function ProductCard({ product }: { product: any }) {
   const [isHovered, setIsHovered] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   
-  // ✅ Local State for Card-level Gift option
   const [isCardGift, setIsCardGift] = useState(false);
 
   // --- 1. SMART CLICK NAVIGATION ---
@@ -38,7 +38,32 @@ export default function ProductCard({ product }: { product: any }) {
     }
   };
 
-  // --- 3. IMAGE SLIDESHOW ---
+  // ✅ 3. NEW SHARE FUNCTION
+  const handleShare = async (e: any) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const url = `${window.location.origin}/product/${product.id}`;
+    
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: product.name,
+          text: `Check out ${product.name} - Amazing product!`,
+          url: url,
+        });
+      } catch (err) {
+        console.log('Sharing closed', err);
+      }
+    } else {
+      navigator.clipboard.writeText(url);
+      toast.success("Link copied to clipboard!", {
+        icon: '🔗',
+        style: { borderRadius: '10px', background: '#333', color: '#fff' },
+      });
+    }
+  };
+
+  // --- 4. IMAGE SLIDESHOW ---
   useEffect(() => {
     let interval: any;
     if (isHovered && product.images && product.images.length > 1) {
@@ -94,7 +119,7 @@ export default function ProductCard({ product }: { product: any }) {
 
         <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
-        {/* ✅ TAGS (Restored to Top Left - Clean Look) */}
+        {/* TAGS (Top Left) */}
         <div className="absolute top-2.5 left-2.5 flex flex-col gap-1 z-20">
             {product.tags?.slice(0, 1).map((tag: string, idx: number) => (
                 <span key={idx} className={`text-[8px] md:text-[9px] font-bold uppercase tracking-widest px-2 py-1 rounded-sm border shadow-sm ${getTagStyle(tag)}`}>
@@ -103,15 +128,28 @@ export default function ProductCard({ product }: { product: any }) {
             ))}
         </div>
 
-        {/* --- WISHLIST (Top Right) --- */}
-        <button 
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleWishlist(product); toast.success(isLiked ? "Removed" : "Saved"); }}
-            className="absolute top-2.5 right-2.5 w-8 h-8 rounded-full flex items-center justify-center bg-white/80 backdrop-blur-md text-stone-400 hover:text-red-500 hover:bg-white transition-all shadow-sm z-20"
-        >
-            <Heart className={`w-4 h-4 transition-colors ${isLiked ? 'fill-rose-500 text-rose-500' : ''}`} />
-        </button>
+        {/* ✅ ACTIONS GROUP (Top Right: Wishlist + Share) */}
+        <div className="absolute top-2.5 right-2.5 flex flex-col gap-2 z-20">
+            
+            {/* Wishlist Button */}
+            <button 
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleWishlist(product); toast.success(isLiked ? "Removed" : "Saved"); }}
+                className="w-8 h-8 rounded-full flex items-center justify-center bg-white/80 backdrop-blur-md text-stone-400 hover:text-red-500 hover:bg-white transition-all shadow-sm"
+            >
+                <Heart className={`w-4 h-4 transition-colors ${isLiked ? 'fill-rose-500 text-rose-500' : ''}`} />
+            </button>
 
-        {/* ✅ GIFT ICON (Bottom Left - Visible on ALL Devices) */}
+            {/* ✅ NEW SHARE BUTTON */}
+            <button 
+                onClick={handleShare}
+                className="w-8 h-8 rounded-full flex items-center justify-center bg-white/80 backdrop-blur-md text-stone-400 hover:text-blue-600 hover:bg-white transition-all shadow-sm delay-75"
+                title="Share"
+            >
+                <Share2 className="w-4 h-4" />
+            </button>
+        </div>
+
+        {/* GIFT ICON (Bottom Left) */}
         <button
             onClick={(e) => {
                 e.preventDefault();
@@ -132,7 +170,7 @@ export default function ProductCard({ product }: { product: any }) {
             <Gift className="w-3.5 h-3.5" />
         </button>
 
-        {/* --- DESKTOP QUICK ADD (Slides Up) --- */}
+        {/* DESKTOP QUICK ADD */}
         <div className="absolute bottom-0 left-0 right-0 z-10 translate-y-full group-hover:translate-y-0 transition-transform duration-500 ease-[cubic-bezier(0.19,1,0.22,1)] hidden md:block">
              <button 
                 onClick={handleAddToCart} 
@@ -147,7 +185,7 @@ export default function ProductCard({ product }: { product: any }) {
         </div>
       </div>
 
-      {/* DETAILS AREA */}
+    {/* DETAILS AREA */}
       <div className="pt-3 pb-2 flex flex-col gap-1 px-1">
         
         <div className="flex justify-between items-center opacity-70">
@@ -166,7 +204,6 @@ export default function ProductCard({ product }: { product: any }) {
             </h3>
         </Link>
 
-        {/* ✅ FIXED PRICE SECTION: Visible Everywhere (Mobile + Laptop) */}
         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
            <span className="text-sm md:text-base font-bold text-[#1c1917] tracking-tight">
             ₹{product.price.toLocaleString()}
@@ -174,12 +211,9 @@ export default function ProductCard({ product }: { product: any }) {
            
            {hasDiscount && (
               <>
-                {/* Cut Price (Always Visible) */}
                 <span className="text-[10px] text-stone-400 line-through decoration-stone-300">
                   ₹{originalPrice.toLocaleString()}
                 </span>
-                
-                {/* Discount Badge (Always Visible) */}
                 <span className="text-[9px] font-bold text-rose-600 bg-rose-50 border border-rose-100 px-1.5 py-0.5 rounded tracking-wider leading-none">
                     {discountPercentage}% OFF
                 </span>
@@ -187,6 +221,7 @@ export default function ProductCard({ product }: { product: any }) {
            )}
         </div>
 
+        {/* 👇👇👇 यहाँ बदलाव किया है (Colors & Assured Badge) 👇👇👇 */}
         <div className="flex items-center justify-between mt-2 min-h-[22px]">
             {colors.length > 0 ? (
                 <div className="flex -space-x-1.5 pl-0.5">
@@ -201,14 +236,27 @@ export default function ProductCard({ product }: { product: any }) {
                 </div>
             )}
 
+{/* RIGHT SIDE: Smart Mobile Layout */}
             <div className="flex items-center gap-2">
-                {product.stock > 0 && product.stock < 5 ? (
-                    <p className="text-[9px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-100">
+                
+                {/* 1. SIGNATURE BADGE */}
+                {/* Logic: Mobile par agar Stock Kam (<5) hai, toh Badge HATA DO taaki Stock Alert dikhe */}
+                <div className={`${(product.stock > 0 && product.stock < 5) ? 'hidden md:flex' : 'flex'} items-center gap-1 px-1.5 py-[2px] md:px-2 md:py-0.5 rounded-[3px] md:rounded-[4px] border border-[#C0A055] bg-gradient-to-r from-[#DFBD69] via-[#F9F2C5] to-[#DFBD69] shadow-sm`}>
+                    <BadgeCheck className="w-2.5 h-2.5 text-[#5B3A0A] fill-[#5B3A0A]/10" strokeWidth={2.5} />
+                    <span className="text-[7px] md:text-[8px] font-extrabold uppercase tracking-wide md:tracking-[0.2em] text-[#5B3A0A] leading-none pt-[1px]">
+                        Signature
+                    </span>
+                </div>
+
+                {/* 2. STOCK WARNING (Ab Mobile Par Bhi Dikhega) */}
+                {/* Logic: Agar Stock < 5 hai, toh ye Mobile par Signature ki jagah le lega */}
+                {product.stock > 0 && product.stock < 5 && (
+                    <p className="text-[8px] md:text-[9px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-100 whitespace-nowrap animate-pulse">
                         Only {product.stock} Left
                     </p>
-                ) : null}
+                )}
 
-                {/* Mobile Add Button */}
+                {/* 3. ADD BUTTON (Same as before) */}
                 <button 
                     onClick={handleAddToCart} 
                     disabled={product.stock === 0}

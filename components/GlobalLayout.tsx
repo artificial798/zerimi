@@ -4,7 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { ShoppingBag, X, Trash2, Menu, Search, User, Instagram, Facebook, Twitter, Lock, Check, Gift, Truck, ArrowRight, Ticket, Heart, ShieldCheck, Gem, Zap, TrendingDown, Eye, ShoppingCart, MapPin, Phone, Mail } from 'lucide-react';
+import { ShoppingBag, X, Trash2, Menu, Search, User, Instagram, Facebook, Twitter, Lock, Check, Gift, Truck, ArrowRight, Ticket, Heart, ShieldCheck, Gem, Zap, TrendingDown, Eye, ShoppingCart, MapPin, Phone, Mail, Bell, CheckCircle, Package, RefreshCcw, Info } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -30,6 +30,22 @@ export default function GlobalLayout({ children }: { children: React.ReactNode }
     
   } = useStore() as any; // <--- 'as any' lagayein taaki TypeScript error na de
 // Is line ko baaki useState ke paas add karein
+// --- NOTIFICATION LOGIC ---
+  const { notifications, markNotificationRead } = useStore() as any; // Store se nikala
+  const [isNotifOpen, setIsNotifOpen] = useState(false); // Popup State
+
+  // Filter & Sort Logic (Sirf meri notifications + Newest first)
+  const myNotifications = notifications
+      ? notifications
+          .filter((n: any) => n.userId === currentUser?.email)
+          .sort((a: any, b: any) => {
+              const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+              const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+              return timeB - timeA;
+          })
+      : [];
+  
+  const unreadCount = myNotifications.filter((n: any) => !n.isRead).length;
 const [showEmptyWishlistToast, setShowEmptyWishlistToast] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -187,7 +203,18 @@ const subtotal = cart.reduce((sum: number, item: any) => sum + (item.product?.pr
               )}
               <Search onClick={handleSearchIconClick} className="w-5 h-5 cursor-pointer text-white hover:text-amber-400 transition" />
             </div>
-
+{/* ✅ NOTIFICATION BELL */}
+            <button 
+                onClick={() => setIsNotifOpen(true)} 
+                className="relative group flex items-center justify-center outline-none mr-2 md:mr-0"
+            >
+                <Bell className="w-5 h-5 text-white group-hover:text-amber-400 transition" />
+                
+                {/* Red Dot Logic */}
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-600 rounded-full border-2 border-[#0a1f1c] animate-pulse flex items-center justify-center shadow-lg shadow-red-500/50"></span>
+                )}
+            </button>
             {/* WISHLIST (Desktop Only - Mobile space bachane ke liye hide rakha hai) */}
             <div className="relative group hidden md:block">
               <Heart 
@@ -445,7 +472,14 @@ const subtotal = cart.reduce((sum: number, item: any) => sum + (item.product?.pr
       </AnimatePresence>
 
       <CartDrawer />
-
+{/* 👇 YAHAN PASTE KAREIN: NOTIFICATION DRAWER CALL */}
+      <NotificationDrawer 
+         isOpen={isNotifOpen} 
+         onClose={() => setIsNotifOpen(false)} 
+         notifications={myNotifications} 
+         markRead={markNotificationRead} 
+      />
+      {/* 👆 YAHAN TAK PASTE KARNA HAI */}
       <AnimatePresence>
         {isMobileMenuOpen && (
           <motion.div initial={{ opacity: 0, x: '-100%' }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: '-100%' }} transition={{ type: "spring", damping: 25, stiffness: 200 }} className="fixed inset-0 z-50 bg-[#0a1f1c] flex flex-col text-white">
@@ -519,4 +553,109 @@ const subtotal = cart.reduce((sum: number, item: any) => sum + (item.product?.pr
       </AnimatePresence>
     </div>
   );
+}
+// --- HELPER: SMART NOTIFICATION ICON ---
+const getNotificationIcon = (title: string) => {
+    const t = (title || "").toLowerCase(); 
+    if (t.includes('delivered')) return <CheckCircle className="w-5 h-5 text-green-500" />;
+    if (t.includes('shipped') || t.includes('track') || t.includes('out')) return <Truck className="w-5 h-5 text-blue-500" />;
+    if (t.includes('processing') || t.includes('confirmed')) return <Package className="w-5 h-5 text-amber-500" />;
+    if (t.includes('return') || t.includes('refund')) return <RefreshCcw className="w-5 h-5 text-red-500" />;
+    return <Info className="w-5 h-5 text-white/50" />;
+};
+
+// --- COMPONENT: NOTIFICATION DRAWER (Exact Copy) ---
+function NotificationDrawer({ isOpen, onClose, notifications, markRead }: any) {
+    if (!isOpen) return null;
+
+    const safeNotifications = Array.isArray(notifications) ? notifications : [];
+    const unreadCount = safeNotifications.filter((n: any) => !n.isRead).length;
+
+    const handleMarkAllRead = () => {
+        safeNotifications.forEach((n: any) => {
+            if (!n.isRead && n.id) {
+                markRead(n.id);
+            }
+        });
+    };
+
+    return (
+        <>
+            {/* Backdrop */}
+            <div 
+                className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[99] transition-opacity animate-in fade-in" 
+                onClick={onClose}
+            ></div>
+
+            {/* Side Panel */}
+            <div className={`fixed top-0 right-0 h-full w-[85%] md:w-[400px] bg-[#0f2925] border-l border-white/10 shadow-2xl z-[100] transform transition-transform duration-300 ease-out ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+                
+                {/* Header */}
+                <div className="p-6 border-b border-white/5 flex justify-between items-center bg-[#0a1f1c]">
+                    <div>
+                        <h3 className="font-serif text-xl text-white tracking-wide flex items-center gap-3">
+                            Notifications
+                            {unreadCount > 0 && <span className="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full font-sans font-bold shadow-red-900/20 shadow-lg">{unreadCount} New</span>}
+                        </h3>
+                        <p className="text-white/40 text-xs mt-1">Updates on your orders & offers.</p>
+                    </div>
+                    <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition group">
+                        <X className="w-5 h-5 text-white/60 group-hover:text-red-400" />
+                    </button>
+                </div>
+
+                {/* Toolbar */}
+                <div className="px-6 py-3 border-b border-white/5 flex justify-between items-center bg-white/[0.02]">
+                    <span className="text-[10px] text-white/30 uppercase font-bold tracking-widest">Recent Activity</span>
+                    {unreadCount > 0 && (
+                        <button onClick={handleMarkAllRead} className="text-[10px] font-bold text-amber-500 hover:text-amber-400 uppercase tracking-wider flex items-center gap-1 transition-colors">
+                            <Check className="w-3 h-3" /> Mark all read
+                        </button>
+                    )}
+                </div>
+
+                {/* List Area */}
+                <div className="overflow-y-auto h-[calc(100vh-140px)] custom-scrollbar p-3 space-y-3">
+                    {safeNotifications.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center h-64 text-white/30">
+                            <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-4">
+                                <Bell className="w-8 h-8 opacity-20" />
+                            </div>
+                            <p className="text-sm">No new updates yet.</p>
+                        </div>
+                    ) : (
+                        safeNotifications.map((n: any, idx: number) => (
+                            <div 
+                                key={n.id || idx} 
+                                onClick={() => !n.isRead && n.id && markRead(n.id)}
+                                className={`group p-4 rounded-xl border transition-all duration-300 cursor-pointer relative overflow-hidden ${
+                                    n.isRead 
+                                    ? 'bg-transparent border-transparent hover:bg-white/5 opacity-60 hover:opacity-100' 
+                                    : 'bg-gradient-to-r from-amber-500/10 to-transparent border-amber-500/20 hover:border-amber-500/40'
+                                }`}
+                            >
+                                <div className="flex gap-4">
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 border ${n.isRead ? 'bg-white/5 border-white/5' : 'bg-[#0a1f1c] border-amber-500/30 shadow-lg'}`}>
+                                        {getNotificationIcon(n.title)}
+                                    </div>
+
+                                    <div className="flex-1">
+                                        <div className="flex justify-between items-start mb-1">
+                                            <h4 className={`text-sm font-bold ${n.isRead ? 'text-white/70' : 'text-white'}`}>{n.title || "Notification"}</h4>
+                                            <span className="text-[9px] text-white/30 whitespace-nowrap ml-2 font-mono">{n.date || "Just now"}</span>
+                                        </div>
+                                        <p className={`text-xs leading-relaxed ${n.isRead ? 'text-white/40' : 'text-white/80'}`}>{n.message || "No details available."}</p>
+                                    </div>
+                                </div>
+
+                                {!n.isRead && (
+                                    <div className="absolute top-4 right-2 w-2 h-2 rounded-full bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.8)] animate-pulse"></div>
+                                )}
+                            </div>
+                        ))
+                    )}
+                </div>
+            </div>
+        </>
+    );
 }

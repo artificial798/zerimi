@@ -279,108 +279,108 @@ export default function Home() {
   </div>
 </section>
 {/* --- 🤫 SECRET GIFT MODE USP SECTION (Mobile Optimized) --- */}
-<section className="py-16 md:py-24 bg-[#0a1f1c] text-white overflow-hidden relative">
+{/* --- 🤫 SECRET GIFT MODE (COMPACT BANNER VERSION) --- */}
+{/* --- 🤫 SECRET GIFT MODE (COLORFUL COMPACT BANNER) --- */}
+{/* --- 🤫 SECRET GIFT MODE (COLORFUL COMPACT BANNER - QUOTE FIXED) --- */}
+<section className="relative py-8 md:py-12 overflow-hidden border-y border-white/10">
   
-  {/* Background Glow (Responsive Position) */}
-  <div className="absolute top-0 right-0 w-[300px] h-[300px] md:w-[500px] md:h-[500px] bg-amber-500/10 rounded-full blur-[80px] md:blur-[100px] -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
-  <div className="absolute bottom-0 left-0 w-[200px] h-[200px] bg-purple-500/10 rounded-full blur-[60px] translate-y-1/3 -translate-x-1/3 pointer-events-none md:hidden"></div>
+  {/* 1. VIBRANT MULTICOLOR BACKGROUND GLOWS */}
+  <div className="absolute inset-0 bg-[#020b09]"></div>
+  <div className="absolute top-0 right-0 w-[250px] h-[250px] bg-gradient-to-br from-amber-400/30 to-orange-600/30 rounded-full blur-[100px] pointer-events-none translate-x-1/3 -translate-y-1/3 mix-blend-screen" />
+  <div className="absolute bottom-0 left-0 w-[200px] h-[200px] bg-gradient-to-tr from-fuchsia-600/30 to-purple-600/30 rounded-full blur-[80px] pointer-events-none -translate-x-1/3 translate-y-1/3 mix-blend-screen" />
+  <div className="absolute top-1/2 left-1/2 w-[150px] h-[150px] bg-cyan-500/20 rounded-full blur-[80px] pointer-events-none -translate-x-1/2 -translate-y-1/2 mix-blend-screen" />
 
-  <div className="max-w-7xl mx-auto px-5 md:px-6 relative z-10">
-    <div className="flex flex-col md:flex-row items-center gap-10 md:gap-16">
+  <div className="max-w-7xl mx-auto px-4 relative z-10">
+    
+    <div className="grid grid-cols-[1.4fr_0.6fr] md:grid-cols-2 gap-3 md:gap-16 items-center">
       
-      {/* LEFT: TEXT CONTENT (Admin Controlled) */}
-      <div className="flex-1 text-center md:text-left w-full">
-        
-        {/* Badge */}
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[9px] md:text-[10px] font-bold uppercase tracking-widest mb-6">
-          <span className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-amber-500 animate-pulse"></span>
-          {store.siteText?.secretGiftBadge || "New Feature"}
+      {/* === LEFT: TEXT CONTENT === */}
+      <div className="text-left">
+        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-amber-500/50 bg-gradient-to-r from-amber-500/10 to-purple-500/10 backdrop-blur-md mb-2">
+          <div className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shadow-[0_0_10px_#f59e0b]" />
+          <span className="text-[9px] md:text-[10px] font-bold tracking-[0.15em] text-amber-400 uppercase bg-clip-text text-transparent bg-gradient-to-r from-amber-400 to-orange-300">
+             {store.siteText?.secretGiftBadge || "NEW: Secret Mode"}
+          </span>
         </div>
-        
-        {/* Main Heading (Responsive Text Size) */}
-        <h2 className="text-3xl sm:text-4xl md:text-6xl font-serif mb-4 md:mb-6 leading-tight">
-           {store.siteText?.secretGiftTitle || "The Art of Secret Gifting"}
+
+        <h2 className="font-serif text-xl md:text-5xl text-white leading-tight mb-2 drop-shadow-lg">
+          <span className="bg-clip-text text-transparent bg-gradient-to-r from-white via-white to-amber-200">
+           {store.siteText?.secretGiftTitle || "Surprise Her in Secret"}
+          </span>
         </h2>
-        
-        {/* Subtitle */}
-        <p className="text-white/60 text-base md:text-lg mb-8 md:mb-10 leading-relaxed max-w-xl mx-auto md:mx-0">
-          {store.siteText?.secretGiftSub || "Surprise your loved ones with luxury. We deliver the gift, hide the price tag, and keep your identity a mystery until you decide to reveal it."}
+
+        <p className="text-white/80 text-[10px] md:text-base leading-relaxed mb-3 md:mb-6 max-w-md font-light drop-shadow">
+           {store.siteText?.secretGiftSub || "Send luxury anonymously. We hide the price tag and keep the mystery alive until delivery."}
         </p>
-        
-        {/* Features Grid (Mobile: Stacked/Full Width, Desktop: Inline) */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-center md:justify-start w-full sm:w-auto">
-          <div className="flex items-center gap-4 bg-white/5 px-5 py-4 rounded-xl border border-white/5 w-full sm:w-auto justify-center sm:justify-start hover:bg-white/10 transition">
-            <Gift className="w-5 h-5 md:w-6 md:h-6 text-amber-500 shrink-0" />
-            <div className="text-left">
-                <p className="text-sm font-bold text-white leading-none mb-1">Luxury Box</p>
-                <p className="text-[10px] text-white/40 uppercase tracking-wider">No Branding</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-4 bg-white/5 px-5 py-4 rounded-xl border border-white/5 w-full sm:w-auto justify-center sm:justify-start hover:bg-white/10 transition">
-            <EyeOff className="w-5 h-5 md:w-6 md:h-6 text-amber-500 shrink-0" />
-            <div className="text-left">
-                <p className="text-sm font-bold text-white leading-none mb-1">Zero Trace</p>
-                <p className="text-[10px] text-white/40 uppercase tracking-wider">No Invoice Inside</p>
-            </div>
-          </div>
+
+        <div className="flex flex-col md:flex-row gap-1.5 md:gap-6">
+           <div className="flex items-center gap-2">
+              <div className="p-1 rounded-full bg-gradient-to-br from-amber-400/20 to-orange-500/20"><Gift className="w-3 h-3 md:w-5 md:h-5 text-amber-400" /></div>
+              <span className="text-[9px] md:text-xs font-bold uppercase tracking-wider text-white">Luxury Box</span>
+           </div>
+           <div className="flex items-center gap-2">
+              <div className="p-1 rounded-full bg-gradient-to-br from-purple-400/20 to-fuchsia-500/20"><EyeOff className="w-3 h-3 md:w-5 md:h-5 text-purple-400" /></div>
+              <span className="text-[9px] md:text-xs font-bold uppercase tracking-wider text-white">Zero Trace</span>
+           </div>
         </div>
       </div>
 
-      {/* RIGHT: VISUALS (Dynamic Image or Default Card) */}
-      <div className="flex-1 relative flex justify-center md:justify-end w-full mt-4 md:mt-0">
+      {/* === RIGHT: VISUAL === */}
+      <div className="relative flex justify-end items-center h-full">
         
-        {/* CASE A: Admin ne Image Upload ki hai */}
-        {store.siteText?.secretGiftImage ? (
-            <div className="relative w-full max-w-sm md:max-w-md aspect-[4/5] rounded-[1.5rem] md:rounded-[2rem] overflow-hidden border border-white/10 shadow-2xl transform rotate-0 md:rotate-3 hover:rotate-0 transition duration-700 group">
-                <Image 
-                    src={store.siteText.secretGiftImage} 
-                    alt="Secret Gift" 
-                    fill 
-                    className="object-cover group-hover:scale-105 transition duration-700" 
-                />
-                {/* Image Overlay Gradient */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent flex flex-col justify-end p-6 md:p-8">
-                    <p className="text-white font-serif italic text-lg md:text-xl opacity-90 leading-relaxed text-center md:text-left">
-                       "{store.siteText?.secretGiftQuote || "Sent with love."}"
-                    </p>
-                </div>
-            </div>
-        ) : (
+        <div className="relative w-full aspect-square md:aspect-[16/9] max-h-[130px] md:max-h-none md:max-w-md">
             
-        /* CASE B: Default Abstract Card (Agar Image nahi hai) */
-            <div className="relative z-10 bg-white/5 backdrop-blur-xl border border-white/10 p-6 md:p-10 rounded-[2rem] md:rounded-[2.5rem] w-full max-w-sm md:max-w-md transform rotate-0 md:rotate-3 hover:rotate-0 transition duration-500 shadow-2xl">
-               {/* Card Header */}
-               <div className="flex justify-between items-start mb-8 md:mb-12">
-                  <div className="flex gap-3 md:gap-4">
-                     <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-gradient-to-br from-amber-400 to-orange-600 shadow-lg"></div>
-                     <div>
-                        <p className="text-sm font-bold text-white">Anonymous Sender</p>
-                        <p className="text-[10px] md:text-xs text-white/40">Via ZERIMI Secret Mode</p>
-                     </div>
-                  </div>
-                  <Lock className="w-5 h-5 md:w-6 md:h-6 text-white/20" />
-               </div>
-
-               {/* Quote (Responsive Text) */}
-               <p className="text-xl md:text-3xl font-serif italic text-white/90 mb-8 md:mb-12 leading-relaxed text-center md:text-left">
-                  "{store.siteText?.secretGiftQuote || "I wanted to see you smile, without knowing who put it there. Enjoy the sparkle."}"
-               </p>
-
-               {/* Fake Tracking Bar */}
-               <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden mb-2">
-                  <div className="h-full w-3/4 bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)] animate-[pulse_3s_ease-in-out_infinite]"></div>
-               </div>
-               <div className="flex justify-between text-[9px] md:text-[10px] font-bold uppercase tracking-widest">
-                   <span className="text-amber-500 flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-ping"></span> Out for Delivery
-                   </span>
-                   <span className="text-white/20">Estimated: Today</span>
-               </div>
-            </div>
-        )}
-        
-        {/* Background Decorations (Desktop Only) */}
-        <div className="hidden md:block absolute -bottom-10 -left-10 w-64 h-64 bg-purple-500/20 rounded-full blur-3xl -z-10 animate-pulse"></div>
+            {store.siteText?.secretGiftImage ? (
+                // ✅ CASE A: FIXED QUOTE (Removed line-clamp-1)
+                <div className="w-full h-full rounded-xl md:rounded-2xl p-[1px] bg-gradient-to-br from-amber-400/50 via-purple-500/50 to-cyan-500/50 shadow-2xl relative group overflow-hidden">
+                    <div className="relative w-full h-full rounded-xl md:rounded-2xl overflow-hidden">
+                      <Image src={store.siteText.secretGiftImage} alt="Secret Gift" fill className="object-cover" />
+                      
+                      {/* Gradient thoda strong kiya taaki text padha jaye */}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent flex items-end p-3">
+                          
+                          {/* 👇 FIX: 'line-clamp-1' hata diya aur 'leading-tight' lagaya */}
+                          <p className="text-white font-serif italic text-[10px] md:text-lg opacity-90 leading-tight">
+                             "{store.siteText?.secretGiftQuote || "Sent with love."}"
+                          </p>
+                      </div>
+                    </div>
+                </div>
+            ) : (
+                // ✅ CASE B: Glass Card
+                <div className="w-full h-full flex items-center justify-center">
+                    <div className="w-[180%] md:w-full transform scale-[0.50] md:scale-100 origin-right md:origin-center">
+                        <div className="relative p-[2px] rounded-[1.5rem] bg-gradient-to-br from-white/40 via-amber-500/40 to-purple-600/40 shadow-[0_0_20px_rgba(168,85,247,0.4)]">
+                          <div className="relative bg-[#0a0a0a]/80 backdrop-blur-xl p-5 rounded-[1.5rem]">
+                            <div className="flex items-center justify-between mb-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-400 via-orange-500 to-purple-600 flex items-center justify-center shadow-lg p-[1px]">
+                                   <div className="w-full h-full rounded-full bg-black flex items-center justify-center">
+                                     <span className="text-amber-400 font-bold text-xs">?</span>
+                                   </div>
+                                </div>
+                                <div>
+                                  <p className="text-white text-xs font-bold whitespace-nowrap">Anonymous</p>
+                                  <p className="text-[8px] text-amber-300/80 uppercase">Via Secret Mode</p>
+                                </div>
+                              </div>
+                              <Lock className="w-3 h-3 text-white/30" />
+                            </div>
+                            <p className="font-serif text-sm text-white italic mb-4 leading-relaxed drop-shadow">
+                              "{store.siteText?.secretGiftQuote || "You deserve the world..."}"
+                            </p>
+                            <div className="h-1 w-full bg-white/10 rounded-full overflow-hidden mb-2">
+                                <div className="h-full w-3/4 bg-gradient-to-r from-amber-500 to-purple-600 shadow-[0_0_10px_#f59e0b]" />
+                            </div>
+                            <div className="flex justify-between text-[8px] font-bold uppercase tracking-widest text-amber-400">
+                               <span className="flex items-center gap-1"><div className="w-1 h-1 bg-amber-400 rounded-full animate-ping"/> Out for Delivery</span>
+                            </div>
+                          </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
       </div>
 
     </div>

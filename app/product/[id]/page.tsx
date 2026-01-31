@@ -8,7 +8,7 @@ import SizeGuide from '@/components/SizeGuide';           // ✅ NEW: Imported C
 import { 
   Star, Truck, ShieldCheck, Heart, Share2, 
   Minus, Plus, ShoppingBag, ChevronDown, User, RefreshCcw, Award, Gift, Headphones, 
-  History, Clock, MessageCircle, Ruler, CheckCircle, Eye, ChevronRight // ✅ Ruler Icon & MessageCircle Added
+  History, Clock, MessageCircle, Ruler, CheckCircle, Eye, ChevronRight, BadgeCheck // ✅ Ruler Icon & MessageCircle Added
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -148,7 +148,22 @@ useEffect(() => {
       setDeliveryMsg("❌ Network Error. Try again.");
     }
   };
-
+// ✅ SHARE LOGIC
+  const handleShare = async () => {
+    const url = window.location.href;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: product.name,
+          text: `Check out ${product.name} - Luxury Collection`,
+          url: url,
+        });
+      } catch (err) { console.log('Share closed'); }
+    } else {
+      navigator.clipboard.writeText(url);
+      toast.success("Link copied to clipboard!", { icon: '🔗' });
+    }
+  };
   const [qty, setQty] = useState(1);
   const [activeTab, setActiveTab] = useState<string | null>('details');
 
@@ -468,31 +483,40 @@ const similarProducts = (() => {
    </button>
 </div>
                     
-                    {/* Add to Cart */}
-                    <button
-                    onClick={() => {
-  // ✅ Sahi Tareeka: Alag-alag arguments pass karein
-  addToCart(
-      product, 
-      qty, 
-      selectedSize || productSizes[0], 
-      selectedColor || colors[0],
-      isGiftWrapped
-  ); 
-  
-}}
-                      disabled={product.stock === 0}
-                      className={`flex-1 text-white rounded-lg flex items-center justify-center gap-3 h-12 shadow-xl transition-all hover:shadow-2xl hover:-translate-y-1 ${product.stock === 0 ? 'bg-stone-400 cursor-not-allowed' : 'bg-[#0a1f1c] hover:bg-amber-700'}`}
-                    >
-                      <ShoppingBag className="w-4 h-4" />
-                      <span className="font-bold uppercase tracking-widest text-xs">
-                          {product.stock === 0 ? "Out of Stock" : "Add to Cart"}
-                      </span>
-                    </button>
+                 <button
+    onClick={() => {
+        // ✅ Logic Same to Same Rakha Hai
+        addToCart(
+            product, 
+            qty, 
+            selectedSize || productSizes[0], 
+            selectedColor || colors[0],
+            isGiftWrapped
+        ); 
+    }}
+    disabled={product.stock === 0}
+    className={`flex-1 text-white rounded-lg flex items-center justify-center gap-2 md:gap-3 h-12 shadow-xl transition-all hover:shadow-2xl hover:-translate-y-1 ${product.stock === 0 ? 'bg-stone-400 cursor-not-allowed' : 'bg-[#0a1f1c] hover:bg-amber-700'}`}
+>
+    {/* Icon: Mobile par thoda bada (w-5), Desktop par normal (w-4) */}
+    <ShoppingBag className="w-5 h-5 md:w-4 md:h-4" />
+
+    {/* Text: Mobile par HIDDEN (chup jayega), Desktop par dikhega */}
+    <span className="hidden md:inline font-bold uppercase tracking-widest text-xs">
+        {product.stock === 0 ? "Out of Stock" : "Add to Cart"}
+    </span>
+</button>
                     
                     {/* Wishlist */}
                     <button onClick={() => { toggleWishlist(product); toast.success("Saved"); }} className="px-4 border border-stone-200 rounded-lg hover:border-red-400 hover:text-red-500 transition hover:shadow-lg h-12">
                        <Heart className="w-5 h-5" />
+                    </button>
+                    {/* ✅ NEW SHARE BUTTON */}
+                    <button 
+                        onClick={handleShare} 
+                        className="px-3 md:px-4 border border-stone-200 rounded-lg hover:border-blue-400 hover:text-blue-600 transition hover:shadow-lg h-12 bg-white"
+                        title="Share Product"
+                    >
+                       <Share2 className="w-5 h-5" />
                     </button>
                 </div>
 
