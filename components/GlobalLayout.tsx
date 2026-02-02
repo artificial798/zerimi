@@ -10,6 +10,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import PopupModal from '@/components/PopupModal';
 import useNotification from '@/hooks/useNotification';
+
 export default function GlobalLayout({ children }: { children: React.ReactNode }) {
   useNotification();
   const pathname = usePathname();
@@ -185,13 +186,22 @@ const subtotal = cart.reduce((sum: number, item: any) => sum + (item.product?.pr
           </div>
 
           {/* 2. CENTER: Logo */}
-          <div className="flex-shrink-0">
-            <Link href="/">
-              <div className="relative h-10 w-28 md:h-12 md:w-40 cursor-pointer">
-                <Image src={logoWhite} alt="ZERIMI" fill className="object-contain" />
-              </div>
-            </Link>
-          </div>
+         {/* 2. CENTER: Logo */}
+<div className="flex-shrink-0">
+  <Link href="/">
+    <div className="relative h-10 w-28 md:h-12 md:w-40 cursor-pointer">
+      {/* ✅ FIX: priority={true} aur sizes add kiya */}
+      <Image 
+        src={logoWhite} 
+        alt="ZERIMI" 
+        fill 
+        sizes="(max-width: 768px) 112px, 160px" // Browser ko batata hai ki actual size kya hai
+        className="object-contain" 
+        priority={true} // Logo turant load hoga (LCP improve hoga)
+      />
+    </div>
+  </Link>
+</div>
 
           {/* 3. RIGHT SIDE: Search, Profile, Cart */}
           <div className="flex items-center justify-end gap-3 md:gap-6 flex-1">

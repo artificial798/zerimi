@@ -7,15 +7,17 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRight, Star, Truck, ShieldCheck, RefreshCw, Lock, Gift, EyeOff } from 'lucide-react';
 import ProductCard from '@/components/ProductCard';
 import PremiumMarquee from '@/components/PremiumMarquee';
-
+import Head from 'next/head';
 // ✅ FIX: Fallback Image
-const FALLBACK_IMAGE = "https://via.placeholder.com/1920x1080?text=ZERIMI+JEWELRY";
+// ✅ AB HAMARA PREMIUM SVG USE HOGA
+const FALLBACK_IMAGE = "/banner-fallback.svg";
 
 export default function Home() {
   const store = useStore() as any;
   
   // Safe destructuring
   const { products, banner, categories, featuredSection, promoSection, blogs, siteText } = store || {};
+  
 // ✅ YE LINE ADD KAREIN (New Arrivals Logic)
   // 1. Check karo products hain ya nahi
   // 2. Copy karo [...products]
@@ -66,8 +68,9 @@ export default function Home() {
  if (slides.length === 0) return null;
 
   return (
+    
     <div className="bg-white overflow-x-hidden">
-      
+      <title>Zerimi | Signature Collection of High-End Jewels</title>
       {/* ✅ YAHAN PASTE KAREIN: Popup sabse upar rahega */}
      
 

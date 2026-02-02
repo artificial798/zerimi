@@ -1,9 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // ✅ Ye line add karein (Strict Mode band karne ke liye)
   reactStrictMode: false,
 
   images: {
+    // ✅ Fix: Modern formats enable karein
+    formats: ['image/avif', 'image/webp'], 
+    
     remotePatterns: [
       {
         protocol: 'https',
