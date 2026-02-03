@@ -1,45 +1,56 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Sparkles } from 'lucide-react';
+import { X, Copy, Check, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useStore } from '@/lib/store';
 
 export default function PopupModal() {
   const [isOpen, setIsOpen] = useState(false);
-  const [isLoaded, setIsLoaded] = useState(false); // ✅ Loading Guard
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [copied, setCopied] = useState(false);
   const { siteText } = useStore() as any;
 
-  useEffect(() => {
-    // 1. Data wait logic
-    if (!siteText) return;
+  // ESC key to close logic
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'Escape') handleClose();
+  }, []);
 
-    // 2. Admin Check
+  useEffect(() => {
+    if (!siteText) return;
     if (siteText.isPopupActive === true) {
       const hasSeenPopup = sessionStorage.getItem('zerimi_popup_seen');
-      
       if (!hasSeenPopup) {
-        setIsLoaded(true); // Data ready, allow rendering
-        const timer = setTimeout(() => setIsOpen(true), 2500); // Thoda aur delay for smooth entry
-        return () => clearTimeout(timer);
+        setIsLoaded(true);
+        // Premium Delay: 4.5 seconds
+        const timer = setTimeout(() => {
+          setIsOpen(true);
+          window.addEventListener('keydown', handleKeyDown);
+        }, 4500); 
+        return () => {
+          clearTimeout(timer);
+          window.removeEventListener('keydown', handleKeyDown);
+        };
       }
     }
-  }, [siteText]);
+  }, [siteText, handleKeyDown]);
 
   const handleClose = () => {
     setIsOpen(false);
     sessionStorage.setItem('zerimi_popup_seen', 'true');
+    window.removeEventListener('keydown', handleKeyDown);
   };
 
-  // ✅ CRITICAL: HTML tab tak render mat karo jab tak sab ready na ho
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   if (!isLoaded || !isOpen || !siteText) return null;
 
-  // Data Variables
-  const popupImage = siteText?.popupImage;
-  const title = siteText?.popupTitle;
-  const subText = siteText?.popupSub;
-  const code = siteText?.popupCode;
+  const { popupImage, popupTitle, popupSub, popupCode } = siteText;
 
   return (
     <AnimatePresence>
@@ -48,104 +59,92 @@ export default function PopupModal() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.6 }}
-          className="fixed inset-0 z-[9999] flex items-center justify-center px-4 sm:px-0"
+          className="fixed inset-0 z-[9999] flex items-end md:items-center justify-center p-4 md:p-6"
         >
-          {/* 1. Luxurious Dark Backdrop with Blur */}
-          <div className="absolute inset-0 bg-black/90 backdrop-blur-sm" onClick={handleClose} />
+          {/* Backdrop with Blur */}
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={handleClose} />
 
-          {/* 2. The Royal Card */}
+          {/* Compact Modal Card */}
           <motion.div 
-            initial={{ scale: 0.95, y: 40, opacity: 0 }}
-            animate={{ scale: 1, y: 0, opacity: 1 }}
-            exit={{ scale: 0.95, y: 40, opacity: 0 }}
-            transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="relative w-full max-w-4xl bg-[#050f0d] overflow-hidden shadow-2xl rounded-sm flex flex-col md:flex-row max-h-[85vh] md:max-h-[600px] border border-[#d4af37]/30"
+            initial={{ y: 40, opacity: 0, scale: 0.95 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: 20, opacity: 0, scale: 0.95 }}
+            className="relative w-full max-w-[400px] md:max-w-3xl bg-[#080808] rounded-2xl overflow-hidden shadow-2xl border border-white/10 flex flex-col md:flex-row"
           >
-            {/* Close Button (Floating Gold) */}
+            {/* Close Icon */}
             <button 
               onClick={handleClose} 
-              className="absolute top-4 right-4 z-40 text-white/50 hover:text-[#d4af37] transition-all bg-black/40 p-2 rounded-full backdrop-blur-md border border-white/10 hover:border-[#d4af37]"
+              className="absolute top-3 right-3 z-50 p-1.5 rounded-full bg-black/50 text-white/50 hover:text-white transition-colors border border-white/5"
             >
-              <X size={20} />
+              <X size={18} />
             </button>
 
-            {/* --- LEFT SIDE: IMAGE WITH FADE --- */}
-            <div className="relative w-full h-[40vh] md:h-auto md:w-1/2 shrink-0">
-               {popupImage ? (
-                 <>
-                   <Image 
-                     src={popupImage}
-                     alt="Exclusive Access"
-                     fill
-                     className="object-cover"
-                   />
-                   {/* Gradient Fade to merge image with black background */}
-                   <div className="absolute inset-0 bg-gradient-to-t from-[#050f0d] via-transparent to-transparent md:bg-gradient-to-r md:from-transparent md:to-[#050f0d]" />
-                 </>
-               ) : (
-                 // Fallback Luxury Pattern
-                 <div className="w-full h-full bg-[#0a1f1c] flex items-center justify-center relative overflow-hidden">
-                    <div className="absolute w-64 h-64 bg-[#d4af37]/10 rounded-full blur-[100px]" />
-                    <h2 className="font-serif text-4xl text-[#d4af37] z-10 tracking-[0.3em]">ZERIMI</h2>
-                 </div>
-               )}
+            {/* Image: Mobile par horizontal ya chhota rakha hai */}
+            <div className="relative w-full h-[120px] md:h-auto md:w-[40%] shrink-0">
+              {popupImage ? (
+                <Image 
+                  src={popupImage} 
+                  alt="Special Offer" 
+                  fill 
+                  className="object-cover" 
+                  priority 
+                />
+              ) : (
+                <div className="w-full h-full bg-[#111] flex items-center justify-center text-[#d4af37]/10 font-serif tracking-widest">ZERIMI</div>
+              )}
+              <div className="absolute inset-0 bg-gradient-to-t from-[#080808] via-transparent to-transparent md:bg-gradient-to-r" />
             </div>
 
-            {/* --- RIGHT SIDE: CONTENT (Dark & Gold) --- */}
-            <div className="relative w-full md:w-1/2 flex flex-col justify-center items-center text-center p-8 md:p-14 text-[#fffcf5]">
-              
-              {/* Background Glow Effect */}
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-[#d4af37]/5 rounded-full blur-[80px] pointer-events-none" />
-
-              {/* Top Label */}
-              <div className="flex items-center gap-3 mb-6 opacity-80">
-                <div className="h-[1px] w-8 bg-gradient-to-r from-transparent to-[#d4af37]"></div>
-                <span className="text-[10px] font-bold tracking-[0.3em] text-[#d4af37] uppercase shadow-black drop-shadow-md">
-                  Royal Privilege
-                </span>
-                <div className="h-[1px] w-8 bg-gradient-to-l from-transparent to-[#d4af37]"></div>
-              </div>
-              
-              {/* Dynamic Title */}
-              <h2 className="text-3xl md:text-5xl font-serif text-white mb-4 leading-tight drop-shadow-lg">
-                {title || <span className="italic font-light">Welcome</span>}
-              </h2>
-              
-              {/* Dynamic Subtext */}
-              <p className="text-stone-300 text-xs md:text-sm mb-8 leading-6 tracking-wide font-light max-w-xs mx-auto opacity-80">
-                {subText || "Indulge in the finest craftsmanship. Join our exclusive circle for early access and rewards."}
-              </p>
-              
-              {/* Coupon Code (Glowing Ticket) */}
-              {code && (
-                  <div className="relative group cursor-pointer mb-8 w-full max-w-[280px]">
-                    <div className="absolute inset-0 bg-[#d4af37]/20 blur-md group-hover:bg-[#d4af37]/30 transition duration-500"></div>
-                    <div className="relative bg-[#0a1f1c]/80 border border-[#d4af37]/50 py-3 px-6 flex items-center justify-center gap-3 backdrop-blur-md">
-                      <Sparkles size={14} className="text-[#d4af37] animate-pulse" />
-                      <span className="font-mono text-xl tracking-[0.2em] text-[#fffcf5]">
-                        {code}
-                      </span>
-                    </div>
+            {/* Content Section */}
+            <div className="p-6 md:p-10 flex flex-col justify-center flex-1 min-w-0">
+              <div className="space-y-4">
+                <header>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="h-[1px] w-5 bg-[#d4af37]"></span>
+                    <span className="text-[9px] uppercase tracking-[0.3em] text-[#d4af37] font-bold">Royal Privilege</span>
                   </div>
-              )}
+                  <h2 className="text-2xl md:text-4xl font-serif text-white leading-tight truncate">
+                    {popupTitle || "Exclusive Gift"}
+                  </h2>
+                  <p className="text-stone-400 text-[11px] md:text-sm font-light mt-1 leading-relaxed line-clamp-2">
+                    {popupSub || "Be the part of Zerimi World and unlock luxury."}
+                  </p>
+                </header>
 
-              {/* Action Buttons */}
-              <div className="flex flex-col w-full gap-4 max-w-[280px] z-10">
-                <Link 
-                  href="/category/all" 
-                  onClick={handleClose}
-                  className="bg-gradient-to-r from-[#d4af37] to-[#b59226] text-black py-3.5 text-[11px] uppercase font-bold tracking-[0.2em] hover:brightness-110 transition duration-500 shadow-[0_5px_20px_rgba(212,175,55,0.2)] text-center"
-                >
-                  Claim Offer
-                </Link>
-                
-                <button 
-                  onClick={handleClose}
-                  className="text-[10px] text-stone-500 hover:text-[#d4af37] transition-colors uppercase tracking-widest pb-1 border-b border-transparent hover:border-[#d4af37]/50 w-fit mx-auto"
-                >
-                  No, I'll pay full price
-                </button>
+                {/* Coupon Code: Compact Layout */}
+                {popupCode && (
+                  <div 
+                    onClick={() => copyToClipboard(popupCode)}
+                    className="flex items-center justify-between bg-white/[0.03] border border-white/5 rounded-lg px-4 py-2.5 cursor-pointer hover:bg-white/[0.06] transition-all group"
+                  >
+                    <div className="flex flex-col">
+                      <span className="text-[7px] uppercase text-stone-500 tracking-widest">Tap to copy</span>
+                      <span className="font-mono text-base md:text-lg text-[#d4af37] leading-none mt-1">{popupCode}</span>
+                    </div>
+                    {copied ? (
+                      <Check size={16} className="text-green-500" />
+                    ) : (
+                      <Copy size={16} className="text-stone-600 group-hover:text-[#d4af37]" />
+                    )}
+                  </div>
+                )}
+
+                {/* Buttons */}
+                <div className="flex flex-col gap-2.5">
+                  <Link 
+                    href="/category/all" 
+                    onClick={handleClose}
+                    className="w-full bg-[#d4af37] text-black text-[11px] font-bold uppercase tracking-[0.2em] py-3.5 rounded-sm text-center flex items-center justify-center gap-2 hover:brightness-110 active:scale-[0.98] transition-all"
+                  >
+                    Claim Offer <ArrowRight size={14} />
+                  </Link>
+                  <button 
+                    onClick={handleClose} 
+                    className="text-[9px] text-stone-600 hover:text-stone-400 uppercase tracking-[0.2em] transition-colors"
+                  >
+                    No thanks, I'll pay full price
+                  </button>
+                </div>
               </div>
             </div>
           </motion.div>
