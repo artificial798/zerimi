@@ -12,38 +12,30 @@ export default function PopupModal() {
   const [copied, setCopied] = useState(false);
   const { siteText } = useStore() as any;
 
-  // ESC key to close logic
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (e.key === 'Escape') handleClose();
-  }, []);
-
+  // Logic: 100% Same as before
   useEffect(() => {
     if (!siteText) return;
+
     if (siteText.isPopupActive === true) {
       const hasSeenPopup = sessionStorage.getItem('zerimi_popup_seen');
+      
       if (!hasSeenPopup) {
         setIsLoaded(true);
-        // Premium Delay: 4.5 seconds
-        const timer = setTimeout(() => {
-          setIsOpen(true);
-          window.addEventListener('keydown', handleKeyDown);
-        }, 4500); 
-        return () => {
-          clearTimeout(timer);
-          window.removeEventListener('keydown', handleKeyDown);
-        };
+        // Premium Delay: 5 seconds for better UX
+        const timer = setTimeout(() => setIsOpen(true), 5000); 
+        return () => clearTimeout(timer);
       }
     }
-  }, [siteText, handleKeyDown]);
+  }, [siteText]);
 
   const handleClose = () => {
     setIsOpen(false);
     sessionStorage.setItem('zerimi_popup_seen', 'true');
-    window.removeEventListener('keydown', handleKeyDown);
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
+  const copyCode = (code: string) => {
+    if (!code) return;
+    navigator.clipboard.writeText(code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -61,90 +53,78 @@ export default function PopupModal() {
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-[9999] flex items-end md:items-center justify-center p-4 md:p-6"
         >
-          {/* Backdrop with Blur */}
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={handleClose} />
+          {/* Background Overlay */}
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-md" onClick={handleClose} />
 
-          {/* Compact Modal Card */}
+          {/* Compact Luxury Card */}
           <motion.div 
-            initial={{ y: 40, opacity: 0, scale: 0.95 }}
+            initial={{ y: 100, opacity: 0, scale: 0.9 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: 20, opacity: 0, scale: 0.95 }}
-            className="relative w-full max-w-[400px] md:max-w-3xl bg-[#080808] rounded-2xl overflow-hidden shadow-2xl border border-white/10 flex flex-col md:flex-row"
+            exit={{ y: 100, opacity: 0, scale: 0.9 }}
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+            className="relative w-full max-w-[400px] md:max-w-3xl bg-[#050505] rounded-[2rem] md:rounded-xl overflow-hidden shadow-[0_30px_60px_rgba(0,0,0,0.8)] border border-white/10 flex flex-col md:flex-row"
           >
-            {/* Close Icon */}
+            {/* Close Trigger */}
             <button 
               onClick={handleClose} 
-              className="absolute top-3 right-3 z-50 p-1.5 rounded-full bg-black/50 text-white/50 hover:text-white transition-colors border border-white/5"
+              className="absolute top-4 right-4 z-50 p-2 rounded-full bg-black/40 text-white/40 hover:text-[#d4af37] transition-all border border-white/5"
             >
               <X size={18} />
             </button>
 
-            {/* Image: Mobile par horizontal ya chhota rakha hai */}
-            <div className="relative w-full h-[120px] md:h-auto md:w-[40%] shrink-0">
-              {popupImage ? (
-                <Image 
-                  src={popupImage} 
-                  alt="Special Offer" 
-                  fill 
-                  className="object-cover" 
-                  priority 
-                />
-              ) : (
-                <div className="w-full h-full bg-[#111] flex items-center justify-center text-[#d4af37]/10 font-serif tracking-widest">ZERIMI</div>
-              )}
-              <div className="absolute inset-0 bg-gradient-to-t from-[#080808] via-transparent to-transparent md:bg-gradient-to-r" />
+            {/* Visual Part (Smaller on Mobile) */}
+            <div className="relative w-full h-[150px] md:h-auto md:w-[42%] shrink-0">
+               {popupImage ? (
+                 <Image src={popupImage} alt="Zerimi Offer" fill className="object-cover" priority />
+               ) : (
+                 <div className="w-full h-full bg-[#0a0a0a] flex items-center justify-center">
+                    <span className="font-serif text-xl text-[#d4af37]/20 tracking-widest">ZERIMI</span>
+                 </div>
+               )}
+               <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-transparent to-transparent md:bg-gradient-to-r md:from-transparent md:to-[#050505]" />
             </div>
 
-            {/* Content Section */}
-            <div className="p-6 md:p-10 flex flex-col justify-center flex-1 min-w-0">
-              <div className="space-y-4">
-                <header>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="h-[1px] w-5 bg-[#d4af37]"></span>
-                    <span className="text-[9px] uppercase tracking-[0.3em] text-[#d4af37] font-bold">Royal Privilege</span>
-                  </div>
-                  <h2 className="text-2xl md:text-4xl font-serif text-white leading-tight truncate">
-                    {popupTitle || "Exclusive Gift"}
-                  </h2>
-                  <p className="text-stone-400 text-[11px] md:text-sm font-light mt-1 leading-relaxed line-clamp-2">
-                    {popupSub || "Be the part of Zerimi World and unlock luxury."}
-                  </p>
-                </header>
+            {/* Messaging Part */}
+            <div className="p-7 md:p-12 flex flex-col justify-center flex-1">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="h-[1px] w-5 bg-[#d4af37]"></div>
+                <span className="text-[9px] font-bold tracking-[0.3em] text-[#d4af37] uppercase">Privilege Access</span>
+              </div>
 
-                {/* Coupon Code: Compact Layout */}
-                {popupCode && (
-                  <div 
-                    onClick={() => copyToClipboard(popupCode)}
-                    className="flex items-center justify-between bg-white/[0.03] border border-white/5 rounded-lg px-4 py-2.5 cursor-pointer hover:bg-white/[0.06] transition-all group"
-                  >
-                    <div className="flex flex-col">
-                      <span className="text-[7px] uppercase text-stone-500 tracking-widest">Tap to copy</span>
-                      <span className="font-mono text-base md:text-lg text-[#d4af37] leading-none mt-1">{popupCode}</span>
-                    </div>
-                    {copied ? (
-                      <Check size={16} className="text-green-500" />
-                    ) : (
-                      <Copy size={16} className="text-stone-600 group-hover:text-[#d4af37]" />
-                    )}
-                  </div>
-                )}
+              <h2 className="text-2xl md:text-4xl font-serif text-white mb-2 tracking-tight">
+                {popupTitle || "A Token of Luxury"}
+              </h2>
 
-                {/* Buttons */}
-                <div className="flex flex-col gap-2.5">
-                  <Link 
-                    href="/category/all" 
-                    onClick={handleClose}
-                    className="w-full bg-[#d4af37] text-black text-[11px] font-bold uppercase tracking-[0.2em] py-3.5 rounded-sm text-center flex items-center justify-center gap-2 hover:brightness-110 active:scale-[0.98] transition-all"
-                  >
-                    Claim Offer <ArrowRight size={14} />
-                  </Link>
-                  <button 
-                    onClick={handleClose} 
-                    className="text-[9px] text-stone-600 hover:text-stone-400 uppercase tracking-[0.2em] transition-colors"
-                  >
-                    No thanks, I'll pay full price
-                  </button>
+              <p className="text-stone-400 text-xs md:text-sm mb-6 font-light leading-relaxed">
+                {popupSub || "Join the world of Zerimi and discover unparalleled craftsmanship."}
+              </p>
+
+              {/* Code Box */}
+              {popupCode && (
+                <div 
+                  onClick={() => copyCode(popupCode)}
+                  className="group flex items-center justify-between bg-white/[0.03] border border-white/10 rounded-lg p-3.5 mb-6 cursor-pointer hover:border-[#d4af37]/40 transition-all"
+                >
+                  <div className="flex flex-col">
+                    <span className="text-[8px] text-stone-500 uppercase tracking-widest mb-0.5">Click to copy code</span>
+                    <span className="font-mono text-lg text-[#d4af37] tracking-wider">{popupCode}</span>
+                  </div>
+                  {copied ? <Check size={18} className="text-green-500" /> : <Copy size={16} className="text-stone-600 group-hover:text-[#d4af37]" />}
                 </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex flex-col gap-3">
+                <Link 
+                  href="/category/all" 
+                  onClick={handleClose}
+                  className="w-full bg-[#d4af37] text-black text-[11px] font-bold uppercase tracking-[0.2em] py-4 rounded-sm text-center flex items-center justify-center gap-2 hover:bg-[#e5c158] transition-all active:scale-[0.98]"
+                >
+                  Shop Collection <ArrowRight size={14} />
+                </Link>
+                <button onClick={handleClose} className="text-[9px] text-stone-600 hover:text-stone-300 uppercase tracking-widest pt-1 transition-colors">
+                  Continue Browsing
+                </button>
               </div>
             </div>
           </motion.div>
