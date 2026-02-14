@@ -109,3 +109,36 @@ h1, h2, h3, h4, .luxury-text {
     animation: marquee 30s linear infinite;
   }
 }
+
+/* --- ZERIMI LUXURY SMOOTHING OVERRIDE --- */
+html {
+  /* Browser ko smooth transition ke liye force karega */
+  scroll-behavior: smooth !important;
+  /* Hardware acceleration enable karke CPU load kam karta hai */
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+body {
+  /* Scrolling physics ko optimize karta hai */
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  
+  /* Mobile 'rubber band' effect ko rokta hai jo scroll ko jerky banata hai */
+  overscroll-behavior-y: none;
+  
+  /* Scrolling ko aur natural banata hai */
+  touch-action: pan-y;
+}
+
+/* Jab aap scroll karte hain, toh images aur containers ko render karne ke liye 
+   GPU ka use karne ko force karega (No more lag) */
+* {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Premium easing for all transitions */
+* {
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1) !important;
+}
