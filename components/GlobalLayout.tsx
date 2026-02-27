@@ -10,7 +10,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import PopupModal from '@/components/PopupModal';
 import useNotification from '@/hooks/useNotification';
-
+import ZEliteChat from '@/components/ZEliteChat'; // Check karein path sahi ho
 export default function GlobalLayout({ children }: { children: React.ReactNode }) {
   useNotification();
   const pathname = usePathname();
@@ -482,6 +482,9 @@ const subtotal = cart.reduce((sum: number, item: any) => sum + (item.product?.pr
       </AnimatePresence>
 
       <CartDrawer />
+
+      {/* --- YAHAN ZERIMI AI ADD KAREIN --- */}
+     <ZEliteChat />
 {/* 👇 YAHAN PASTE KAREIN: NOTIFICATION DRAWER CALL */}
       <NotificationDrawer 
          isOpen={isNotifOpen} 
