@@ -4,28 +4,41 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { useStore } from '@/lib/store'; 
 import Image from 'next/image';
-import { Sparkles, X, Send, ShoppingBag } from 'lucide-react';
+import { X, Send, ArrowRight, Crown } from 'lucide-react';
 
-export default function ZEliteChat() {
+export default function ZemiChat() {
   const [isOpen, setIsOpen] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
+  const [input, setInput] = useState("");
+  const [showTooltip, setShowTooltip] = useState(false); 
+  
   const [messages, setMessages] = useState([{ 
     role: 'assistant', 
-    content: 'Welcome to the world of Zerimi. I am Z-Elite, your personal concierge. How may I elevate your style today?' 
+    content: 'Hi! I am Zemi, your personal stylist. What are we looking for today?' 
   }]);
-  const [input, setInput] = useState("");
-  const [isTyping, setIsTyping] = useState(false);
   
-  // Ref for boundary constraints and dragging
-  const constraintsRef = useRef(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  
-  const { addToCart, cart } = useStore() as any; 
+  const { cart } = useStore() as any; 
   const router = useRouter();
 
   const subtotal = cart.reduce((sum: number, item: any) => sum + (item.product?.price || 0) * item.qty, 0);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+    const hasSeenPopup = localStorage.getItem('zemi_stylist_seen');
+    if (!hasSeenPopup) {
+      const timer = setTimeout(() => {
+        setShowTooltip(true);
+        localStorage.setItem('zemi_stylist_seen', 'true');
+      }, 2500);
+      const hideTimer = setTimeout(() => setShowTooltip(false), 10000);
+      return () => { clearTimeout(timer); clearTimeout(hideTimer); };
+    }
+  }, []);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+    }
   }, [messages, isTyping]);
 
   const handleSend = async () => {
@@ -34,11 +47,18 @@ export default function ZEliteChat() {
     setMessages(prev => [...prev, userMsg]);
     setInput("");
     setIsTyping(true);
+    setShowTooltip(false); 
 
     try {
       const res = await fetch('/api/chat', { 
         method: 'POST', 
-        body: JSON.stringify({ messages: [...messages, userMsg], cartCount: cart.length, subtotal }) 
+        body: JSON.stringify({ 
+          messages: [...messages, userMsg], 
+          cartCount: cart.length, 
+          subtotal,
+          // STRICT FOUNDER RULE ADDED HERE
+          context: "You are Zemi, the personal stylist for Zerimi. STRICT RULE: NEVER mention the founder Ashutosh unless the user explicitly asks 'Who is the founder?'. Keep responses concise, chic, and helpful."
+        }) 
       });
       const data = await res.json();
       
@@ -47,61 +67,83 @@ export default function ZEliteChat() {
 
       setMessages(prev => [...prev, data]);
     } catch (error) {
-      console.error("Chat error:", error);
+      console.error("Zemi Chat Error:", error);
     } finally {
       setIsTyping(false);
     }
   };
 
   return (
-    // Pointer-events-none ensures background remains clickable
-    <div ref={constraintsRef} className="fixed inset-0 pointer-events-none z-[999] font-sans">
+    <div className="fixed inset-0 pointer-events-none z-[9999] font-sans selection:bg-amber-100">
       
-      {/* --- DRAGGABLE PREMIUM PILL ICON --- */}
+      {/* --- SLEEK TOOLTIP --- */}
       <AnimatePresence>
-        {!isOpen && (
-          <motion.button 
-            drag
-            dragConstraints={constraintsRef}
-            initial={{ x: 100, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ scale: 0, opacity: 0 }}
-            onClick={() => setIsOpen(true)} 
-            className="pointer-events-auto absolute bottom-24 right-0 bg-[#0a1f1c] text-amber-500 pl-4 pr-3 py-3 rounded-l-full border border-amber-500/30 shadow-[-10px_0_30px_rgba(0,0,0,0.5)] flex items-center gap-2 cursor-grab active:cursor-grabbing"
+        {showTooltip && !isOpen && (
+          <motion.div 
+            initial={{ opacity: 0, y: 15, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+            transition={{ type: "spring", stiffness: 300, damping: 25 }}
+            className="pointer-events-auto absolute bottom-20 right-6 w-[200px] bg-white/90 backdrop-blur-md border border-stone-100 rounded-2xl p-3.5 shadow-xl flex flex-col gap-1.5"
           >
-            <Sparkles className="w-4 h-4 animate-pulse" />
-            <span className="text-[10px] font-bold uppercase tracking-[0.2em] hidden md:block">Z-Elite</span>
-          </motion.button>
+            <div className="flex justify-between items-center mb-0.5">
+              <span className="text-[10px] font-bold tracking-[0.2em] uppercase text-amber-600 flex items-center gap-1.5">
+                <Crown className="w-3 h-3" /> Zemi
+              </span>
+              <button onClick={() => setShowTooltip(false)} className="text-stone-300 hover:text-black transition-colors">
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+            <p className="text-[11px] text-stone-600 leading-relaxed">
+              Need styling advice? I'm here to find your perfect piece.
+            </p>
+            <div className="absolute -bottom-1.5 right-5 w-3 h-3 bg-white border-b border-r border-stone-100 transform rotate-45"></div>
+          </motion.div>
         )}
       </AnimatePresence>
 
-      {/* --- ULTRA-PREMIUM CHAT WINDOW --- */}
+      {/* --- CROWN TRIGGER BUTTON --- */}
+      {!isOpen && (
+        <motion.button 
+          initial={{ scale: 0 }} animate={{ scale: 1 }} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+          onClick={() => { setIsOpen(true); setShowTooltip(false); }} 
+          className="pointer-events-auto absolute bottom-6 right-6 w-12 h-12 bg-[#0a0a0a] rounded-full flex items-center justify-center shadow-[0_8px_30px_rgba(0,0,0,0.2)] border border-white/10 transition-all group hover:bg-black"
+        >
+          <Crown className="text-amber-500 w-5 h-5 group-hover:scale-110 transition-transform" />
+        </motion.button>
+      )}
+
+      {/* --- COMPACT CHAT WINDOW --- */}
       <AnimatePresence>
         {isOpen && (
           <motion.div 
-            initial={{ opacity: 0, y: 100, scale: 0.9, filter: "blur(10px)" }}
-            animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
-            exit={{ opacity: 0, y: 100, scale: 0.9, filter: "blur(10px)" }}
-            transition={{ type: "spring", damping: 25, stiffness: 200 }}
-           // Is className ko apne motion.div mein replace karein
-className="pointer-events-auto absolute bottom-4 right-4 left-4 md:left-auto md:right-6 md:bottom-6 w-[calc(100%-2rem)] md:w-[380px] h-[60vh] md:h-[600px] bg-[#0a1f1c]/95 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] md:rounded-[3rem] shadow-[0_20_60px_rgba(0,0,0,0.6)] flex flex-col overflow-hidden"
+            initial={{ y: "100%", opacity: 0, scale: 0.95 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: "100%", opacity: 0, scale: 0.95 }}
+            transition={{ type: "spring", stiffness: 250, damping: 25 }}
+            className="pointer-events-auto absolute bottom-0 right-0 left-0 md:bottom-6 md:right-6 md:left-auto w-full md:w-[320px] h-[70vh] md:h-[480px] bg-[#fcfcfc] border border-stone-100 md:rounded-[2rem] rounded-t-[2rem] shadow-[0_20px_60px_rgba(0,0,0,0.08)] flex flex-col overflow-hidden"
           >
-            {/* Minimalist Gold Header with Close Action */}
-            <div className="p-6 flex justify-between items-center border-b border-white/5 bg-gradient-to-b from-white/10 to-transparent">
-              <div className="flex flex-col items-start text-left">
-                <span className="text-[9px] tracking-[0.4em] text-amber-500 uppercase font-bold mb-0.5">Concierge</span>
-                <h3 className="font-serif text-white text-xl tracking-widest italic uppercase">Z-Elite</h3>
+            {/* Glassmorphism Header */}
+            <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-5 py-3.5 bg-white/70 backdrop-blur-xl border-b border-stone-100/50">
+              <div className="flex items-center gap-3">
+                <div className="w-6 h-6 bg-black rounded-full flex items-center justify-center">
+                  <Crown className="w-3.5 h-3.5 text-amber-500" />
+                </div>
+                <div>
+                  <h3 className="text-[12px] font-bold tracking-[0.15em] text-black uppercase">Zemi</h3>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
+                    <span className="text-[8px] text-stone-500 uppercase tracking-wider font-semibold">Online</span>
+                  </div>
+                </div>
               </div>
-              <button 
-                onClick={() => setIsOpen(false)} 
-                className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white/40 hover:text-white transition-colors"
-              >
-                <X className="w-5 h-5" />
+              <button onClick={() => setIsOpen(false)} className="w-7 h-7 flex items-center justify-center bg-stone-100 hover:bg-stone-200 rounded-full text-stone-500 transition-colors">
+                <X className="w-3.5 h-3.5" />
               </button>
             </div>
 
-            {/* Chat Area with Smooth Content Rendering */}
-            <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-gradient-to-b from-transparent to-black/30">
+            {/* Chat Area */}
+            <div ref={scrollRef} className="flex-1 overflow-y-auto pt-16 pb-4 px-4 space-y-4 custom-scrollbar">
               {messages.map((m, i) => {
                 const productMatch = m.content.match(/PRODUCT_CARD: (\{.*?\})/);
                 const cleanText = m.content.replace(/PRODUCT_CARD: \{.*?\}/g, "").replace(/\[GOTO: .*?\]/g, "").trim();
@@ -110,36 +152,31 @@ className="pointer-events-auto absolute bottom-4 right-4 left-4 md:left-auto md:
                 return (
                   <div key={i} className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
                     {cleanText && (
-                      <div className={`p-4 rounded-[1.5rem] text-[13px] leading-[1.6] tracking-wide max-w-[88%] ${
-                        m.role === 'user' ? 'bg-amber-600 text-white rounded-tr-none shadow-lg' : 'bg-white/5 text-stone-200 border border-white/10 rounded-tl-none backdrop-blur-md'
+                      <div className={`px-4 py-2.5 text-[12.5px] leading-[1.5] max-w-[85%] ${
+                        m.role === 'user' 
+                        ? 'bg-[#0a0a0a] text-white rounded-[1.2rem] rounded-tr-sm shadow-sm' 
+                        : 'bg-white text-stone-800 rounded-[1.2rem] rounded-tl-sm border border-stone-100 shadow-sm'
                       }`}>
                         {cleanText}
                       </div>
                     )}
                     
+                    {/* SMART HORIZONTAL PRODUCT CARD */}
                     {product && (
                       <motion.div 
-                        initial={{ opacity: 0, scale: 0.8 }} 
-                        animate={{ opacity: 1, scale: 1 }} 
-                        onClick={() => router.push(product.link)}
-                        className="mt-4 w-52 bg-white rounded-[1.5rem] overflow-hidden shadow-2xl cursor-pointer group ring-1 ring-black/5"
+                        initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+                        onClick={() => router.push(product.link || `/product/${product.id}`)}
+                        className="mt-2 w-[240px] bg-white rounded-2xl p-1.5 border border-stone-100 shadow-sm flex items-center gap-3 cursor-pointer group hover:shadow-md transition-all"
                       >
-                        <div className="relative h-32 w-full overflow-hidden">
-                          <Image src={product.img || '/logo.png'} alt={product.name} fill className="object-cover transition-transform duration-700 group-hover:scale-110" />
-                          <div className="absolute inset-0 bg-black/5" />
+                        <div className="relative w-14 h-14 rounded-xl overflow-hidden shrink-0 bg-stone-50">
+                          <Image src={product.img || '/logo.png'} alt={product.name} fill className="object-cover group-hover:scale-105 transition-transform duration-500" />
                         </div>
-                        <div className="p-4 bg-white">
-                          <h4 className="text-[11px] font-bold text-black truncate mb-1">{product.name}</h4>
-                          <div className="flex justify-between items-center mb-3">
-                            <span className="text-[12px] text-amber-600 font-bold">₹{product.price}</span>
-                            <span className="text-[8px] bg-stone-100 px-2 py-0.5 rounded-full text-stone-500 uppercase tracking-tighter">Limited</span>
-                          </div>
-                          <button 
-                            onClick={(e) => { e.stopPropagation(); addToCart(product); }} 
-                            className="w-full bg-[#0a1f1c] text-white text-[10px] py-2.5 rounded-xl font-bold uppercase flex items-center justify-center gap-2 hover:bg-black transition-colors"
-                          >
-                            <ShoppingBag className="w-3 h-3" /> Add to Bag
-                          </button>
+                        <div className="flex-1 min-w-0 py-1">
+                          <h4 className="text-[10.5px] font-bold text-black truncate">{product.name}</h4>
+                          <p className="text-[10px] text-amber-600 font-bold mt-0.5">₹{product.price}</p>
+                        </div>
+                        <div className="w-7 h-7 mr-1 rounded-full bg-stone-50 flex items-center justify-center shrink-0 group-hover:bg-black group-hover:text-white text-stone-400 transition-colors">
+                          <ArrowRight className="w-3.5 h-3.5" />
                         </div>
                       </motion.div>
                     )}
@@ -147,30 +184,30 @@ className="pointer-events-auto absolute bottom-4 right-4 left-4 md:left-auto md:
                 );
               })}
               {isTyping && (
-                <div className="flex gap-2 px-3 py-1 items-center">
-                  <div className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-bounce [animation-delay:-0.3s]" />
-                  <div className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-bounce [animation-delay:-0.15s]" />
-                  <div className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-bounce" />
+                <div className="flex gap-1 ml-1 py-1">
+                  <div className="w-1.5 h-1.5 bg-stone-300 rounded-full animate-bounce" />
+                  <div className="w-1.5 h-1.5 bg-stone-300 rounded-full animate-bounce [animation-delay:0.15s]" />
+                  <div className="w-1.5 h-1.5 bg-stone-300 rounded-full animate-bounce [animation-delay:0.3s]" />
                 </div>
               )}
             </div>
 
-            {/* Premium Gold-Focus Input Area */}
-            <div className="p-6 bg-[#0a1f1c] border-t border-white/5 shadow-[0_-10px_30px_rgba(0,0,0,0.3)]">
-              <div className="flex items-center gap-3 bg-white/5 p-2 rounded-2xl border border-white/10 focus-within:border-amber-500/40 focus-within:bg-white/[0.08] transition-all duration-500">
+            {/* Floating Pill Input */}
+            <div className="px-4 pb-4 pt-1 bg-gradient-to-t from-[#fcfcfc] to-transparent">
+              <div className="flex items-center gap-2 bg-white rounded-full pl-4 pr-1.5 py-1.5 border border-stone-200 shadow-sm focus-within:border-stone-300 focus-within:shadow-md transition-all">
                 <input 
                   value={input} 
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                  placeholder="Inquire with Z-Elite..." 
-                  className="flex-1 bg-transparent border-none outline-none text-white text-[14px] px-3 placeholder:text-white/20" 
+                  placeholder="Ask Zemi..." 
+                  className="flex-1 bg-transparent border-none outline-none text-[13px] text-black placeholder:text-stone-400" 
                 />
                 <button 
                   onClick={handleSend} 
-                  disabled={!input.trim()}
-                  className="bg-amber-500 text-[#0a1f1c] p-2.5 rounded-xl hover:bg-amber-400 disabled:opacity-30 disabled:grayscale transition-all shadow-lg"
+                  disabled={!input.trim()} 
+                  className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center disabled:opacity-30 hover:bg-amber-600 transition-colors shrink-0"
                 >
-                  <Send className="w-4 h-4" />
+                  <Send className="w-3.5 h-3.5 ml-0.5" />
                 </button>
               </div>
             </div>

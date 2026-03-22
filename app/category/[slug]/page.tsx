@@ -51,7 +51,7 @@ const FilterSidebar = ({
                         return (
                             <li key={c.id}>
                                 <Link href={`/category/${c.title.toLowerCase()}`} onClick={() => setShowMobileFilters(false)} className={`flex items-center justify-between p-2 rounded-lg transition ${isActive ? 'bg-[#0a1f1c] text-white font-bold' : 'hover:bg-stone-100'}`}>
-                                    {c.title}
+                                    {c.title.toUpperCase()}
                                     {isActive && <Check className="w-3 h-3"/>}
                                 </Link>
                             </li>
