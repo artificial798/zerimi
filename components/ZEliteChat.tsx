@@ -56,7 +56,6 @@ export default function ZemiChat() {
           messages: [...messages, userMsg], 
           cartCount: cart.length, 
           subtotal,
-          // STRICT FOUNDER RULE ADDED HERE
           context: "You are Zemi, the personal stylist for Zerimi. STRICT RULE: NEVER mention the founder Ashutosh unless the user explicitly asks 'Who is the founder?'. Keep responses concise, chic, and helpful."
         }) 
       });
@@ -76,74 +75,75 @@ export default function ZemiChat() {
   return (
     <div className="fixed inset-0 pointer-events-none z-[9999] font-sans selection:bg-amber-100">
       
-      {/* --- SLEEK TOOLTIP --- */}
+      {/* --- MICRO TOOLTIP --- */}
       <AnimatePresence>
         {showTooltip && !isOpen && (
           <motion.div 
-            initial={{ opacity: 0, y: 15, scale: 0.95 }}
+            initial={{ opacity: 0, y: 5, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 10, scale: 0.95 }}
-            transition={{ type: "spring", stiffness: 300, damping: 25 }}
-            className="pointer-events-auto absolute bottom-20 right-6 w-[200px] bg-white/90 backdrop-blur-md border border-stone-100 rounded-2xl p-3.5 shadow-xl flex flex-col gap-1.5"
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="pointer-events-auto absolute bottom-16 right-3 md:right-6 w-[160px] bg-white/95 backdrop-blur-md border border-stone-100 rounded-xl p-2.5 shadow-lg flex flex-col gap-0.5"
           >
-            <div className="flex justify-between items-center mb-0.5">
-              <span className="text-[10px] font-bold tracking-[0.2em] uppercase text-amber-600 flex items-center gap-1.5">
-                <Crown className="w-3 h-3" /> Zemi
+            <div className="flex justify-between items-center">
+              <span className="text-[9px] font-bold tracking-[0.2em] uppercase text-amber-600 flex items-center gap-1">
+                <Crown className="w-2.5 h-2.5" /> Zemi
               </span>
-              <button onClick={() => setShowTooltip(false)} className="text-stone-300 hover:text-black transition-colors">
+              <button onClick={() => setShowTooltip(false)} className="text-stone-300 hover:text-black">
                 <X className="w-3 h-3" />
               </button>
             </div>
-            <p className="text-[11px] text-stone-600 leading-relaxed">
-              Need styling advice? I'm here to find your perfect piece.
+            <p className="text-[10px] text-stone-600 leading-snug mt-0.5">
+              Need styling advice?
             </p>
-            <div className="absolute -bottom-1.5 right-5 w-3 h-3 bg-white border-b border-r border-stone-100 transform rotate-45"></div>
+            <div className="absolute -bottom-1 right-4 w-2.5 h-2.5 bg-white border-b border-r border-stone-100 transform rotate-45"></div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* --- CROWN TRIGGER BUTTON --- */}
+      {/* --- TINY TRIGGER BUTTON --- */}
       {!isOpen && (
         <motion.button 
-          initial={{ scale: 0 }} animate={{ scale: 1 }} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+          initial={{ scale: 0 }} animate={{ scale: 1 }} whileHover={{ scale: 1.05 }}
           onClick={() => { setIsOpen(true); setShowTooltip(false); }} 
-          className="pointer-events-auto absolute bottom-6 right-6 w-12 h-12 bg-[#0a0a0a] rounded-full flex items-center justify-center shadow-[0_8px_30px_rgba(0,0,0,0.2)] border border-white/10 transition-all group hover:bg-black"
+          // Size reduced from w-12 to w-10
+          className="pointer-events-auto absolute bottom-3 right-3 md:bottom-6 md:right-6 w-10 h-10 bg-[#0a0a0a] rounded-full flex items-center justify-center shadow-xl border border-white/10 hover:bg-black transition-all"
         >
-          <Crown className="text-amber-500 w-5 h-5 group-hover:scale-110 transition-transform" />
+          <Crown className="text-amber-500 w-4.5 h-4.5" />
         </motion.button>
       )}
 
-      {/* --- COMPACT CHAT WINDOW --- */}
+      {/* --- MICRO-COMPACT CHAT WINDOW --- */}
       <AnimatePresence>
         {isOpen && (
           <motion.div 
-            initial={{ y: "100%", opacity: 0, scale: 0.95 }}
+            initial={{ y: 15, opacity: 0, scale: 0.95 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: "100%", opacity: 0, scale: 0.95 }}
-            transition={{ type: "spring", stiffness: 250, damping: 25 }}
-            className="pointer-events-auto absolute bottom-0 right-0 left-0 md:bottom-6 md:right-6 md:left-auto w-full md:w-[320px] h-[70vh] md:h-[480px] bg-[#fcfcfc] border border-stone-100 md:rounded-[2rem] rounded-t-[2rem] shadow-[0_20px_60px_rgba(0,0,0,0.08)] flex flex-col overflow-hidden"
+            exit={{ y: 15, opacity: 0, scale: 0.95 }}
+            transition={{ type: "spring", stiffness: 300, damping: 28 }}
+            // ULTRA COMPACT: width 280px on mobile, h-45vh, max-h-360px
+            className="pointer-events-auto absolute bottom-2 right-2 left-auto w-[280px] md:w-[300px] h-[45vh] min-h-[300px] max-h-[360px] md:max-h-[450px] bg-[#fcfcfc] border border-stone-100 rounded-[1.2rem] shadow-[0_12px_35px_rgba(0,0,0,0.12)] flex flex-col overflow-hidden"
           >
-            {/* Glassmorphism Header */}
-            <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-5 py-3.5 bg-white/70 backdrop-blur-xl border-b border-stone-100/50">
-              <div className="flex items-center gap-3">
-                <div className="w-6 h-6 bg-black rounded-full flex items-center justify-center">
-                  <Crown className="w-3.5 h-3.5 text-amber-500" />
+            {/* Header - Micro Padding */}
+            <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-3 py-2 bg-white/80 backdrop-blur-md border-b border-stone-100/50">
+              <div className="flex items-center gap-2">
+                <div className="w-4.5 h-4.5 bg-black rounded-full flex items-center justify-center">
+                  <Crown className="w-2.5 h-2.5 text-amber-500" />
                 </div>
                 <div>
-                  <h3 className="text-[12px] font-bold tracking-[0.15em] text-black uppercase">Zemi</h3>
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
-                    <span className="text-[8px] text-stone-500 uppercase tracking-wider font-semibold">Online</span>
+                  <h3 className="text-[10px] font-bold tracking-[0.15em] text-black uppercase">Zemi</h3>
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <div className="w-1 h-1 bg-green-500 rounded-full" />
+                    <span className="text-[7.5px] text-stone-400 uppercase tracking-wider">Active</span>
                   </div>
                 </div>
               </div>
-              <button onClick={() => setIsOpen(false)} className="w-7 h-7 flex items-center justify-center bg-stone-100 hover:bg-stone-200 rounded-full text-stone-500 transition-colors">
-                <X className="w-3.5 h-3.5" />
+              <button onClick={() => setIsOpen(false)} className="w-5 h-5 flex items-center justify-center bg-stone-100 rounded-full text-stone-400 transition-colors">
+                <X className="w-3 h-3" />
               </button>
             </div>
 
-            {/* Chat Area */}
-            <div ref={scrollRef} className="flex-1 overflow-y-auto pt-16 pb-4 px-4 space-y-4 custom-scrollbar">
+            {/* Chat Area - tighter padding */}
+            <div ref={scrollRef} className="flex-1 overflow-y-auto pt-11 pb-1.5 px-2.5 space-y-2.5 custom-scrollbar">
               {messages.map((m, i) => {
                 const productMatch = m.content.match(/PRODUCT_CARD: (\{.*?\})/);
                 const cleanText = m.content.replace(/PRODUCT_CARD: \{.*?\}/g, "").replace(/\[GOTO: .*?\]/g, "").trim();
@@ -152,32 +152,30 @@ export default function ZemiChat() {
                 return (
                   <div key={i} className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
                     {cleanText && (
-                      <div className={`px-4 py-2.5 text-[12.5px] leading-[1.5] max-w-[85%] ${
+                      <div className={`px-3 py-1.5 text-[11.5px] leading-[1.35] max-w-[90%] ${
                         m.role === 'user' 
-                        ? 'bg-[#0a0a0a] text-white rounded-[1.2rem] rounded-tr-sm shadow-sm' 
-                        : 'bg-white text-stone-800 rounded-[1.2rem] rounded-tl-sm border border-stone-100 shadow-sm'
+                        ? 'bg-[#0a0a0a] text-white rounded-[0.9rem] rounded-tr-sm shadow-sm' 
+                        : 'bg-white text-stone-800 rounded-[0.9rem] rounded-tl-sm border border-stone-100 shadow-sm'
                       }`}>
                         {cleanText}
                       </div>
                     )}
                     
-                    {/* SMART HORIZONTAL PRODUCT CARD */}
+                    {/* MICRO PRODUCT STRIP */}
                     {product && (
                       <motion.div 
-                        initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+                        initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                         onClick={() => router.push(product.link || `/product/${product.id}`)}
-                        className="mt-2 w-[240px] bg-white rounded-2xl p-1.5 border border-stone-100 shadow-sm flex items-center gap-3 cursor-pointer group hover:shadow-md transition-all"
+                        className="mt-1.5 w-[190px] bg-white rounded-lg p-1 border border-stone-100 shadow-sm flex items-center gap-2 cursor-pointer group hover:border-amber-200 transition-all"
                       >
-                        <div className="relative w-14 h-14 rounded-xl overflow-hidden shrink-0 bg-stone-50">
-                          <Image src={product.img || '/logo.png'} alt={product.name} fill className="object-cover group-hover:scale-105 transition-transform duration-500" />
+                        <div className="relative w-9 h-9 rounded-md overflow-hidden shrink-0 bg-stone-50">
+                          <Image src={product.img || '/logo.png'} alt={product.name} fill className="object-cover" />
                         </div>
-                        <div className="flex-1 min-w-0 py-1">
-                          <h4 className="text-[10.5px] font-bold text-black truncate">{product.name}</h4>
-                          <p className="text-[10px] text-amber-600 font-bold mt-0.5">₹{product.price}</p>
+                        <div className="flex-1 min-w-0 py-0.5">
+                          <h4 className="text-[9.5px] font-bold text-black truncate">{product.name}</h4>
+                          <p className="text-[9px] text-amber-600 font-medium mt-0.5">₹{product.price}</p>
                         </div>
-                        <div className="w-7 h-7 mr-1 rounded-full bg-stone-50 flex items-center justify-center shrink-0 group-hover:bg-black group-hover:text-white text-stone-400 transition-colors">
-                          <ArrowRight className="w-3.5 h-3.5" />
-                        </div>
+                        <ArrowRight className="w-3 h-3 text-stone-300 mr-1 shrink-0" />
                       </motion.div>
                     )}
                   </div>
@@ -185,29 +183,29 @@ export default function ZemiChat() {
               })}
               {isTyping && (
                 <div className="flex gap-1 ml-1 py-1">
-                  <div className="w-1.5 h-1.5 bg-stone-300 rounded-full animate-bounce" />
-                  <div className="w-1.5 h-1.5 bg-stone-300 rounded-full animate-bounce [animation-delay:0.15s]" />
-                  <div className="w-1.5 h-1.5 bg-stone-300 rounded-full animate-bounce [animation-delay:0.3s]" />
+                  <div className="w-1 h-1 bg-stone-300 rounded-full animate-bounce" />
+                  <div className="w-1 h-1 bg-stone-300 rounded-full animate-bounce [animation-delay:0.1s]" />
+                  <div className="w-1 h-1 bg-stone-300 rounded-full animate-bounce [animation-delay:0.2s]" />
                 </div>
               )}
             </div>
 
-            {/* Floating Pill Input */}
-            <div className="px-4 pb-4 pt-1 bg-gradient-to-t from-[#fcfcfc] to-transparent">
-              <div className="flex items-center gap-2 bg-white rounded-full pl-4 pr-1.5 py-1.5 border border-stone-200 shadow-sm focus-within:border-stone-300 focus-within:shadow-md transition-all">
+            {/* Input Area - Micro profile */}
+            <div className="px-2.5 pb-2.5 pt-1 bg-gradient-to-t from-[#fcfcfc] to-transparent">
+              <div className="flex items-center gap-1.5 bg-white rounded-full pl-3 pr-1 py-1 border border-stone-200 focus-within:border-stone-300 transition-all">
                 <input 
                   value={input} 
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSend()}
                   placeholder="Ask Zemi..." 
-                  className="flex-1 bg-transparent border-none outline-none text-[13px] text-black placeholder:text-stone-400" 
+                  className="flex-1 bg-transparent border-none outline-none text-[11.5px] text-black placeholder:text-stone-400" 
                 />
                 <button 
                   onClick={handleSend} 
                   disabled={!input.trim()} 
-                  className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center disabled:opacity-30 hover:bg-amber-600 transition-colors shrink-0"
+                  className="w-6.5 h-6.5 rounded-full bg-black text-white flex items-center justify-center disabled:opacity-30 hover:bg-amber-600 transition-colors shrink-0"
                 >
-                  <Send className="w-3.5 h-3.5 ml-0.5" />
+                  <Send className="w-3 h-3 ml-0.5" />
                 </button>
               </div>
             </div>
