@@ -7,6 +7,7 @@ import { Toaster } from "react-hot-toast";
 import { useState, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion"; 
 import Preloader from "@/components/Preloader";
+import { SpeedInsights } from '@vercel/speed-insights/next';
 
 // ✅ 1. FEMALE CENTRIC SERIF FONT (Headings)
 const luxuryFont = Playfair_Display({
@@ -101,6 +102,7 @@ export default function RootLayout({
             </main>
           </GlobalLayout>
 
+          <SpeedInsights />
         </motion.div>
       </body>
     </html>
